@@ -6,6 +6,22 @@
 2. Select your project → **SQL Editor**
 3. Paste the contents of `supabase/migrations/001_initial_schema.sql`
 4. Click **Run**
+5. Run `supabase/migrations/002_whatsapp_evolution.sql` for WhatsApp + Realtime support
+
+## Evolution API (WhatsApp)
+
+1. Set env vars in `.env.local` (see `supabase.env.example`)
+2. Run migration `002_whatsapp_evolution.sql`
+3. In Evolution API, configure the instance webhook:
+
+```
+URL: https://your-domain.com/api/webhooks/evolution?secret=YOUR_SECRET
+Events: MESSAGES_UPSERT
+```
+
+4. Set `WHATSAPP_DEFAULT_USER_ID` to your Supabase auth user UUID
+
+**Flow:** WhatsApp message → webhook → create/find lead → save client message → OpenAI reply → save AI message → send via Evolution API → dashboard updates live via Supabase Realtime.
 
 This creates:
 

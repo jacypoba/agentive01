@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { CreateTestLeadButton } from "@/components/dashboard/create-test-lead-button";
+import { WhatsAppLiveFeed } from "@/components/dashboard/whatsapp-live-feed";
 import { createClient } from "@/lib/supabase/server";
 import {
   formatRelativeTime,
@@ -17,8 +18,8 @@ export const metadata: Metadata = {
 const quickActions = [
   {
     title: "Connect WhatsApp",
-    description: "Link your business number to start capturing leads.",
-    href: "#",
+    description: "Configure Evolution API webhook for live message sync.",
+    href: "#whatsapp",
     badge: "Setup",
   },
   {
@@ -222,6 +223,13 @@ export default async function DashboardPage() {
                 </div>
               </div>
             </section>
+
+            {user && (
+              <WhatsAppLiveFeed
+                userId={user.id}
+                initialActivity={dashboardData.recentActivity}
+              />
+            )}
           </>
         )}
 

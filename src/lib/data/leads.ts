@@ -1,4 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import {
+  formatPhoneDisplay,
+  normalizePhoneDigits,
+} from "@/lib/phone/normalize";
 import type { Database, Lead, LeadInsert, LeadStatus } from "@/types/database";
 
 type Client = SupabaseClient<Database>;
@@ -39,13 +43,42 @@ export async function getLeadById(
   return data;
 }
 
+export async function getLeadByPhone(
+  supabase: Client,
+  userId: string,
+  phoneDigits: string
+): Promise<Lead | null> {
+  const { data, error } = await supabase
+    .from("leads")
+    .select("*")
+    .eq("user_id", userId)
+    .eq("phone_normalized", phoneDigits)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(`Failed to fetch lead by phone: ${error.message}`);
+  }
+
+  return data;
+}
+
 export async function createLead(
   supabase: Client,
   lead: LeadInsert
 ): Promise<Lead> {
+  const phoneNormalized = lead.phone
+    ? normalizePhoneDigits(lead.phone)
+    : lead.phone_normalized ?? null;
+
   const { data, error } = await supabase
     .from("leads")
-    .insert(lead)
+    .insert({
+      ...lead,
+      phone: lead.phone
+        ? formatPhoneDisplay(normalizePhoneDigits(lead.phone))
+        : lead.phone,
+      phone_normalized: phoneNormalized,
+    })
     .select("*")
     .single();
 

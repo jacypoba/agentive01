@@ -20,6 +20,7 @@ export type Lead = {
   user_id: string;
   client_name: string;
   phone: string | null;
+  phone_normalized: string | null;
   interest: string | null;
   status: LeadStatus;
   created_at: string;
@@ -50,6 +51,7 @@ export type LeadInsert = {
   user_id: string;
   client_name: string;
   phone?: string | null;
+  phone_normalized?: string | null;
   interest?: string | null;
   status?: LeadStatus;
   created_at?: string;

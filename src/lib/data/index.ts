@@ -4,6 +4,7 @@ export {
   countLeadsByStatus,
   createLead,
   getLeadById,
+  getLeadByPhone,
   getLeads,
   getRecentLeads,
   updateLeadStatus,
