@@ -36,13 +36,13 @@ function buildPropertyDetailLines(property: Property): string[] {
     lines.push(truncateDescription(property.description.trim()));
   }
 
+  if (property.image_url?.trim()) {
+    lines.push("🖼️ Foto:", property.image_url.trim());
+  }
+
   const listingUrl = property.listing_url?.trim();
   if (listingUrl) {
     lines.push("🔗 Ver detalhes:", listingUrl);
-  }
-
-  if (property.image_url?.trim()) {
-    lines.push("🖼️ Foto:", property.image_url.trim());
   }
 
   return lines;

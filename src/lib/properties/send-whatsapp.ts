@@ -2,10 +2,7 @@ import {
   sendWhatsAppMedia,
   sendWhatsAppText,
 } from "@/lib/evolution/client";
-import {
-  formatPropertyImageCaption,
-  hasPropertyImage,
-} from "@/lib/properties/property-cards";
+import { formatPropertyImageCaption } from "@/lib/properties/property-cards";
 import type { Property } from "@/types/database";
 
 export type OutboundWhatsAppMessage =
@@ -61,19 +58,13 @@ export function buildPropertyOutboundMessages(
   property: Property,
   detailsText: string
 ): OutboundWhatsAppMessage[] {
-  const messages: OutboundWhatsAppMessage[] = [];
-
-  if (hasPropertyImage(property)) {
-    messages.push({ kind: "property_image", property });
-  }
-
-  messages.push({
-    kind: "property_details",
-    text: detailsText,
-    property,
-  });
-
-  return messages;
+  return [
+    {
+      kind: "property_details",
+      text: detailsText,
+      property,
+    },
+  ];
 }
 
 function guessImageMimeType(url: string): string {
