@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { CreateTestLeadButton } from "@/components/dashboard/create-test-lead-button";
 import { WhatsAppLiveFeed } from "@/components/dashboard/whatsapp-live-feed";
+import { VisitRequestsPanel } from "@/components/visits/visit-requests-panel";
 import { createClient } from "@/lib/supabase/server";
 import {
   formatRelativeTime,
@@ -27,6 +28,12 @@ const quickActions = [
     description: "Upload listings, FAQs, and tone guidelines.",
     href: "#",
     badge: "Configure",
+  },
+  {
+    title: "Visit requests",
+    description: "Review and confirm pending property visits.",
+    href: "/visits",
+    badge: "Visits",
   },
   {
     title: "View leads",
@@ -77,10 +84,10 @@ export default async function DashboardPage() {
           accent: "text-white",
         },
         {
-          label: "Visits scheduled",
-          value: String(dashboardData.stats.scheduledLeads),
-          change: "Ready for tours",
-          accent: "text-white",
+          label: "Pending visits",
+          value: String(dashboardData.stats.pendingVisitRequests),
+          change: `${dashboardData.stats.scheduledLeads} confirmed on calendar`,
+          accent: "text-amber-300",
         },
         {
           label: "Total pipeline",
@@ -223,6 +230,10 @@ export default async function DashboardPage() {
                 </div>
               </div>
             </section>
+
+            {user && (
+              <VisitRequestsPanel visits={dashboardData.recentVisitRequests} />
+            )}
 
             {user && (
               <WhatsAppLiveFeed

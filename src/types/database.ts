@@ -124,11 +124,53 @@ export type ProcessedWhatsAppMessageInsert = {
   created_at?: string;
 };
 
+export type VisitRequestStatus = "pending" | "confirmed" | "cancelled";
+
+export type VisitRequest = {
+  id: string;
+  lead_id: string;
+  user_id: string;
+  requested_datetime_text: string | null;
+  status: VisitRequestStatus;
+  notes: string | null;
+  created_at: string;
+};
+
+export type VisitRequestInsert = {
+  id?: string;
+  lead_id: string;
+  user_id: string;
+  requested_datetime_text?: string | null;
+  status?: VisitRequestStatus;
+  notes?: string | null;
+  created_at?: string;
+};
+
+export type VisitRequestUpdate = {
+  requested_datetime_text?: string | null;
+  status?: VisitRequestStatus;
+  notes?: string | null;
+};
+
+export type VisitRequestWithLead = VisitRequest & {
+  leads: Pick<
+    Lead,
+    | "id"
+    | "client_name"
+    | "phone"
+    | "preferred_area"
+    | "property_type"
+    | "budget"
+    | "status"
+  >;
+};
+
 export type DashboardStats = {
   totalLeads: number;
   qualifiedLeads: number;
   scheduledLeads: number;
   recentConversations: number;
+  pendingVisitRequests: number;
 };
 
 export type RecentActivity = {
@@ -168,6 +210,12 @@ export type Database = {
         Row: ProcessedWhatsAppMessage;
         Insert: ProcessedWhatsAppMessageInsert;
         Update: Partial<ProcessedWhatsAppMessageInsert>;
+        Relationships: [];
+      };
+      visit_requests: {
+        Row: VisitRequest;
+        Insert: VisitRequestInsert;
+        Update: VisitRequestUpdate;
         Relationships: [];
       };
     };

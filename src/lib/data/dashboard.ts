@@ -5,6 +5,10 @@ import {
   countRecentConversations,
   getRecentConversationsForUser,
 } from "@/lib/data/conversations";
+import {
+  countVisitRequestsByStatus,
+  getRecentVisitRequests,
+} from "@/lib/data/visit-requests";
 import { getStatusBadgeColor } from "@/lib/leads/status";
 import type {
   DashboardStats,
@@ -12,6 +16,7 @@ import type {
   Lead,
   Profile,
   RecentActivity,
+  VisitRequestWithLead,
 } from "@/types/database";
 
 type Client = SupabaseClient<Database>;
@@ -20,6 +25,7 @@ export type DashboardData = {
   profile: Profile | null;
   stats: DashboardStats;
   recentActivity: RecentActivity[];
+  recentVisitRequests: VisitRequestWithLead[];
 };
 
 function formatActivityDescription(
@@ -103,16 +109,20 @@ export async function getDashboardData(
     qualifiedLeads,
     scheduledLeads,
     recentConversations,
+    pendingVisitRequests,
     conversations,
     leads,
+    recentVisitRequests,
   ] = await Promise.all([
     getProfile(supabase, userId),
     countLeads(supabase, userId),
     countLeadsByStatus(supabase, userId, "qualified"),
     countLeadsByStatus(supabase, userId, "scheduled"),
     countRecentConversations(supabase, userId, 7),
+    countVisitRequestsByStatus(supabase, userId, "pending"),
     getRecentConversationsForUser(supabase, userId, 5),
     getRecentLeads(supabase, userId, 5),
+    getRecentVisitRequests(supabase, userId, 5),
   ]);
 
   return {
@@ -122,11 +132,13 @@ export async function getDashboardData(
       qualifiedLeads,
       scheduledLeads,
       recentConversations,
+      pendingVisitRequests,
     },
     recentActivity: mergeRecentActivity(
       mapConversationToActivity(conversations),
       leads
     ),
+    recentVisitRequests,
   };
 }
 
