@@ -22,6 +22,8 @@ export function VisitsList({ visits, dbError }: VisitsListProps) {
   const [filter, setFilter] = useState<StatusFilter>("all");
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [warningMessage, setWarningMessage] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
   const filteredVisits = useMemo(() => {
@@ -41,14 +43,29 @@ export function VisitsList({ visits, dbError }: VisitsListProps) {
 
   function handleStatusChange(visitId: string, status: VisitRequestStatus) {
     setError(null);
+    setSuccessMessage(null);
+    setWarningMessage(null);
     setPendingId(visitId);
     startTransition(async () => {
       const result = await updateVisitStatus(visitId, status);
       if (result.error) {
         setError(result.error);
+      } else if (result.warning) {
+        setWarningMessage(result.warning);
+      } else if (result.message) {
+        setSuccessMessage(result.message);
+      } else if (result.success) {
+        setSuccessMessage("Visit request updated successfully.");
       }
       setPendingId(null);
     });
+  }
+
+  function getActionLabel(visitId: string, status: VisitRequestStatus): string {
+    if (pendingId !== visitId || !isPending) {
+      return status === "confirmed" ? "Confirm visit" : "Cancel";
+    }
+    return status === "confirmed" ? "Confirming…" : "Cancelling…";
   }
 
   const filters: { key: StatusFilter; label: string }[] = [
@@ -74,6 +91,24 @@ export function VisitsList({ visits, dbError }: VisitsListProps) {
             in the Supabase SQL Editor, then refresh.
           </p>
           <p className="mt-2 text-xs text-amber-200/60">{dbError}</p>
+        </div>
+      )}
+
+      {successMessage && (
+        <div
+          role="status"
+          className="mb-6 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-5 py-4 text-sm text-emerald-200"
+        >
+          {successMessage}
+        </div>
+      )}
+
+      {warningMessage && (
+        <div
+          role="alert"
+          className="mb-6 rounded-2xl border border-amber-500/30 bg-amber-500/10 px-5 py-4 text-sm text-amber-200"
+        >
+          {warningMessage}
         </div>
       )}
 
@@ -174,7 +209,7 @@ export function VisitsList({ visits, dbError }: VisitsListProps) {
                       onClick={() => handleStatusChange(visit.id, "confirmed")}
                       className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-xs font-semibold text-emerald-300 transition-all hover:bg-emerald-500/20 disabled:opacity-50"
                     >
-                      Confirm visit
+                      {getActionLabel(visit.id, "confirmed")}
                     </button>
                     <button
                       type="button"
@@ -182,7 +217,7 @@ export function VisitsList({ visits, dbError }: VisitsListProps) {
                       onClick={() => handleStatusChange(visit.id, "cancelled")}
                       className="rounded-full border border-red-500/30 bg-red-500/10 px-4 py-2 text-xs font-semibold text-red-300 transition-all hover:bg-red-500/20 disabled:opacity-50"
                     >
-                      Cancel
+                      {getActionLabel(visit.id, "cancelled")}
                     </button>
                   </div>
                 )}

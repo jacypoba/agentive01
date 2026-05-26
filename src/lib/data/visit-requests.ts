@@ -40,6 +40,38 @@ export async function getVisitRequests(
   return (data ?? []) as VisitRequestWithLead[];
 }
 
+export async function getVisitRequestById(
+  supabase: Client,
+  userId: string,
+  visitId: string
+): Promise<VisitRequestWithLead | null> {
+  const { data, error } = await supabase
+    .from("visit_requests")
+    .select(
+      `
+      *,
+      leads!inner (
+        id,
+        client_name,
+        phone,
+        preferred_area,
+        property_type,
+        budget,
+        status
+      )
+    `
+    )
+    .eq("id", visitId)
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(`Failed to fetch visit request: ${error.message}`);
+  }
+
+  return data as VisitRequestWithLead | null;
+}
+
 export async function getRecentVisitRequests(
   supabase: Client,
   userId: string,
