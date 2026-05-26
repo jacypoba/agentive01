@@ -43,11 +43,8 @@ export async function processIncomingWhatsAppMessage(
     });
   }
 
-  const { userMessage, aiMessage } = await processClientMessageWithAI(
-    supabase,
-    lead,
-    incoming.text
-  );
+  const { userMessage, aiMessage, lead: updatedLead } =
+    await processClientMessageWithAI(supabase, lead, incoming.text);
 
   let whatsappSent = false;
 
@@ -61,7 +58,7 @@ export async function processIncomingWhatsAppMessage(
   }
 
   return {
-    lead,
+    lead: updatedLead,
     clientMessage: userMessage,
     aiMessage,
     whatsappSent,

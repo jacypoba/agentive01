@@ -3,7 +3,7 @@ import {
   formatPhoneDisplay,
   normalizePhoneDigits,
 } from "@/lib/phone/normalize";
-import type { Database, Lead, LeadInsert, LeadStatus } from "@/types/database";
+import type { Database, Lead, LeadInsert, LeadStatus, LeadUpdate } from "@/types/database";
 
 type Client = SupabaseClient<Database>;
 
@@ -84,6 +84,25 @@ export async function createLead(
 
   if (error) {
     throw new Error(`Failed to create lead: ${error.message}`);
+  }
+
+  return data;
+}
+
+export async function updateLeadQualification(
+  supabase: Client,
+  leadId: string,
+  fields: LeadUpdate
+): Promise<Lead> {
+  const { data, error } = await supabase
+    .from("leads")
+    .update(fields)
+    .eq("id", leadId)
+    .select("*")
+    .single();
+
+  if (error) {
+    throw new Error(`Failed to update lead qualification: ${error.message}`);
   }
 
   return data;

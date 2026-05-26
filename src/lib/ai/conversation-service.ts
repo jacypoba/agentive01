@@ -1,3 +1,4 @@
+import { extractAndApplyLeadQualification } from "@/lib/ai/apply-qualification";
 import { generateAIReply } from "@/lib/ai/generate-reply";
 import {
   createConversation,
@@ -18,9 +19,10 @@ type Client = SupabaseClient<Database>;
 export type SendWithAIResult = {
   userMessage: Conversation;
   aiMessage?: Conversation;
+  lead: Lead;
 };
 
-/** Core flow: save client message → generate AI reply → save AI message. */
+/** Core flow: save client message → generate AI reply → save AI message → extract qualification. */
 export async function processClientMessageWithAI(
   supabase: Client,
   lead: Lead,
@@ -41,7 +43,14 @@ export async function processClientMessageWithAI(
     sender: "ai",
   });
 
-  return { userMessage, aiMessage };
+  const fullHistory = await getConversationsByLead(supabase, lead.id);
+  const updatedLead = await extractAndApplyLeadQualification(
+    supabase,
+    lead,
+    fullHistory
+  );
+
+  return { userMessage, aiMessage, lead: updatedLead };
 }
 
 export async function sendMessageWithAI(
@@ -73,5 +82,5 @@ export async function sendMessageWithAI(
     sender,
   });
 
-  return { userMessage };
+  return { userMessage, lead };
 }

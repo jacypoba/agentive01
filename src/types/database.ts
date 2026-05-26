@@ -15,6 +15,14 @@ export type Profile = {
   created_at: string;
 };
 
+export type IntentStatus =
+  | "unknown"
+  | "browsing"
+  | "interested"
+  | "qualified"
+  | "ready_to_visit"
+  | "not_interested";
+
 export type Lead = {
   id: string;
   user_id: string;
@@ -23,7 +31,24 @@ export type Lead = {
   phone_normalized: string | null;
   interest: string | null;
   status: LeadStatus;
+  budget: string | null;
+  preferred_area: string | null;
+  property_type: string | null;
+  timeline: string | null;
+  intent_status: IntentStatus | null;
+  visit_requested: boolean;
+  visit_datetime_text: string | null;
   created_at: string;
+};
+
+export type LeadQualificationFields = {
+  budget?: string | null;
+  preferred_area?: string | null;
+  property_type?: string | null;
+  timeline?: string | null;
+  intent_status?: IntentStatus | null;
+  visit_requested?: boolean;
+  visit_datetime_text?: string | null;
 };
 
 export type Conversation = {
@@ -62,6 +87,13 @@ export type LeadUpdate = {
   phone?: string | null;
   interest?: string | null;
   status?: LeadStatus;
+  budget?: string | null;
+  preferred_area?: string | null;
+  property_type?: string | null;
+  timeline?: string | null;
+  intent_status?: IntentStatus | null;
+  visit_requested?: boolean;
+  visit_datetime_text?: string | null;
 };
 
 export type ConversationInsert = {

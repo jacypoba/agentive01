@@ -8,6 +8,7 @@
 4. Click **Run**
 5. Run `supabase/migrations/002_whatsapp_evolution.sql` for WhatsApp + Realtime support
 6. Run `supabase/migrations/003_whatsapp_message_dedup.sql` to prevent duplicate AI replies
+7. Run `supabase/migrations/004_lead_qualification_fields.sql` for AI-extracted lead fields
 
 ## Evolution API (WhatsApp)
 

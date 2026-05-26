@@ -3,7 +3,9 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { CreateTestLeadButton } from "@/components/dashboard/create-test-lead-button";
+import { LeadQualificationSummary } from "@/components/leads/lead-qualification-summary";
 import { formatLeadDate, getStatusBadgeColor } from "@/lib/leads/status";
+import { getIntentStatusColor, getIntentStatusLabel } from "@/lib/leads/qualification-display";
 import type { Lead } from "@/types/database";
 
 type LeadsListProps = {
@@ -78,6 +80,12 @@ export function LeadsList({ leads, dbError }: LeadsListProps) {
         lead.phone ?? "",
         lead.interest ?? "",
         lead.status,
+        lead.budget ?? "",
+        lead.preferred_area ?? "",
+        lead.property_type ?? "",
+        lead.timeline ?? "",
+        lead.intent_status ?? "",
+        lead.visit_datetime_text ?? "",
       ]
         .join(" ")
         .toLowerCase();
@@ -97,7 +105,7 @@ export function LeadsList({ leads, dbError }: LeadsListProps) {
             type="search"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search by name, phone, interest, status…"
+            placeholder="Search by name, phone, budget, area, status…"
             className="w-full rounded-xl border border-white/10 bg-white/5 py-3 pl-11 pr-4 text-sm text-white placeholder:text-white/30 outline-none transition-colors focus:border-[#0066FF]/50 focus:ring-2 focus:ring-[#0066FF]/20"
           />
         </div>
@@ -191,7 +199,17 @@ export function LeadsList({ leads, dbError }: LeadsListProps) {
                   </span>
                 </div>
 
-                <div className="relative mt-5 space-y-2.5 border-t border-white/5 pt-4">
+                <div className="relative mt-5 space-y-3 border-t border-white/5 pt-4">
+                  {lead.intent_status && lead.intent_status !== "unknown" && (
+                    <span
+                      className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-medium ${getIntentStatusColor(lead.intent_status)}`}
+                    >
+                      {getIntentStatusLabel(lead.intent_status)}
+                    </span>
+                  )}
+
+                  <LeadQualificationSummary lead={lead} compact />
+
                   {lead.phone && (
                     <div className="flex items-center gap-2 text-xs text-white/60">
                       <PhoneIcon />
