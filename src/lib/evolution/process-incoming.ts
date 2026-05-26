@@ -1,5 +1,5 @@
 import { processClientMessageWithAI } from "@/lib/ai/conversation-service";
-import { sendWhatsAppText } from "@/lib/evolution/client";
+import { sendOutboundWhatsAppMessages } from "@/lib/properties/send-whatsapp";
 import type { ParsedIncomingMessage } from "@/lib/evolution/types";
 import { createLead, getLeadByPhone } from "@/lib/data/leads";
 import { formatPhoneDisplay } from "@/lib/phone/normalize";
@@ -10,6 +10,7 @@ export type ProcessIncomingResult = {
   lead: Lead;
   clientMessage: Conversation;
   aiMessage?: Conversation;
+  aiMessages?: Conversation[];
   whatsappSent: boolean;
   isNewLead: boolean;
 };
@@ -43,15 +44,20 @@ export async function processIncomingWhatsAppMessage(
     });
   }
 
-  const { userMessage, aiMessage, lead: updatedLead } =
-    await processClientMessageWithAI(supabase, lead, incoming.text);
+  const {
+    userMessage,
+    aiMessage,
+    aiMessages,
+    outboundMessages,
+    lead: updatedLead,
+  } = await processClientMessageWithAI(supabase, lead, incoming.text);
 
   let whatsappSent = false;
 
-  if (aiMessage) {
-    await sendWhatsAppText(
+  if (outboundMessages.length > 0) {
+    await sendOutboundWhatsAppMessages(
       incoming.phoneDigits,
-      aiMessage.message,
+      outboundMessages,
       incoming.instance
     );
     whatsappSent = true;
@@ -61,6 +67,7 @@ export async function processIncomingWhatsAppMessage(
     lead: updatedLead,
     clientMessage: userMessage,
     aiMessage,
+    aiMessages,
     whatsappSent,
     isNewLead,
   };

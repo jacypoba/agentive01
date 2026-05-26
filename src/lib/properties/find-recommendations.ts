@@ -9,7 +9,7 @@ export async function findPropertyRecommendations(
   supabase: Client,
   lead: Lead,
   history: Conversation[],
-  limit = 3
+  limit = 10
 ): Promise<Property[]> {
   const criteria = derivePropertySearchCriteria(lead, history);
   if (!criteria) {

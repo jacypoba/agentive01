@@ -3,11 +3,15 @@ export type SendTextResult = {
   status?: number;
 };
 
-export async function sendWhatsAppText(
-  phoneDigits: string,
-  text: string,
-  instance?: string
-): Promise<SendTextResult> {
+export type SendMediaPayload = {
+  mediatype: "image" | "video" | "document";
+  media: string;
+  caption?: string;
+  mimetype?: string;
+  fileName?: string;
+};
+
+function getEvolutionConfig(instance?: string) {
   const baseUrl = process.env.EVOLUTION_API_URL?.replace(/\/+$/, "");
   const apiKey = process.env.EVOLUTION_API_KEY;
   const instanceName =
@@ -18,6 +22,16 @@ export async function sendWhatsAppText(
       "Evolution API is not configured. Set EVOLUTION_API_URL, EVOLUTION_API_KEY, and EVOLUTION_INSTANCE_NAME."
     );
   }
+
+  return { baseUrl, apiKey, instanceName };
+}
+
+export async function sendWhatsAppText(
+  phoneDigits: string,
+  text: string,
+  instance?: string
+): Promise<SendTextResult> {
+  const { baseUrl, apiKey, instanceName } = getEvolutionConfig(instance);
 
   const response = await fetch(
     `${baseUrl}/message/sendText/${encodeURIComponent(instanceName)}`,
@@ -38,6 +52,42 @@ export async function sendWhatsAppText(
     const body = await response.text();
     throw new Error(
       `Evolution API send failed (${response.status}): ${body}`
+    );
+  }
+
+  return { success: true, status: response.status };
+}
+
+export async function sendWhatsAppMedia(
+  phoneDigits: string,
+  payload: SendMediaPayload,
+  instance?: string
+): Promise<SendTextResult> {
+  const { baseUrl, apiKey, instanceName } = getEvolutionConfig(instance);
+
+  const response = await fetch(
+    `${baseUrl}/message/sendMedia/${encodeURIComponent(instanceName)}`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        apikey: apiKey,
+      },
+      body: JSON.stringify({
+        number: phoneDigits,
+        mediatype: payload.mediatype,
+        mimetype: payload.mimetype,
+        caption: payload.caption,
+        media: payload.media,
+        fileName: payload.fileName,
+      }),
+    }
+  );
+
+  if (!response.ok) {
+    const body = await response.text();
+    throw new Error(
+      `Evolution API media send failed (${response.status}): ${body}`
     );
   }
 
