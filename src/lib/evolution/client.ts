@@ -74,9 +74,8 @@ export async function sendWhatsAppMedia(
     fileName: payload.fileName,
   };
 
-  console.log("[WhatsApp debug] Evolution sendMedia endpoint:", endpoint);
-  console.log("[WhatsApp debug] Evolution sendMedia image URL:", payload.media);
-  console.log("[WhatsApp debug] Evolution sendMedia payload:", requestBody);
+  console.log("[EVOLUTION MEDIA REQUEST] endpoint:", endpoint);
+  console.log("[EVOLUTION MEDIA REQUEST] payload:", requestBody);
 
   try {
     const response = await fetch(endpoint, {

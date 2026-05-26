@@ -41,6 +41,10 @@ function buildPropertyDetailLines(property: Property): string[] {
     lines.push("🔗 Ver detalhes:", listingUrl);
   }
 
+  if (property.image_url?.trim()) {
+    lines.push("🖼️ Foto:", property.image_url.trim());
+  }
+
   return lines;
 }
 
