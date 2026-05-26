@@ -13,6 +13,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import type { EvolutionWebhookPayload } from "@/lib/evolution/types";
 
 export async function POST(request: Request) {
+  console.log("[WhatsApp debug] Webhook received");
+
   let claimedMessageId: string | null = null;
   let claimedInstance: string | null = null;
   let adminClient: ReturnType<typeof createAdminClient> | null = null;
@@ -30,6 +32,9 @@ export async function POST(request: Request) {
     if (!incoming) {
       return NextResponse.json({ ok: true, skipped: true });
     }
+
+    console.log("[WhatsApp debug] Sender phone:", incoming.phoneDigits);
+    console.log("[WhatsApp debug] Incoming message text:", incoming.text);
 
     adminClient = createAdminClient();
 

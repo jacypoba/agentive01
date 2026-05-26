@@ -6,6 +6,7 @@ import {
   getConversationsByLead,
 } from "@/lib/data/conversations";
 import { findPropertyRecommendations } from "@/lib/properties/find-recommendations";
+import { derivePropertySearchCriteria } from "@/lib/properties/search-criteria";
 import {
   buildPropertyFollowUpText,
   formatPropertyCard,
@@ -69,15 +70,31 @@ export async function processClientMessageWithAI(
     lead
   );
 
+  const criteria = derivePropertySearchCriteria(memoryLead, history);
+  console.log("[WhatsApp debug] Extracted criteria:", criteria);
+
   const matchingProperties = await findPropertyRecommendations(
     supabase,
     memoryLead,
     history,
     10
   );
+  console.log(
+    "[WhatsApp debug] Matching properties count:",
+    matchingProperties.length
+  );
+  console.log(
+    "[WhatsApp debug] Matching property titles:",
+    matchingProperties.map((property) => property.title)
+  );
+
   const propertyToRecommend = selectNextPropertyToRecommend(
     matchingProperties,
     history
+  );
+  console.log(
+    "[WhatsApp debug] Selected property title:",
+    propertyToRecommend?.title ?? null
   );
 
   const aiReply = await generateAIReply(
@@ -122,6 +139,11 @@ export async function processClientMessageWithAI(
     aiMessages.push(followUpMessage);
     outboundMessages.push({ kind: "text", text: followUpText });
   }
+
+  console.log(
+    "[WhatsApp debug] Outbound message kinds:",
+    outboundMessages.map((message) => message.kind)
+  );
 
   const fullHistory = await getConversationsByLead(supabase, lead.id);
   const updatedLead = await extractAndApplyLeadQualification(

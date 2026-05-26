@@ -30,6 +30,10 @@ export async function sendOutboundWhatsAppMessages(
 ): Promise<void> {
   for (const message of messages) {
     if (message.kind === "property_image") {
+      console.log(
+        "[WhatsApp debug] property_image image_url:",
+        message.property.image_url
+      );
       const imageUrl = message.property.image_url?.trim();
       if (!imageUrl) {
         continue;

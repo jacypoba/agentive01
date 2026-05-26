@@ -1,13 +1,17 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createProperty } from "@/lib/data/properties";
+import { createProperty, updateProperty } from "@/lib/data/properties";
 import { createClient } from "@/lib/supabase/server";
+import type { PropertyUpdate } from "@/types/database";
 
-export type CreatePropertyState = {
+export type PropertyActionState = {
   error?: string;
   success?: string;
 };
+
+export type CreatePropertyState = PropertyActionState;
+export type UpdatePropertyState = PropertyActionState;
 
 function parseOptionalInt(value: FormDataEntryValue | null): number | null {
   const text = (value as string)?.trim();
@@ -23,19 +27,18 @@ function parsePrice(value: FormDataEntryValue | null): number | null {
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
 }
 
-export async function createPropertyAction(
-  _prevState: CreatePropertyState,
-  formData: FormData
-): Promise<CreatePropertyState> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+type ParsedPropertyForm =
+  | { error: string }
+  | {
+      payload: PropertyUpdate & {
+        title: string;
+        city: string;
+        property_type: string;
+        price: number;
+      };
+    };
 
-  if (!user) {
-    return { error: "You must be signed in." };
-  }
-
+function parsePropertyFormData(formData: FormData): ParsedPropertyForm {
   const title = (formData.get("title") as string)?.trim();
   const city = (formData.get("city") as string)?.trim();
   const neighborhood = (formData.get("neighborhood") as string)?.trim() || null;
@@ -55,9 +58,8 @@ export async function createPropertyAction(
     return { error: "Enter a valid price." };
   }
 
-  try {
-    await createProperty(supabase, {
-      user_id: user.id,
+  return {
+    payload: {
       title,
       city,
       neighborhood,
@@ -68,6 +70,37 @@ export async function createPropertyAction(
       description,
       image_url: imageUrl,
       listing_url: listingUrl,
+    },
+  };
+}
+
+function revalidatePropertyPaths() {
+  revalidatePath("/properties");
+  revalidatePath("/dashboard/properties");
+}
+
+export async function createPropertyAction(
+  _prevState: CreatePropertyState,
+  formData: FormData
+): Promise<CreatePropertyState> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { error: "You must be signed in." };
+  }
+
+  const parsed = parsePropertyFormData(formData);
+  if ("error" in parsed) {
+    return { error: parsed.error };
+  }
+
+  try {
+    await createProperty(supabase, {
+      user_id: user.id,
+      ...parsed.payload,
     });
   } catch (error) {
     return {
@@ -76,6 +109,42 @@ export async function createPropertyAction(
     };
   }
 
-  revalidatePath("/properties");
+  revalidatePropertyPaths();
   return { success: "Property created successfully." };
+}
+
+export async function updatePropertyAction(
+  _prevState: UpdatePropertyState,
+  formData: FormData
+): Promise<UpdatePropertyState> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { error: "You must be signed in." };
+  }
+
+  const propertyId = (formData.get("property_id") as string)?.trim();
+  if (!propertyId) {
+    return { error: "Property ID is required." };
+  }
+
+  const parsed = parsePropertyFormData(formData);
+  if ("error" in parsed) {
+    return { error: parsed.error };
+  }
+
+  try {
+    await updateProperty(supabase, propertyId, user.id, parsed.payload);
+  } catch (error) {
+    return {
+      error:
+        error instanceof Error ? error.message : "Failed to update property.",
+    };
+  }
+
+  revalidatePropertyPaths();
+  return { success: "Property updated successfully." };
 }

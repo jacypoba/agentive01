@@ -3,6 +3,7 @@ import type {
   Database,
   Property,
   PropertyInsert,
+  PropertyUpdate,
   PropertySearchCriteria,
 } from "@/types/database";
 
@@ -37,6 +38,27 @@ export async function createProperty(
 
   if (error) {
     throw new Error(`Failed to create property: ${error.message}`);
+  }
+
+  return normalizeProperty(data);
+}
+
+export async function updateProperty(
+  supabase: Client,
+  propertyId: string,
+  userId: string,
+  fields: PropertyUpdate
+): Promise<Property> {
+  const { data, error } = await supabase
+    .from("properties")
+    .update(fields)
+    .eq("id", propertyId)
+    .eq("user_id", userId)
+    .select("*")
+    .single();
+
+  if (error) {
+    throw new Error(`Failed to update property: ${error.message}`);
   }
 
   return normalizeProperty(data);

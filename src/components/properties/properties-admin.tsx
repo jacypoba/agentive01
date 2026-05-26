@@ -1,14 +1,15 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useEffect, useState } from "react";
 import {
   createPropertyAction,
-  type CreatePropertyState,
+  updatePropertyAction,
+  type PropertyActionState,
 } from "@/app/actions/properties";
 import { formatPropertyPrice } from "@/lib/properties/search-criteria";
 import type { Property } from "@/types/database";
 
-const initialState: CreatePropertyState = {};
+const initialState: PropertyActionState = {};
 
 type PropertiesAdminProps = {
   properties: Property[];
@@ -21,12 +22,14 @@ function Field({
   type = "text",
   required = false,
   placeholder,
+  defaultValue,
 }: {
   label: string;
   name: string;
   type?: string;
   required?: boolean;
   placeholder?: string;
+  defaultValue?: string | number;
 }) {
   return (
     <label className="block">
@@ -38,6 +41,7 @@ function Field({
         type={type}
         required={required}
         placeholder={placeholder}
+        defaultValue={defaultValue}
         className="mt-2 w-full rounded-xl border border-white/10 bg-black/40 px-4 py-2.5 text-sm text-white placeholder:text-white/25 focus:border-[#0066FF]/50 focus:outline-none"
       />
     </label>
@@ -45,15 +49,36 @@ function Field({
 }
 
 export function PropertiesAdmin({ properties, dbError }: PropertiesAdminProps) {
-  const [state, formAction, isPending] = useActionState(
+  const [editingPropertyId, setEditingPropertyId] = useState<string | null>(null);
+  const editingProperty =
+    properties.find((property) => property.id === editingPropertyId) ?? null;
+  const isEditing = editingPropertyId != null;
+
+  const [createState, createAction, createPending] = useActionState(
     createPropertyAction,
     initialState
   );
+  const [updateState, updateAction, updatePending] = useActionState(
+    updatePropertyAction,
+    initialState
+  );
+
+  const formAction = isEditing ? updateAction : createAction;
+  const state = isEditing ? updateState : createState;
+  const isPending = isEditing ? updatePending : createPending;
+
+  useEffect(() => {
+    if (state.success && isEditing) {
+      setEditingPropertyId(null);
+    }
+  }, [state.success, isEditing]);
 
   return (
     <div className="grid gap-8 lg:grid-cols-2">
       <section className="rounded-2xl border border-white/10 bg-white/[0.02] p-6">
-        <h2 className="text-lg font-semibold">Add property</h2>
+        <h2 className="text-lg font-semibold">
+          {editingProperty ? "Edit property" : "Add property"}
+        </h2>
         <p className="mt-1 text-sm text-white/45">
           Listings here are matched against WhatsApp leads by city, budget, and
           property type.
@@ -90,14 +115,36 @@ export function PropertiesAdmin({ properties, dbError }: PropertiesAdminProps) {
           </div>
         )}
 
-        <form action={formAction} className="mt-6 space-y-4">
-          <Field label="Title" name="title" required placeholder="Moradia com jardim" />
+        <form
+          key={editingPropertyId ?? "new"}
+          action={formAction}
+          className="mt-6 space-y-4"
+        >
+          <input
+            type="hidden"
+            name="property_id"
+            value={editingPropertyId ?? ""}
+          />
+          <Field
+            label="Title"
+            name="title"
+            required
+            placeholder="Moradia com jardim"
+            defaultValue={editingProperty?.title ?? ""}
+          />
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="City" name="city" required placeholder="Milano" />
+            <Field
+              label="City"
+              name="city"
+              required
+              placeholder="Milano"
+              defaultValue={editingProperty?.city ?? ""}
+            />
             <Field
               label="Neighborhood"
               name="neighborhood"
               placeholder="Navigli"
+              defaultValue={editingProperty?.neighborhood ?? ""}
             />
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
@@ -106,6 +153,7 @@ export function PropertiesAdmin({ properties, dbError }: PropertiesAdminProps) {
               name="property_type"
               required
               placeholder="Moradia"
+              defaultValue={editingProperty?.property_type ?? ""}
             />
             <Field
               label="Price (EUR)"
@@ -113,11 +161,24 @@ export function PropertiesAdmin({ properties, dbError }: PropertiesAdminProps) {
               type="number"
               required
               placeholder="750000"
+              defaultValue={editingProperty?.price ?? ""}
             />
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Bedrooms" name="bedrooms" type="number" placeholder="3" />
-            <Field label="Bathrooms" name="bathrooms" type="number" placeholder="2" />
+            <Field
+              label="Bedrooms"
+              name="bedrooms"
+              type="number"
+              placeholder="3"
+              defaultValue={editingProperty?.bedrooms ?? ""}
+            />
+            <Field
+              label="Bathrooms"
+              name="bathrooms"
+              type="number"
+              placeholder="2"
+              defaultValue={editingProperty?.bathrooms ?? ""}
+            />
           </div>
           <label className="block">
             <span className="text-xs font-medium uppercase tracking-wider text-white/40">
@@ -127,6 +188,7 @@ export function PropertiesAdmin({ properties, dbError }: PropertiesAdminProps) {
               name="description"
               rows={3}
               placeholder="Short highlight for the AI to reference…"
+              defaultValue={editingProperty?.description ?? ""}
               className="mt-2 w-full rounded-xl border border-white/10 bg-black/40 px-4 py-2.5 text-sm text-white placeholder:text-white/25 focus:border-[#0066FF]/50 focus:outline-none"
             />
           </label>
@@ -134,19 +196,37 @@ export function PropertiesAdmin({ properties, dbError }: PropertiesAdminProps) {
             label="Image URL"
             name="image_url"
             placeholder="https://…"
+            defaultValue={editingProperty?.image_url ?? ""}
           />
           <Field
             label="Listing URL"
             name="listing_url"
             placeholder="https://…"
+            defaultValue={editingProperty?.listing_url ?? ""}
           />
-          <button
-            type="submit"
-            disabled={isPending || !!dbError}
-            className="rounded-full bg-gradient-to-r from-[#0066FF] to-[#0088FF] px-6 py-2.5 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
-          >
-            {isPending ? "Saving…" : "Create property"}
-          </button>
+          <div className="flex flex-wrap gap-3">
+            <button
+              type="submit"
+              disabled={isPending || !!dbError}
+              className="rounded-full bg-gradient-to-r from-[#0066FF] to-[#0088FF] px-6 py-2.5 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+            >
+              {isPending
+                ? "Saving…"
+                : isEditing
+                  ? "Update property"
+                  : "Create property"}
+            </button>
+            {isEditing && (
+              <button
+                type="button"
+                onClick={() => setEditingPropertyId(null)}
+                disabled={isPending}
+                className="rounded-full border border-white/10 px-6 py-2.5 text-sm font-medium text-white/70 transition-all hover:border-white/20 hover:text-white disabled:opacity-50"
+              >
+                Cancel
+              </button>
+            )}
+          </div>
         </form>
       </section>
 
@@ -164,7 +244,11 @@ export function PropertiesAdmin({ properties, dbError }: PropertiesAdminProps) {
             properties.map((property) => (
               <article
                 key={property.id}
-                className="rounded-2xl border border-white/10 bg-white/[0.02] p-5"
+                className={`rounded-2xl border bg-white/[0.02] p-5 transition-all ${
+                  editingPropertyId === property.id
+                    ? "border-[#0066FF]/40"
+                    : "border-white/10"
+                }`}
               >
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
@@ -174,9 +258,18 @@ export function PropertiesAdmin({ properties, dbError }: PropertiesAdminProps) {
                       {property.neighborhood ? `, ${property.neighborhood}` : ""}
                     </p>
                   </div>
-                  <p className="text-sm font-medium text-[#00D4FF]">
-                    {formatPropertyPrice(property.price)}
-                  </p>
+                  <div className="flex items-center gap-3">
+                    <p className="text-sm font-medium text-[#00D4FF]">
+                      {formatPropertyPrice(property.price)}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => setEditingPropertyId(property.id)}
+                      className="rounded-full border border-white/10 px-3 py-1 text-xs text-white/70 hover:border-[#0066FF]/40 hover:text-white"
+                    >
+                      Edit
+                    </button>
+                  </div>
                 </div>
                 {(property.bedrooms != null || property.bathrooms != null) && (
                   <p className="mt-2 text-xs text-white/35">
