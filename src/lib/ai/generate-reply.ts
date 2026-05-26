@@ -1,4 +1,5 @@
 import OpenAI from "openai";
+import { buildQualificationDirective } from "@/lib/ai/qualification";
 import { REAL_ESTATE_ASSISTANT_PROMPT } from "@/lib/ai/prompts";
 import type { Conversation, Lead } from "@/types/database";
 
@@ -17,22 +18,57 @@ function getModel() {
 }
 
 function buildLeadContext(lead: Lead): string {
-  const parts = [`Client name: ${lead.client_name}`];
-  if (lead.interest) parts.push(`Interest: ${lead.interest}`);
-  if (lead.phone) parts.push(`Phone: ${lead.phone}`);
-  parts.push(`Status: ${lead.status}`);
+  const parts = [`Nome do cliente: ${lead.client_name}`];
+  if (lead.interest && lead.interest !== "WhatsApp inquiry") {
+    parts.push(`Interesse inicial: ${lead.interest}`);
+  }
+  if (lead.phone) parts.push(`Telefone: ${lead.phone}`);
+  parts.push(`Estado do lead: ${lead.status}`);
   return parts.join("\n");
+}
+
+function buildConversationSummary(history: Conversation[]): string {
+  if (history.length === 0) return "Nenhuma mensagem anterior.";
+
+  const recent = history.slice(-12);
+  return recent
+    .map((item) => {
+      const role =
+        item.sender === "client"
+          ? "Cliente"
+          : item.sender === "ai"
+            ? "Assistente"
+            : "Consultor";
+      return `${role}: ${item.message}`;
+    })
+    .join("\n");
 }
 
 function toOpenAIMessages(
   history: Conversation[],
   lead: Lead
 ): OpenAI.Chat.ChatCompletionMessageParam[] {
+  const qualificationDirective = buildQualificationDirective(
+    history,
+    lead.interest
+  );
+
+  const systemContent = [
+    REAL_ESTATE_ASSISTANT_PROMPT,
+    "",
+    "---",
+    "Perfil do lead:",
+    buildLeadContext(lead),
+    "",
+    "---",
+    "Histórico recente:",
+    buildConversationSummary(history),
+    "",
+    qualificationDirective,
+  ].join("\n");
+
   const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
-    {
-      role: "system",
-      content: `${REAL_ESTATE_ASSISTANT_PROMPT}\n\n---\nLead context:\n${buildLeadContext(lead)}`,
-    },
+    { role: "system", content: systemContent },
   ];
 
   for (const item of history) {
@@ -56,8 +92,10 @@ export async function generateAIReply(
   const completion = await openai.chat.completions.create({
     model: getModel(),
     messages,
-    temperature: 0.7,
-    max_tokens: 300,
+    temperature: 0.65,
+    max_tokens: 180,
+    presence_penalty: 0.3,
+    frequency_penalty: 0.4,
   });
 
   const reply = completion.choices[0]?.message?.content?.trim();
