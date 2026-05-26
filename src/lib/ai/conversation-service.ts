@@ -9,9 +9,15 @@ import { findPropertyRecommendations } from "@/lib/properties/find-recommendatio
 import {
   buildPropertyFollowUpText,
   formatPropertyCard,
+  formatPropertyDetails,
+  formatPropertyImageConversationRecord,
+  hasPropertyImage,
   selectNextPropertyToRecommend,
 } from "@/lib/properties/property-cards";
-import type { OutboundWhatsAppMessage } from "@/lib/properties/send-whatsapp";
+import {
+  buildPropertyOutboundMessages,
+  type OutboundWhatsAppMessage,
+} from "@/lib/properties/send-whatsapp";
 import { getLeadById } from "@/lib/data/leads";
 import { createClient } from "@/lib/supabase/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -85,16 +91,27 @@ export async function processClientMessageWithAI(
 
   const introMessage = await saveAiMessage(supabase, lead.id, aiReply);
   aiMessages.push(introMessage);
-  outboundMessages.push({ text: aiReply });
+  outboundMessages.push({ kind: "text", text: aiReply });
 
   if (propertyToRecommend) {
-    const cardText = formatPropertyCard(propertyToRecommend);
-    const cardMessage = await saveAiMessage(supabase, lead.id, cardText);
-    aiMessages.push(cardMessage);
-    outboundMessages.push({
-      text: cardText,
-      property: propertyToRecommend,
-    });
+    const detailsText = hasPropertyImage(propertyToRecommend)
+      ? formatPropertyDetails(propertyToRecommend)
+      : formatPropertyCard(propertyToRecommend);
+
+    if (hasPropertyImage(propertyToRecommend)) {
+      const imageRecord = formatPropertyImageConversationRecord(
+        propertyToRecommend
+      );
+      const imageMessage = await saveAiMessage(supabase, lead.id, imageRecord);
+      aiMessages.push(imageMessage);
+    }
+
+    const detailsMessage = await saveAiMessage(supabase, lead.id, detailsText);
+    aiMessages.push(detailsMessage);
+
+    outboundMessages.push(
+      ...buildPropertyOutboundMessages(propertyToRecommend, detailsText)
+    );
 
     const followUpText = buildPropertyFollowUpText();
     const followUpMessage = await saveAiMessage(
@@ -103,7 +120,7 @@ export async function processClientMessageWithAI(
       followUpText
     );
     aiMessages.push(followUpMessage);
-    outboundMessages.push({ text: followUpText });
+    outboundMessages.push({ kind: "text", text: followUpText });
   }
 
   const fullHistory = await getConversationsByLead(supabase, lead.id);

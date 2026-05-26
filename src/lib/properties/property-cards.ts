@@ -2,19 +2,32 @@ import { formatPropertyPrice } from "@/lib/properties/search-criteria";
 import type { Conversation, Property } from "@/types/database";
 
 const CARD_MARKER = "🏡";
+const IMAGE_MARKER = "📷";
+
+export function formatPropertyImageCaption(property: Property): string {
+  return `${CARD_MARKER} ${property.title}`;
+}
 
 export function formatPropertyCard(property: Property): string {
+  const lines = [`${CARD_MARKER} ${property.title}`, ...buildPropertyDetailLines(property)];
+  return lines.join("\n");
+}
+
+export function formatPropertyDetails(property: Property): string {
+  return buildPropertyDetailLines(property).join("\n");
+}
+
+function buildPropertyDetailLines(property: Property): string[] {
   const location = property.neighborhood
     ? `${property.neighborhood}, ${property.city}`
     : property.city;
 
-  const lines = [
-    `${CARD_MARKER} ${property.title}`,
-    `💰 ${formatPropertyPrice(property.price)}`,
-  ];
+  const lines = [`💰 ${formatPropertyPrice(property.price)}`];
 
   if (property.bedrooms != null) {
-    lines.push(`🛏 ${property.bedrooms} ${property.bedrooms === 1 ? "quarto" : "quartos"}`);
+    lines.push(
+      `🛏 ${property.bedrooms} ${property.bedrooms === 1 ? "quarto" : "quartos"}`
+    );
   }
 
   lines.push(`📍 ${location}`);
@@ -23,11 +36,21 @@ export function formatPropertyCard(property: Property): string {
     lines.push(truncateDescription(property.description.trim()));
   }
 
-  if (property.listing_url?.trim()) {
-    lines.push(`🔗 Ver detalhes: ${property.listing_url.trim()}`);
+  const listingUrl = property.listing_url?.trim();
+  if (listingUrl) {
+    lines.push("🔗 Ver detalhes:", listingUrl);
   }
 
-  return lines.join("\n");
+  return lines;
+}
+
+export function formatPropertyImageConversationRecord(property: Property): string {
+  const imageUrl = property.image_url?.trim();
+  if (!imageUrl) {
+    return formatPropertyCard(property);
+  }
+
+  return `${IMAGE_MARKER} ${property.title}\n${imageUrl}`;
 }
 
 function truncateDescription(description: string, maxLength = 160): string {
@@ -49,7 +72,14 @@ export function wasPropertyAlreadySent(
       return true;
     }
 
-    return message.startsWith(CARD_MARKER) && message.includes(property.title);
+    if (property.image_url && message.includes(property.image_url)) {
+      return true;
+    }
+
+    return (
+      (message.startsWith(CARD_MARKER) || message.startsWith(IMAGE_MARKER)) &&
+      message.includes(property.title)
+    );
   });
 }
 
@@ -70,5 +100,9 @@ export function buildPropertyFollowUpText(): string {
 }
 
 export function isPropertyCardMessage(message: string): boolean {
-  return message.startsWith(CARD_MARKER);
+  return message.startsWith(CARD_MARKER) && !message.startsWith(IMAGE_MARKER);
+}
+
+export function hasPropertyImage(property: Property): boolean {
+  return Boolean(property.image_url?.trim());
 }

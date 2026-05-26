@@ -2,13 +2,26 @@ import {
   sendWhatsAppMedia,
   sendWhatsAppText,
 } from "@/lib/evolution/client";
-import { isPropertyCardMessage } from "@/lib/properties/property-cards";
+import {
+  formatPropertyImageCaption,
+  hasPropertyImage,
+} from "@/lib/properties/property-cards";
 import type { Property } from "@/types/database";
 
-export type OutboundWhatsAppMessage = {
-  text: string;
-  property?: Property;
-};
+export type OutboundWhatsAppMessage =
+  | {
+      kind: "text";
+      text: string;
+    }
+  | {
+      kind: "property_image";
+      property: Property;
+    }
+  | {
+      kind: "property_details";
+      text: string;
+      property: Property;
+    };
 
 export async function sendOutboundWhatsAppMessages(
   phoneDigits: string,
@@ -16,18 +29,20 @@ export async function sendOutboundWhatsAppMessages(
   instance?: string
 ): Promise<void> {
   for (const message of messages) {
-    const property = message.property;
-    const imageUrl = property?.image_url?.trim();
+    if (message.kind === "property_image") {
+      const imageUrl = message.property.image_url?.trim();
+      if (!imageUrl) {
+        continue;
+      }
 
-    if (property && isPropertyCardMessage(message.text) && imageUrl) {
       await sendWhatsAppMedia(
         phoneDigits,
         {
           mediatype: "image",
           media: imageUrl,
-          caption: message.text,
+          caption: formatPropertyImageCaption(message.property),
           mimetype: guessImageMimeType(imageUrl),
-          fileName: buildImageFileName(property),
+          fileName: buildImageFileName(message.property),
         },
         instance
       );
@@ -36,6 +51,25 @@ export async function sendOutboundWhatsAppMessages(
 
     await sendWhatsAppText(phoneDigits, message.text, instance);
   }
+}
+
+export function buildPropertyOutboundMessages(
+  property: Property,
+  detailsText: string
+): OutboundWhatsAppMessage[] {
+  const messages: OutboundWhatsAppMessage[] = [];
+
+  if (hasPropertyImage(property)) {
+    messages.push({ kind: "property_image", property });
+  }
+
+  messages.push({
+    kind: "property_details",
+    text: detailsText,
+    property,
+  });
+
+  return messages;
 }
 
 function guessImageMimeType(url: string): string {
