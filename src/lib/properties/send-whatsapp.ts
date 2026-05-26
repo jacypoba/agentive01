@@ -1,8 +1,4 @@
-import {
-  sendWhatsAppMedia,
-  sendWhatsAppText,
-} from "@/lib/evolution/client";
-import { formatPropertyImageCaption } from "@/lib/properties/property-cards";
+import { sendWhatsAppText } from "@/lib/evolution/client";
 import type { Property } from "@/types/database";
 
 export type OutboundWhatsAppMessage =
@@ -27,25 +23,10 @@ export async function sendOutboundWhatsAppMessages(
 ): Promise<void> {
   for (const message of messages) {
     if (message.kind === "property_image") {
+      console.log("[MEDIA DISABLED - TEXT ONLY]");
       console.log(
-        "[WhatsApp debug] property_image image_url:",
+        "[MEDIA DISABLED - TEXT ONLY] Skipped property_image:",
         message.property.image_url
-      );
-      const imageUrl = message.property.image_url?.trim();
-      if (!imageUrl) {
-        continue;
-      }
-
-      await sendWhatsAppMedia(
-        phoneDigits,
-        {
-          mediatype: "image",
-          media: imageUrl,
-          caption: formatPropertyImageCaption(message.property),
-          mimetype: guessImageMimeType(imageUrl),
-          fileName: buildImageFileName(message.property),
-        },
-        instance
       );
       continue;
     }
@@ -65,21 +46,4 @@ export function buildPropertyOutboundMessages(
       property,
     },
   ];
-}
-
-function guessImageMimeType(url: string): string {
-  const lower = url.toLowerCase();
-  if (lower.includes(".png")) return "image/png";
-  if (lower.includes(".webp")) return "image/webp";
-  if (lower.includes(".gif")) return "image/gif";
-  return "image/jpeg";
-}
-
-function buildImageFileName(property: Property): string {
-  const slug = property.title
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-|-$/g, "")
-    .slice(0, 40);
-  return `${slug || "property"}.jpg`;
 }

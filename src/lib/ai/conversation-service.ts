@@ -10,9 +10,6 @@ import { derivePropertySearchCriteria } from "@/lib/properties/search-criteria";
 import {
   buildPropertyFollowUpText,
   formatPropertyCard,
-  formatPropertyDetails,
-  formatPropertyImageConversationRecord,
-  hasPropertyImage,
   selectNextPropertyToRecommend,
 } from "@/lib/properties/property-cards";
 import {
@@ -111,17 +108,7 @@ export async function processClientMessageWithAI(
   outboundMessages.push({ kind: "text", text: aiReply });
 
   if (propertyToRecommend) {
-    const detailsText = hasPropertyImage(propertyToRecommend)
-      ? formatPropertyDetails(propertyToRecommend)
-      : formatPropertyCard(propertyToRecommend);
-
-    if (hasPropertyImage(propertyToRecommend)) {
-      const imageRecord = formatPropertyImageConversationRecord(
-        propertyToRecommend
-      );
-      const imageMessage = await saveAiMessage(supabase, lead.id, imageRecord);
-      aiMessages.push(imageMessage);
-    }
+    const detailsText = formatPropertyCard(propertyToRecommend);
 
     const detailsMessage = await saveAiMessage(supabase, lead.id, detailsText);
     aiMessages.push(detailsMessage);

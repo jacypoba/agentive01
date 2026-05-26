@@ -63,64 +63,11 @@ export async function sendWhatsAppMedia(
   payload: SendMediaPayload,
   instance?: string
 ): Promise<SendTextResult> {
-  const { baseUrl, apiKey, instanceName } = getEvolutionConfig(instance);
-  const endpoint = `${baseUrl}/message/sendMedia/${encodeURIComponent(instanceName)}`;
-  const requestBody = {
-    number: phoneDigits,
-    mediatype: payload.mediatype,
-    mimetype: payload.mimetype,
-    caption: payload.caption,
+  console.log("[MEDIA DISABLED - TEXT ONLY]");
+  console.log("[MEDIA DISABLED - TEXT ONLY] Skipped sendWhatsAppMedia", {
+    phoneDigits,
     media: payload.media,
-    fileName: payload.fileName,
-  };
-
-  console.log("[EVOLUTION MEDIA REQUEST] endpoint:", endpoint);
-  console.log("[EVOLUTION MEDIA REQUEST] payload:", requestBody);
-
-  try {
-    const response = await fetch(endpoint, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        apikey: apiKey,
-      },
-      body: JSON.stringify(requestBody),
-    });
-
-    if (!response.ok) {
-      const rawData = await response.text();
-      let responseData: unknown = rawData;
-
-      try {
-        responseData = JSON.parse(rawData);
-      } catch {
-        // Keep raw text when the body is not JSON.
-      }
-
-      console.error("[EVOLUTION MEDIA ERROR] response.status:", response.status);
-      console.error("[EVOLUTION MEDIA ERROR] response.data:", responseData);
-      console.error("[EVOLUTION MEDIA ERROR] endpoint URL:", endpoint);
-      console.error("[EVOLUTION MEDIA ERROR] payload:", requestBody);
-
-      throw new Error(
-        `Evolution API media send failed (${response.status}): ${rawData}`
-      );
-    }
-
-    return { success: true, status: response.status };
-  } catch (error) {
-    if (
-      error instanceof Error &&
-      error.message.startsWith("Evolution API media send failed")
-    ) {
-      throw error;
-    }
-
-    console.error("[EVOLUTION MEDIA ERROR] response.status:", "fetch_failed");
-    console.error("[EVOLUTION MEDIA ERROR] response.data:", error);
-    console.error("[EVOLUTION MEDIA ERROR] endpoint URL:", endpoint);
-    console.error("[EVOLUTION MEDIA ERROR] payload:", requestBody);
-
-    throw error;
-  }
+    instance: instance ?? process.env.EVOLUTION_INSTANCE_NAME ?? null,
+  });
+  return { success: true, status: 200 };
 }
