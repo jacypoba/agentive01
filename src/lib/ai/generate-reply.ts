@@ -2,8 +2,9 @@ import OpenAI from "openai";
 import { MEMORY_MESSAGE_LIMIT } from "@/lib/ai/conversation-memory";
 import { buildQualificationDirective } from "@/lib/ai/qualification";
 import { REAL_ESTATE_ASSISTANT_PROMPT } from "@/lib/ai/prompts";
+import { buildPropertyRecommendationDirective } from "@/lib/properties/recommendations";
 import { getIntentStatusLabel } from "@/lib/leads/qualification-display";
-import type { Conversation, Lead } from "@/types/database";
+import type { Conversation, Lead, Property } from "@/types/database";
 
 const DEFAULT_MODEL = "gpt-4.1-mini";
 
@@ -69,10 +70,12 @@ function buildConversationSummary(history: Conversation[]): string {
 
 function toOpenAIMessages(
   history: Conversation[],
-  lead: Lead
+  lead: Lead,
+  matchingProperties: Property[]
 ): OpenAI.Chat.ChatCompletionMessageParam[] {
   const recentHistory = history.slice(-MEMORY_MESSAGE_LIMIT);
   const qualificationDirective = buildQualificationDirective(recentHistory, lead);
+  const propertyDirective = buildPropertyRecommendationDirective(matchingProperties);
 
   const systemContent = [
     REAL_ESTATE_ASSISTANT_PROMPT,
@@ -86,6 +89,8 @@ function toOpenAIMessages(
     buildConversationSummary(recentHistory),
     "",
     qualificationDirective,
+    "",
+    propertyDirective,
   ].join("\n");
 
   const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
@@ -105,10 +110,11 @@ function toOpenAIMessages(
 
 export async function generateAIReply(
   lead: Lead,
-  history: Conversation[]
+  history: Conversation[],
+  matchingProperties: Property[] = []
 ): Promise<string> {
   const openai = getOpenAIClient();
-  const messages = toOpenAIMessages(history, lead);
+  const messages = toOpenAIMessages(history, lead, matchingProperties);
 
   const completion = await openai.chat.completions.create({
     model: getModel(),

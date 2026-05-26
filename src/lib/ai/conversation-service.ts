@@ -1,6 +1,7 @@
 import { extractAndApplyLeadQualification } from "@/lib/ai/apply-qualification";
 import { loadConversationMemory } from "@/lib/ai/conversation-memory";
 import { generateAIReply } from "@/lib/ai/generate-reply";
+import { findPropertyRecommendations } from "@/lib/properties/find-recommendations";
 import {
   createConversation,
   getConversationsByLead,
@@ -39,7 +40,16 @@ export async function processClientMessageWithAI(
     supabase,
     lead
   );
-  const aiReply = await generateAIReply(memoryLead, history);
+  const matchingProperties = await findPropertyRecommendations(
+    supabase,
+    memoryLead,
+    history
+  );
+  const aiReply = await generateAIReply(
+    memoryLead,
+    history,
+    matchingProperties
+  );
 
   const aiMessage = await createConversation(supabase, {
     lead_id: lead.id,

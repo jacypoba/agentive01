@@ -165,6 +165,57 @@ export type VisitRequestWithLead = VisitRequest & {
   >;
 };
 
+export type Property = {
+  id: string;
+  user_id: string;
+  title: string;
+  city: string;
+  neighborhood: string | null;
+  property_type: string;
+  price: number;
+  bedrooms: number | null;
+  bathrooms: number | null;
+  description: string | null;
+  image_url: string | null;
+  listing_url: string | null;
+  created_at: string;
+};
+
+export type PropertyInsert = {
+  id?: string;
+  user_id: string;
+  title: string;
+  city: string;
+  neighborhood?: string | null;
+  property_type: string;
+  price: number;
+  bedrooms?: number | null;
+  bathrooms?: number | null;
+  description?: string | null;
+  image_url?: string | null;
+  listing_url?: string | null;
+  created_at?: string;
+};
+
+export type PropertyUpdate = {
+  title?: string;
+  city?: string;
+  neighborhood?: string | null;
+  property_type?: string;
+  price?: number;
+  bedrooms?: number | null;
+  bathrooms?: number | null;
+  description?: string | null;
+  image_url?: string | null;
+  listing_url?: string | null;
+};
+
+export type PropertySearchCriteria = {
+  city: string;
+  propertyType: string;
+  maxBudget: number;
+};
+
 export type DashboardStats = {
   totalLeads: number;
   qualifiedLeads: number;
@@ -216,6 +267,12 @@ export type Database = {
         Row: VisitRequest;
         Insert: VisitRequestInsert;
         Update: VisitRequestUpdate;
+        Relationships: [];
+      };
+      properties: {
+        Row: Property;
+        Insert: PropertyInsert;
+        Update: PropertyUpdate;
         Relationships: [];
       };
     };
