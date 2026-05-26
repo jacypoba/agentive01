@@ -78,23 +78,50 @@ export async function sendWhatsAppMedia(
   console.log("[WhatsApp debug] Evolution sendMedia image URL:", payload.media);
   console.log("[WhatsApp debug] Evolution sendMedia payload:", requestBody);
 
-  const response = await fetch(endpoint, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      apikey: apiKey,
-    },
-    body: JSON.stringify(requestBody),
-  });
+  try {
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        apikey: apiKey,
+      },
+      body: JSON.stringify(requestBody),
+    });
 
-  if (!response.ok) {
-    const body = await response.text();
-    console.error("[WhatsApp debug] Evolution sendMedia error status:", response.status);
-    console.error("[WhatsApp debug] Evolution sendMedia error body:", body);
-    throw new Error(
-      `Evolution API media send failed (${response.status}): ${body}`
-    );
+    if (!response.ok) {
+      const rawData = await response.text();
+      let responseData: unknown = rawData;
+
+      try {
+        responseData = JSON.parse(rawData);
+      } catch {
+        // Keep raw text when the body is not JSON.
+      }
+
+      console.error("[EVOLUTION MEDIA ERROR] response.status:", response.status);
+      console.error("[EVOLUTION MEDIA ERROR] response.data:", responseData);
+      console.error("[EVOLUTION MEDIA ERROR] endpoint URL:", endpoint);
+      console.error("[EVOLUTION MEDIA ERROR] payload:", requestBody);
+
+      throw new Error(
+        `Evolution API media send failed (${response.status}): ${rawData}`
+      );
+    }
+
+    return { success: true, status: response.status };
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      error.message.startsWith("Evolution API media send failed")
+    ) {
+      throw error;
+    }
+
+    console.error("[EVOLUTION MEDIA ERROR] response.status:", "fetch_failed");
+    console.error("[EVOLUTION MEDIA ERROR] response.data:", error);
+    console.error("[EVOLUTION MEDIA ERROR] endpoint URL:", endpoint);
+    console.error("[EVOLUTION MEDIA ERROR] payload:", requestBody);
+
+    throw error;
   }
-
-  return { success: true, status: response.status };
 }
