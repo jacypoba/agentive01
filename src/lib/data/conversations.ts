@@ -25,6 +25,25 @@ export async function getConversationsByLead(
   return data ?? [];
 }
 
+export async function getRecentConversationsByLead(
+  supabase: Client,
+  leadId: string,
+  limit = 10
+): Promise<Conversation[]> {
+  const { data, error } = await supabase
+    .from("conversations")
+    .select("*")
+    .eq("lead_id", leadId)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+
+  if (error) {
+    throw new Error(`Failed to fetch recent conversations: ${error.message}`);
+  }
+
+  return (data ?? []).reverse();
+}
+
 export async function createConversation(
   supabase: Client,
   conversation: ConversationInsert

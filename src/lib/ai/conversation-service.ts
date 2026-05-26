@@ -1,4 +1,5 @@
 import { extractAndApplyLeadQualification } from "@/lib/ai/apply-qualification";
+import { loadConversationMemory } from "@/lib/ai/conversation-memory";
 import { generateAIReply } from "@/lib/ai/generate-reply";
 import {
   createConversation,
@@ -34,8 +35,11 @@ export async function processClientMessageWithAI(
     sender: "client",
   });
 
-  const history = await getConversationsByLead(supabase, lead.id);
-  const aiReply = await generateAIReply(lead, history);
+  const { lead: memoryLead, history } = await loadConversationMemory(
+    supabase,
+    lead
+  );
+  const aiReply = await generateAIReply(memoryLead, history);
 
   const aiMessage = await createConversation(supabase, {
     lead_id: lead.id,

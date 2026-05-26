@@ -1,4 +1,4 @@
-import type { Conversation } from "@/types/database";
+import type { Conversation, Lead } from "@/types/database";
 
 type QualificationField =
   | "budget"
@@ -67,7 +67,14 @@ function hasBudgetContext(text: string): boolean {
 }
 
 /** Budget mentioned but unclear if rent/buy or monthly/total. */
-export function isBudgetAmbiguous(history: Conversation[]): boolean {
+export function isBudgetAmbiguous(
+  history: Conversation[],
+  lead?: Lead
+): boolean {
+  if (lead?.budget?.trim()) {
+    return false;
+  }
+
   const text = clientMessages(history);
   if (!hasBudgetSignal(text)) return false;
   if (hasBudgetContext(text)) return false;
@@ -90,43 +97,48 @@ function hasTimelineSignal(text: string): boolean {
   );
 }
 
-function isBudgetKnown(history: Conversation[]): boolean {
+function isBudgetKnown(history: Conversation[], lead?: Lead): boolean {
+  if (lead?.budget?.trim()) {
+    return true;
+  }
   const text = clientMessages(history);
-  return hasBudgetSignal(text) && !isBudgetAmbiguous(history);
+  return hasBudgetSignal(text) && !isBudgetAmbiguous(history, lead);
 }
 
 function isFieldKnown(
   field: QualificationField,
   history: Conversation[],
-  leadInterest?: string | null
+  lead: Lead
 ): boolean {
   const clientText = clientMessages(history);
 
   switch (field) {
     case "property_type":
-      return hasPropertyTypeSignal(clientText, leadInterest);
+      return (
+        !!lead.property_type?.trim() ||
+        hasPropertyTypeSignal(clientText, lead.interest)
+      );
     case "area":
-      return hasAreaSignal(clientText, leadInterest);
+      return (
+        !!lead.preferred_area?.trim() ||
+        hasAreaSignal(clientText, lead.interest)
+      );
     case "budget":
-      return isBudgetKnown(history);
+      return isBudgetKnown(history, lead);
     case "timeline":
-      return hasTimelineSignal(clientText);
+      return !!lead.timeline?.trim() || hasTimelineSignal(clientText);
     case "complete":
       return true;
   }
 }
 
-function getNextField(
-  history: Conversation[],
-  leadInterest?: string | null
-): QualificationField {
-  // Prioritise budget clarification when amount is ambiguous
-  if (isBudgetAmbiguous(history)) {
+function getNextField(history: Conversation[], lead: Lead): QualificationField {
+  if (isBudgetAmbiguous(history, lead)) {
     return "budget";
   }
 
   for (const field of QUALIFICATION_ORDER) {
-    if (!isFieldKnown(field, history, leadInterest)) {
+    if (!isFieldKnown(field, history, lead)) {
       return field;
     }
   }
@@ -137,7 +149,11 @@ function isFirstAiReply(history: Conversation[]): boolean {
   return !history.some((item) => item.sender === "ai" || item.sender === "agent");
 }
 
-export function clientWantsVisit(history: Conversation[]): boolean {
+export function clientWantsVisit(history: Conversation[], lead?: Lead): boolean {
+  if (lead?.visit_requested) {
+    return true;
+  }
+
   const clientText = clientMessages(history);
   return /\b(visita|visitar|ver o imóvel|agendar|marcar|conhecer|viewing|schedule|marcação)\b/i.test(
     clientText
@@ -154,19 +170,34 @@ export function detailsWereSentInHistory(history: Conversation[]): boolean {
   );
 }
 
-function buildSafetyLines(history: Conversation[]): string[] {
+function buildSafetyLines(history: Conversation[], lead: Lead): string[] {
   const lines = [
     `- Property/details were actually sent in this chat: ${detailsWereSentInHistory(history) ? "yes — you may refer to them" : "no — NEVER claim you already sent details"}`,
     "- NEVER invent addresses, listings, prices, consultant names, or visit confirmations.",
     "- If discussing a visit: say you'll check availability and confirm back — do NOT say it is booked.",
     "- Avoid corporate phrases: no 'Agradeço o interesse', 'a equipa entrará em contacto', 'Pode indicar-nos'.",
+    "- Do NOT re-ask for info already saved in the lead profile or stated in recent messages.",
   ];
 
-  if (clientWantsVisit(history)) {
+  if (clientWantsVisit(history, lead)) {
     lines.push(
       "- Client wants a visit: respond warmly and naturally (e.g. 'Vou verificar a disponibilidade e já lhe confirmo') — but do NOT confirm scheduling."
     );
   }
+
+  return lines;
+}
+
+function buildSavedLeadMemoryLines(lead: Lead): string[] {
+  const lines = ["- Saved CRM profile (do NOT ask again for known fields):"];
+
+  lines.push(`  - Orçamento: ${lead.budget?.trim() || "desconhecido"}`);
+  lines.push(`  - Zona: ${lead.preferred_area?.trim() || "desconhecida"}`);
+  lines.push(`  - Tipo: ${lead.property_type?.trim() || "desconhecido"}`);
+  lines.push(`  - Prazo: ${lead.timeline?.trim() || "desconhecido"}`);
+  lines.push(
+    `  - Visita pedida: ${lead.visit_requested ? "sim" : "não"}${lead.visit_datetime_text ? ` (${lead.visit_datetime_text})` : ""}`
+  );
 
   return lines;
 }
@@ -177,20 +208,22 @@ function buildSafetyLines(history: Conversation[]): string[] {
  */
 export function buildQualificationDirective(
   history: Conversation[],
-  leadInterest?: string | null
+  lead: Lead
 ): string {
-  const nextField = getNextField(history, leadInterest);
+  const nextField = getNextField(history, lead);
   const firstReply = isFirstAiReply(history);
   const messageCount = history.length;
-  const wantsVisit = clientWantsVisit(history);
-  const budgetAmbiguous = isBudgetAmbiguous(history);
+  const wantsVisit = clientWantsVisit(history, lead);
+  const budgetAmbiguous = isBudgetAmbiguous(history, lead);
 
   const lines = [
     "---",
     "Directive for this reply:",
-    `- Conversation messages so far: ${messageCount}`,
+    `- Conversation messages in context: ${messageCount} (last ${messageCount} from Supabase)`,
     `- First AI reply: ${firstReply ? "yes — you may greet briefly" : "no — do NOT greet or re-introduce yourself"}`,
-    ...buildSafetyLines(history),
+    "- Continue naturally from the last message — do not reset the conversation.",
+    ...buildSavedLeadMemoryLines(lead),
+    ...buildSafetyLines(history, lead),
   ];
 
   if (wantsVisit && nextField !== "complete") {
@@ -258,7 +291,7 @@ export function buildQualificationDirective(
   }
 
   const discussed = QUALIFICATION_ORDER.filter((field) =>
-    isFieldKnown(field, history, leadInterest)
+    isFieldKnown(field, history, lead)
   );
   if (discussed.length > 0) {
     lines.push(
@@ -277,7 +310,7 @@ export function buildQualificationDirective(
 /** Hint for logging / debugging — not used by webhook. */
 export function getQualificationStage(
   history: Conversation[],
-  leadInterest?: string | null
+  lead: Lead
 ): QualificationField {
-  return getNextField(history, leadInterest);
+  return getNextField(history, lead);
 }
