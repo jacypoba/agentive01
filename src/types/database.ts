@@ -76,6 +76,22 @@ export type ConversationWithLead = Conversation & {
   leads: Pick<Lead, "id" | "client_name" | "interest" | "status" | "user_id">;
 };
 
+export type ProcessedWhatsAppMessage = {
+  id: string;
+  message_id: string;
+  instance: string;
+  remote_jid: string | null;
+  created_at: string;
+};
+
+export type ProcessedWhatsAppMessageInsert = {
+  id?: string;
+  message_id: string;
+  instance: string;
+  remote_jid?: string | null;
+  created_at?: string;
+};
+
 export type DashboardStats = {
   totalLeads: number;
   qualifiedLeads: number;
@@ -114,6 +130,12 @@ export type Database = {
         Row: Conversation;
         Insert: ConversationInsert;
         Update: Partial<ConversationInsert>;
+        Relationships: [];
+      };
+      processed_whatsapp_messages: {
+        Row: ProcessedWhatsAppMessage;
+        Insert: ProcessedWhatsAppMessageInsert;
+        Update: Partial<ProcessedWhatsAppMessageInsert>;
         Relationships: [];
       };
     };

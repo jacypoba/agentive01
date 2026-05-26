@@ -9,7 +9,7 @@ export type EvolutionMessageData = {
   key?: {
     id?: string;
     remoteJid?: string;
-    fromMe?: boolean;
+    fromMe?: boolean | string | number;
   };
   pushName?: string;
   message?: {

@@ -7,6 +7,7 @@
 3. Paste the contents of `supabase/migrations/001_initial_schema.sql`
 4. Click **Run**
 5. Run `supabase/migrations/002_whatsapp_evolution.sql` for WhatsApp + Realtime support
+6. Run `supabase/migrations/003_whatsapp_message_dedup.sql` to prevent duplicate AI replies
 
 ## Evolution API (WhatsApp)
 

@@ -1,3 +1,4 @@
+import { isFromMe } from "@/lib/evolution/from-me";
 import {
   isIndividualChat,
   phoneFromRemoteJid,
@@ -7,6 +8,8 @@ import type {
   EvolutionWebhookPayload,
   ParsedIncomingMessage,
 } from "@/lib/evolution/types";
+
+const LOG_PREFIX = "[Evolution webhook]";
 
 function extractMessageText(data: EvolutionMessageData): string | null {
   const message = data.message;
@@ -43,7 +46,20 @@ export function parseEvolutionWebhook(
     return null;
   }
 
-  if (data.key.fromMe === true) {
+  const messageId = data.key.id;
+  if (!messageId) {
+    console.warn(`${LOG_PREFIX} Missing message ID — skipping`, {
+      remoteJid: data.key.remoteJid,
+    });
+    return null;
+  }
+
+  if (isFromMe(data.key.fromMe)) {
+    console.log(`${LOG_PREFIX} Skipped fromMe message`, {
+      messageId,
+      remoteJid: data.key.remoteJid,
+      fromMe: data.key.fromMe,
+    });
     return null;
   }
 
@@ -67,7 +83,7 @@ export function parseEvolutionWebhook(
     phoneDigits: phoneFromRemoteJid(data.key.remoteJid),
     pushName: data.pushName?.trim() || "WhatsApp Lead",
     text,
-    messageId: data.key.id ?? `evo-${Date.now()}`,
+    messageId,
   };
 }
 
@@ -99,4 +115,25 @@ export function verifyEvolutionWebhook(
   }
 
   return false;
+}
+
+/** Log every messages.upsert payload key for observability. */
+export function logIncomingWebhookPayload(
+  payload: EvolutionWebhookPayload
+): void {
+  if (payload.event !== "messages.upsert") {
+    console.log(`${LOG_PREFIX} Event received`, {
+      event: payload.event,
+      instance: payload.instance,
+    });
+    return;
+  }
+
+  console.log(`${LOG_PREFIX} Incoming message ID`, {
+    messageId: payload.data?.key?.id ?? null,
+    instance: payload.instance,
+    remoteJid: payload.data?.key?.remoteJid ?? null,
+    fromMe: payload.data?.key?.fromMe ?? null,
+    messageType: payload.data?.messageType ?? null,
+  });
 }
