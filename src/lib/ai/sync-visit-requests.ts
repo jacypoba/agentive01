@@ -1,5 +1,5 @@
 import type { ExtractedQualification } from "@/lib/ai/extract-qualification";
-import { clientWantsVisit } from "@/lib/ai/qualification";
+import { lastClientMessageMentionsVisit } from "@/lib/ai/qualification";
 import {
   createVisitRequest,
   getPendingVisitRequestForLead,
@@ -8,15 +8,6 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Conversation, Database, Lead, VisitRequest } from "@/types/database";
 
 type Client = SupabaseClient<Database>;
-
-function lastClientMessageWantsVisit(history: Conversation[]): boolean {
-  const lastClient = [...history].reverse().find((item) => item.sender === "client");
-  if (!lastClient) return false;
-
-  return /\b(visita|visitar|ver o imóvel|agendar|marcar|conhecer|viewing|schedule|marcação)\b/i.test(
-    lastClient.message
-  );
-}
 
 /**
  * Creates a pending visit request when the client expresses visit intent.
@@ -32,7 +23,7 @@ export async function syncVisitRequestFromQualification(
     return null;
   }
 
-  if (!lastClientMessageWantsVisit(history) && !clientWantsVisit(history)) {
+  if (!lastClientMessageMentionsVisit(history)) {
     return null;
   }
 

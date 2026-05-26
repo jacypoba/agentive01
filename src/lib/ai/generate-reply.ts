@@ -41,10 +41,11 @@ function buildLeadContext(lead: Lead): string {
     `Tipo de imóvel: ${formatKnown(lead.property_type)}`,
     `Prazo: ${formatKnown(lead.timeline)}`,
     `Intent status: ${getIntentStatusLabel(lead.intent_status ?? "unknown")}`,
-    `Pedido de visita: ${lead.visit_requested ? "sim" : "não"}`,
-    `Data/hora visita (texto): ${formatKnown(lead.visit_datetime_text)}`,
+    `Pedido de visita (histórico CRM): ${lead.visit_requested ? "sim" : "não"}`,
+    `Data/hora visita (histórico): ${formatKnown(lead.visit_datetime_text)}`,
     "",
-    "Memória persistente: use estes dados guardados no CRM. Não volte a perguntar o que já está preenchido — continue a conversa a partir daqui."
+    "Memória persistente: contexto de apoio apenas. Responda sobretudo à última mensagem do cliente.",
+    "Não assuma que pedidos antigos (ex. visitas) continuam ativos. Não invente horários ou confirmações passadas."
   );
 
   return parts.join("\n");

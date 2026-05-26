@@ -108,8 +108,8 @@ Rules:
 - preferred_area: neighbourhood, city, or region
 - property_type: e.g. "T2 apartamento", "moradia 4 quartos"
 - timeline: e.g. "3 meses", "imediato", "verão 2026"
-- visit_requested: true if client wants or asks about a visit — not if a visit was confirmed
-- visit_datetime_text: raw preferred timing text only if the client mentioned it (not AI-invented)
+- visit_requested: true only if the LATEST client message asks about or references scheduling a visit — not from older messages alone
+- visit_datetime_text: raw preferred timing from the latest client message only if they mentioned it (not AI-invented)
 - intent_status: overall buying/renting intent level`;
 
   const userPrompt = `Lead profile:

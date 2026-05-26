@@ -149,15 +149,31 @@ function isFirstAiReply(history: Conversation[]): boolean {
   return !history.some((item) => item.sender === "ai" || item.sender === "agent");
 }
 
-export function clientWantsVisit(history: Conversation[], lead?: Lead): boolean {
-  if (lead?.visit_requested) {
-    return true;
-  }
+const VISIT_PATTERN =
+  /\b(visita|visitar|ver o imóvel|agendar|marcar|conhecer|viewing|schedule|marcação|horário|horario)\b/i;
 
-  const clientText = clientMessages(history);
-  return /\b(visita|visitar|ver o imóvel|agendar|marcar|conhecer|viewing|schedule|marcação)\b/i.test(
-    clientText
+function getLastClientMessage(history: Conversation[]): Conversation | null {
+  return (
+    [...history].reverse().find((item) => item.sender === "client") ?? null
   );
+}
+
+export function getLastClientMessageText(history: Conversation[]): string | null {
+  return getLastClientMessage(history)?.message ?? null;
+}
+
+/** Visit topic is active only when the latest client message explicitly references it. */
+export function lastClientMessageMentionsVisit(
+  history: Conversation[]
+): boolean {
+  const last = getLastClientMessage(history);
+  if (!last) return false;
+  return VISIT_PATTERN.test(last.message);
+}
+
+/** Any client message in history mentions a visit — for logging/debug only. */
+export function clientMessagesMentionVisit(history: Conversation[]): boolean {
+  return VISIT_PATTERN.test(clientMessages(history));
 }
 
 export function detailsWereSentInHistory(history: Conversation[]): boolean {
@@ -171,33 +187,50 @@ export function detailsWereSentInHistory(history: Conversation[]): boolean {
 }
 
 function buildSafetyLines(history: Conversation[], lead: Lead): string[] {
+  const visitActive = lastClientMessageMentionsVisit(history);
   const lines = [
     `- Property/details were actually sent in this chat: ${detailsWereSentInHistory(history) ? "yes — you may refer to them" : "no — NEVER claim you already sent details"}`,
     "- NEVER invent addresses, listings, prices, consultant names, or visit confirmations.",
+    "- NEVER invent or recall previous schedules, confirmed slots, or bookings unless explicitly stated in this chat.",
     "- If discussing a visit: say you'll check availability and confirm back — do NOT say it is booked.",
     "- Avoid corporate phrases: no 'Agradeço o interesse', 'a equipa entrará em contacto', 'Pode indicar-nos'.",
-    "- Do NOT re-ask for info already saved in the lead profile or stated in recent messages.",
+    "- Do NOT re-ask for info already saved in the lead profile or stated in the current exchange.",
+    "- Respond to the LATEST client message first. Older context is background — use only if clearly still relevant.",
   ];
 
-  if (clientWantsVisit(history, lead)) {
+  if (visitActive) {
     lines.push(
-      "- Client wants a visit: respond warmly and naturally (e.g. 'Vou verificar a disponibilidade e já lhe confirmo') — but do NOT confirm scheduling."
+      "- Latest message references a visit: respond warmly (e.g. 'Vou verificar a disponibilidade e já lhe confirmo') — but do NOT confirm scheduling."
     );
+  } else {
+    lines.push(
+      "- Latest message does NOT mention visits: do NOT bring up visits, scheduling, or past visit requests in this reply."
+    );
+    if (lead.visit_requested || lead.visit_datetime_text) {
+      lines.push(
+        "- CRM shows a past visit request — treat as historical. Do NOT assume it is still active unless the client references it now."
+      );
+    }
   }
 
   return lines;
 }
 
 function buildSavedLeadMemoryLines(lead: Lead): string[] {
-  const lines = ["- Saved CRM profile (do NOT ask again for known fields):"];
+  const lines = [
+    "- Saved CRM profile (background reference — do NOT treat as automatic continuation):",
+  ];
 
   lines.push(`  - Orçamento: ${lead.budget?.trim() || "desconhecido"}`);
   lines.push(`  - Zona: ${lead.preferred_area?.trim() || "desconhecida"}`);
   lines.push(`  - Tipo: ${lead.property_type?.trim() || "desconhecido"}`);
   lines.push(`  - Prazo: ${lead.timeline?.trim() || "desconhecido"}`);
-  lines.push(
-    `  - Visita pedida: ${lead.visit_requested ? "sim" : "não"}${lead.visit_datetime_text ? ` (${lead.visit_datetime_text})` : ""}`
-  );
+
+  if (lead.visit_requested || lead.visit_datetime_text) {
+    lines.push(
+      `  - Visita (histórico): ${lead.visit_requested ? "sim" : "não"}${lead.visit_datetime_text ? ` — ${lead.visit_datetime_text}` : ""} — só relevante se o cliente referir agora`
+    );
+  }
 
   return lines;
 }
@@ -213,20 +246,24 @@ export function buildQualificationDirective(
   const nextField = getNextField(history, lead);
   const firstReply = isFirstAiReply(history);
   const messageCount = history.length;
-  const wantsVisit = clientWantsVisit(history, lead);
+  const visitActive = lastClientMessageMentionsVisit(history);
   const budgetAmbiguous = isBudgetAmbiguous(history, lead);
+  const latestClient = getLastClientMessageText(history);
 
   const lines = [
     "---",
     "Directive for this reply:",
     `- Conversation messages in context: ${messageCount} (last ${messageCount} from Supabase)`,
     `- First AI reply: ${firstReply ? "yes — you may greet briefly" : "no — do NOT greet or re-introduce yourself"}`,
-    "- Continue naturally from the last message — do not reset the conversation.",
+    `- Latest client message: ${latestClient ? `"${latestClient.slice(0, 120)}${latestClient.length > 120 ? "…" : ""}"` : "none"}`,
+    "- Reply primarily to the latest client message. Use CRM/history only if clearly still relevant.",
+    "- If the client shared search criteria (tipo, zona, orçamento), acknowledge it and continue qualification naturally.",
+    "- Do NOT mention visits unless the latest client message asks about or references one.",
     ...buildSavedLeadMemoryLines(lead),
     ...buildSafetyLines(history, lead),
   ];
 
-  if (wantsVisit && nextField !== "complete") {
+  if (visitActive && nextField !== "complete") {
     lines.push(
       "- Client wants a visit but qualification is incomplete.",
       "- Do NOT confirm any visit. Acknowledge naturally, then ask for the missing info below.",
@@ -238,15 +275,16 @@ export function buildQualificationDirective(
     lines.push(
       "- Qualification: budget, area, property type, and timeline appear covered."
     );
-    if (wantsVisit) {
+    if (visitActive) {
       lines.push(
-        "- Client wants a visit: respond naturally — e.g. 'Vou verificar a disponibilidade e já lhe confirmo.'",
+        "- Client referenced a visit in their latest message: respond naturally — e.g. 'Vou verificar a disponibilidade e já lhe confirmo.'",
         "- Do NOT confirm a date/time, address, or consultant name."
       );
     } else {
       lines.push(
-        "- Gently suggest a visit or next step when it feels natural — without pressure.",
-        "- Example: 'Quer que veja opções para si?' or 'Posso verificar disponibilidade para uma visita?'"
+        "- Do NOT mention visits or scheduling in this reply unless the client asked.",
+        "- Continue naturally: confirm what you understood and ask a relevant next step (e.g. prazo if still useful), or offer to search options.",
+        "- Example: 'Moradia em Milano até 800 mil — fixe. Tem algum prazo em mente?'"
       );
     }
     lines.push("- Keep it short, warm, and conversational — like a real consultant texting.");
@@ -255,6 +293,7 @@ export function buildQualificationDirective(
       `- Next qualification focus: ${FIELD_LABELS[nextField]}`,
       "- Ask ONLY about this one topic in this message.",
       "- Do not ask about other qualification points yet.",
+      "- Do NOT mention visits in this reply.",
       "- Sound natural, not like a form. Vary your phrasing."
     );
 
