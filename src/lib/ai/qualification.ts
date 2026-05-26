@@ -158,12 +158,13 @@ function buildSafetyLines(history: Conversation[]): string[] {
   const lines = [
     `- Property/details were actually sent in this chat: ${detailsWereSentInHistory(history) ? "yes — you may refer to them" : "no — NEVER claim you already sent details"}`,
     "- NEVER invent addresses, listings, prices, consultant names, or visit confirmations.",
-    "- If discussing a visit: say the team will confirm availability — do NOT confirm it is booked.",
+    "- If discussing a visit: say you'll check availability and confirm back — do NOT say it is booked.",
+    "- Avoid corporate phrases: no 'Agradeço o interesse', 'a equipa entrará em contacto', 'Pode indicar-nos'.",
   ];
 
   if (clientWantsVisit(history)) {
     lines.push(
-      "- Client expressed visit interest: acknowledge warmly, but do not confirm scheduling."
+      "- Client wants a visit: respond warmly and naturally (e.g. 'Vou verificar a disponibilidade e já lhe confirmo') — but do NOT confirm scheduling."
     );
   }
 
@@ -195,8 +196,8 @@ export function buildQualificationDirective(
   if (wantsVisit && nextField !== "complete") {
     lines.push(
       "- Client wants a visit but qualification is incomplete.",
-      "- Do NOT confirm any visit. Briefly acknowledge, then ask for the missing info below.",
-      "- Mention that the team will confirm availability once details are clear."
+      "- Do NOT confirm any visit. Acknowledge naturally, then ask for the missing info below.",
+      "- Example: 'Perfeito 👌 Antes de marcar, só preciso de perceber [missing info] — consegue dizer-me?'"
     );
   }
 
@@ -206,50 +207,51 @@ export function buildQualificationDirective(
     );
     if (wantsVisit) {
       lines.push(
-        "- Client wants a visit: say the team will check availability and contact them shortly.",
-        "- Do NOT confirm a date/time or invent a consultant."
+        "- Client wants a visit: respond naturally — e.g. 'Vou verificar a disponibilidade e já lhe confirmo.'",
+        "- Do NOT confirm a date/time, address, or consultant name."
       );
     } else {
       lines.push(
-        "- Gently suggest that the team can arrange a visit or call once they're ready.",
-        "- Do NOT confirm anything — say availability will be confirmed by the team."
+        "- Gently suggest a visit or next step when it feels natural — without pressure.",
+        "- Example: 'Quer que veja opções para si?' or 'Posso verificar disponibilidade para uma visita?'"
       );
     }
-    lines.push("- Keep it short, warm, and realistic.");
+    lines.push("- Keep it short, warm, and conversational — like a real consultant texting.");
   } else {
     lines.push(
       `- Next qualification focus: ${FIELD_LABELS[nextField]}`,
       "- Ask ONLY about this one topic in this message.",
-      "- Do not ask about other qualification points yet."
+      "- Do not ask about other qualification points yet.",
+      "- Sound natural, not like a form. Vary your phrasing."
     );
 
     switch (nextField) {
       case "property_type":
         lines.push(
-          "- Example angle: what type of property and how many bedrooms they need."
+          "- Example tones: 'Que tipo de imóvel procura?' / 'Está à procura de apartamento ou moradia?' / 'Quantos quartos precisa?'"
         );
         break;
       case "area":
         lines.push(
-          "- Example angle: which neighbourhood, city, or region they prefer."
+          "- Example tones: 'Boa escolha. Prefere alguma zona específica?' / 'Tem alguma zona em mente?' / 'Lisboa, Porto, ou outra?'"
         );
         break;
       case "budget":
         if (budgetAmbiguous) {
           lines.push(
             "- Budget seems ambiguous or incomplete.",
-            "- Ask ONE question to clarify: arrendamento vs compra, and/or mensal vs total.",
-            "- Do not assume. Do not judge — just clarify tactfully."
+            "- Ask ONE natural clarifying question: compra vs arrendamento, and/or mensal vs total.",
+            "- Example: 'Entendi. Está mais inclinado para compra ou arrendamento?' or 'Esse valor seria mensal?'"
           );
         } else {
           lines.push(
-            "- Example angle: comfortable budget range — be tactful and premium in tone."
+            "- Example tones: 'E qual seria o orçamento mais ou menos?' / 'Tem alguma faixa de preço em mente?'"
           );
         }
         break;
       case "timeline":
         lines.push(
-          "- Example angle: when they plan to decide, visit, or move."
+          "- Example tones: 'Top. Quando gostaria de avançar?' / 'Tem algum prazo em mente?' / 'É para breve ou ainda a explorar?'"
         );
         break;
     }
@@ -265,7 +267,8 @@ export function buildQualificationDirective(
   }
 
   lines.push(
-    "- Remember: reply in conversational Portuguese, 1–3 sentences, one question only."
+    "- Reply in natural conversational Portuguese, 1–3 sentences, one question only.",
+    "- Never use corporate/customer-support phrasing."
   );
 
   return lines.join("\n");

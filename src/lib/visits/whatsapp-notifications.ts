@@ -18,10 +18,10 @@ export function buildVisitConfirmedMessage(
 ): string {
   const name = firstName(clientName);
   const whenClause = requestedDatetimeText
-    ? ` referente a ${requestedDatetimeText}`
+    ? ` para ${requestedDatetimeText}`
     : "";
 
-  return `${name}, a nossa equipa confirmou o seu pedido de visita${whenClause}. Entraremos em contacto em breve com os detalhes finais. Obrigado!`;
+  return `Perfeito, ${name} 👌 A visita ficou confirmada${whenClause}. Já trato dos detalhes finais e volto a falar consigo em breve.`;
 }
 
 export function buildVisitCancelledMessage(
@@ -33,7 +33,7 @@ export function buildVisitCancelledMessage(
     ? ` para ${requestedDatetimeText}`
     : "";
 
-  return `${name}, infelizmente o horário solicitado${slotClause} já não está disponível. Pode indicar-nos outra data ou horário de preferência? Obrigado!`;
+  return `${name}, esse horário${slotClause} já não dá infelizmente 🙏 Tem outra data ou horário que lhe funcione melhor?`;
 }
 
 export function resolveLeadPhoneDigits(lead: Lead): string | null {

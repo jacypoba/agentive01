@@ -92,10 +92,10 @@ export async function generateAIReply(
   const completion = await openai.chat.completions.create({
     model: getModel(),
     messages,
-    temperature: 0.65,
+    temperature: 0.78,
     max_tokens: 180,
-    presence_penalty: 0.3,
-    frequency_penalty: 0.4,
+    presence_penalty: 0.45,
+    frequency_penalty: 0.55,
   });
 
   const reply = completion.choices[0]?.message?.content?.trim();
