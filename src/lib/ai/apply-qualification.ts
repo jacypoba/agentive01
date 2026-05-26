@@ -25,8 +25,9 @@ function derivePipelineStatus(
   lead: Lead,
   extracted: Awaited<ReturnType<typeof extractLeadQualification>>
 ): LeadStatus {
+  // Visit interest ≠ confirmed visit — keep pipeline realistic
   if (extracted.visit_requested) {
-    return pickHigherStatus(lead.status, "scheduled");
+    return pickHigherStatus(lead.status, "qualified");
   }
 
   const filledCount = [

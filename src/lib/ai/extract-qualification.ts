@@ -104,12 +104,12 @@ Return ONLY valid JSON with this exact shape:
 Rules:
 - Extract only what is explicitly stated or strongly implied in the conversation.
 - Use null when unknown — do not guess.
-- budget: e.g. "até 500 mil €", "800k-1M"
+- budget: include context when stated, e.g. "até 500 mil € compra", "1.200 €/mês arrendamento"
 - preferred_area: neighbourhood, city, or region
 - property_type: e.g. "T2 apartamento", "moradia 4 quartos"
 - timeline: e.g. "3 meses", "imediato", "verão 2026"
-- visit_requested: true if client wants or agrees to a visit/meeting
-- visit_datetime_text: raw text about when they want to visit, if mentioned
+- visit_requested: true if client wants or asks about a visit — not if a visit was confirmed
+- visit_datetime_text: raw preferred timing text only if the client mentioned it (not AI-invented)
 - intent_status: overall buying/renting intent level`;
 
   const userPrompt = `Lead profile:
