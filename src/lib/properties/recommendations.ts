@@ -30,7 +30,7 @@ export function buildPropertyRecommendationDirective(
         ? `- Example: 'Tenho estas opções em ${cityHint} 👇' or 'Encontrei algumas que encaixam bem${cityClause}.'`
         : "- Example: 'Encontrei algumas que encaixam bem 👇' or 'Tenho estas opções para si.'",
       "- NO question mark. NO repeating their criteria. NO listing details or prices.",
-      "- A soft closing may follow the catalog — do NOT preview it in your intro.",
+      "- A soft, consultative comparison (1–2 sentences) may follow the catalog — do NOT preview it in your intro.",
       "- NEVER invent listings or details.",
     ].join("\n");
   }

@@ -1,6 +1,7 @@
 import { extractAndApplyLeadQualification } from "@/lib/ai/apply-qualification";
 import { loadConversationMemory } from "@/lib/ai/conversation-memory";
 import { generateAIReply } from "@/lib/ai/generate-reply";
+import { generateCatalogComparison } from "@/lib/ai/generate-catalog-comparison";
 import { clientAskedToSeeOptions } from "@/lib/ai/qualification";
 import {
   createConversation,
@@ -9,7 +10,6 @@ import {
 import { findPropertyRecommendations } from "@/lib/properties/find-recommendations";
 import { derivePropertySearchCriteria } from "@/lib/properties/search-criteria";
 import {
-  buildCatalogClosingText,
   buildPropertyFollowUpText,
   formatPropertyCard,
   formatPropertyListingRecord,
@@ -158,9 +158,11 @@ export async function processClientMessageWithAI(
       ...buildCatalogOutboundMessages(propertiesToRecommend, detailsTexts)
     );
 
-    const closingText = buildCatalogClosingText(propertiesToRecommend, {
-      clientAskedForOptions,
-    });
+    const closingText = await generateCatalogComparison(
+      memoryLead,
+      history,
+      propertiesToRecommend
+    );
     if (closingText) {
       const closingMessage = await saveAiMessage(
         supabase,

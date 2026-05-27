@@ -183,38 +183,6 @@ export function buildPropertyFollowUpText(
   return singleMatch[Math.floor(Math.random() * singleMatch.length)];
 }
 
-export type CatalogClosingOptions = {
-  clientAskedForOptions: boolean;
-};
-
-/** Soft closing after a full catalog — optional, never a question. */
-export function buildCatalogClosingText(
-  properties: Property[],
-  options: CatalogClosingOptions
-): string | null {
-  if (options.clientAskedForOptions || properties.length < CATALOG_MIN) {
-    return null;
-  }
-
-  if (Math.random() < 0.3) {
-    return null;
-  }
-
-  const ordinals = ["A primeira", "A segunda", "A terceira", "A quarta"];
-  const highlightIndex =
-    properties.length >= 3 ? 1 : Math.floor(Math.random() * properties.length);
-  const highlight = ordinals[highlightIndex] ?? "Esta";
-
-  const closings = [
-    `${highlight} parece encaixar bastante no perfil.`,
-    "Qualquer uma destas pode fazer sentido — veja com calma.",
-    `${highlight} é provavelmente a que mais se aproxima do que pediu.`,
-    "São as que melhor encaixam no perfil de momento.",
-  ];
-
-  return closings[Math.floor(Math.random() * closings.length)];
-}
-
 export function isPropertyCardMessage(message: string): boolean {
   return message.startsWith(CARD_MARKER) && !message.startsWith(IMAGE_MARKER);
 }
