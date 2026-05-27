@@ -1,6 +1,7 @@
 import { extractAndApplyLeadQualification } from "@/lib/ai/apply-qualification";
 import { loadConversationMemory } from "@/lib/ai/conversation-memory";
 import { generateAIReply } from "@/lib/ai/generate-reply";
+import { clientAskedToSeeOptions } from "@/lib/ai/qualification";
 import {
   createConversation,
   getConversationsByLead,
@@ -12,6 +13,7 @@ import {
   formatPropertyCard,
   formatPropertyListingRecord,
   selectNextPropertyToRecommend,
+  wasPropertyAlreadySent,
 } from "@/lib/properties/property-cards";
 import {
   buildPropertyOutboundMessages,
@@ -98,7 +100,8 @@ export async function processClientMessageWithAI(
   const aiReply = await generateAIReply(
     memoryLead,
     history,
-    propertyToRecommend
+    propertyToRecommend,
+    matchingProperties.length
   );
 
   const aiMessages: Conversation[] = [];
@@ -128,14 +131,23 @@ export async function processClientMessageWithAI(
       ...buildPropertyOutboundMessages(propertyToRecommend, detailsText)
     );
 
-    const followUpText = buildPropertyFollowUpText();
-    const followUpMessage = await saveAiMessage(
-      supabase,
-      lead.id,
-      followUpText
+    const unsentMatches = matchingProperties.filter(
+      (property) => !wasPropertyAlreadySent(history, property)
     );
-    aiMessages.push(followUpMessage);
-    outboundMessages.push({ kind: "text", text: followUpText });
+    const followUpText = buildPropertyFollowUpText({
+      hasMoreMatches: unsentMatches.length > 1,
+      clientAskedForOptions: clientAskedToSeeOptions(history),
+    });
+
+    if (followUpText) {
+      const followUpMessage = await saveAiMessage(
+        supabase,
+        lead.id,
+        followUpText
+      );
+      aiMessages.push(followUpMessage);
+      outboundMessages.push({ kind: "text", text: followUpText });
+    }
   }
 
   console.log(

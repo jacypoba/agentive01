@@ -72,10 +72,18 @@ function buildConversationSummary(history: Conversation[]): string {
 function toOpenAIMessages(
   history: Conversation[],
   lead: Lead,
-  propertyToRecommend: Property | null
+  propertyToRecommend: Property | null,
+  matchingPropertyCount: number
 ): OpenAI.Chat.ChatCompletionMessageParam[] {
   const recentHistory = history.slice(-MEMORY_MESSAGE_LIMIT);
-  const qualificationDirective = buildQualificationDirective(recentHistory, lead);
+  const qualificationDirective = buildQualificationDirective(
+    recentHistory,
+    lead,
+    {
+      propertyBeingSent: propertyToRecommend,
+      matchingPropertyCount,
+    }
+  );
   const propertyDirective =
     buildPropertyRecommendationDirective(propertyToRecommend);
 
@@ -113,10 +121,16 @@ function toOpenAIMessages(
 export async function generateAIReply(
   lead: Lead,
   history: Conversation[],
-  propertyToRecommend: Property | null = null
+  propertyToRecommend: Property | null = null,
+  matchingPropertyCount = 0
 ): Promise<string> {
   const openai = getOpenAIClient();
-  const messages = toOpenAIMessages(history, lead, propertyToRecommend);
+  const messages = toOpenAIMessages(
+    history,
+    lead,
+    propertyToRecommend,
+    matchingPropertyCount
+  );
 
   const completion = await openai.chat.completions.create({
     model: getModel(),

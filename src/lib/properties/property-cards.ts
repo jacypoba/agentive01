@@ -103,15 +103,38 @@ export function selectNextPropertyToRecommend(
   return null;
 }
 
-export function buildPropertyFollowUpText(): string {
-  const options = [
-    "Esta parece encaixar bastante no que procura 👌",
-    "Acho que esta faz sentido para o que descreveu.",
-    "Parece-me uma boa match — diz-me o que pensa.",
-    "Esta tinha mesmo o perfil que mencionou.",
-    "Curiosa para saber o que acha desta 🙂",
+export type PropertyFollowUpOptions = {
+  hasMoreMatches: boolean;
+  clientAskedForOptions: boolean;
+};
+
+/** Optional statement after a property card — never a question. Returns null to skip. */
+export function buildPropertyFollowUpText(
+  options: PropertyFollowUpOptions
+): string | null {
+  if (options.clientAskedForOptions) {
+    return null;
+  }
+
+  if (options.hasMoreMatches) {
+    const withMore = [
+      "Tenho também outras opções semelhantes, se quiser ver depois.",
+      "Esta foi a primeira — tenho mais no mesmo perfil.",
+      "Esta encaixa bem no que pediu. Há mais no mesmo estilo.",
+    ];
+    return withMore[Math.floor(Math.random() * withMore.length)];
+  }
+
+  if (Math.random() < 0.45) {
+    return null;
+  }
+
+  const singleMatch = [
+    "Esta foi a melhor opção que encontrei dentro do perfil.",
+    "Esta encaixa bem no que pediu.",
+    "Acho que esta faz sentido para o perfil.",
   ];
-  return options[Math.floor(Math.random() * options.length)];
+  return singleMatch[Math.floor(Math.random() * singleMatch.length)];
 }
 
 export function isPropertyCardMessage(message: string): boolean {

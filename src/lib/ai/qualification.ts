@@ -1,4 +1,4 @@
-import type { Conversation, Lead } from "@/types/database";
+import type { Conversation, Lead, Property } from "@/types/database";
 
 type QualificationField =
   | "budget"
@@ -152,6 +152,9 @@ function isFirstAiReply(history: Conversation[]): boolean {
 const VISIT_PATTERN =
   /\b(visita|visitar|ver o imóvel|agendar|marcar|conhecer|viewing|schedule|marcação|horário|horario)\b/i;
 
+const OPTIONS_REQUEST_PATTERN =
+  /\b(opções|opcões|imóveis|imoveis|mostra|mostrar|envia|enviar|manda|mandar|partilha|partilhar|recomenda|sugere|tens algo|tem algo|alguma coisa|algum imóvel|quero ver|ver opções|ver imóveis|mandar opções|enviar opções|procura algo|procuro algo)\b/i;
+
 function getLastClientMessage(history: Conversation[]): Conversation | null {
   return (
     [...history].reverse().find((item) => item.sender === "client") ?? null
@@ -160,6 +163,13 @@ function getLastClientMessage(history: Conversation[]): Conversation | null {
 
 export function getLastClientMessageText(history: Conversation[]): string | null {
   return getLastClientMessage(history)?.message ?? null;
+}
+
+/** Client explicitly asked to see listings or options. */
+export function clientAskedToSeeOptions(history: Conversation[]): boolean {
+  const last = getLastClientMessage(history);
+  if (!last) return false;
+  return OPTIONS_REQUEST_PATTERN.test(last.message);
 }
 
 /** Visit topic is active only when the latest client message explicitly references it. */
@@ -235,20 +245,28 @@ function buildSavedLeadMemoryLines(lead: Lead): string[] {
   return lines;
 }
 
+export type QualificationDirectiveOptions = {
+  propertyBeingSent?: Property | null;
+  matchingPropertyCount?: number;
+};
+
 /**
  * Builds a dynamic directive appended to the system prompt so the model
- * asks one qualification question at a time and avoids repeated greetings.
+ * qualifies only when needed and avoids forced follow-up questions.
  */
 export function buildQualificationDirective(
   history: Conversation[],
-  lead: Lead
+  lead: Lead,
+  options: QualificationDirectiveOptions = {}
 ): string {
+  const { propertyBeingSent = null, matchingPropertyCount = 0 } = options;
   const nextField = getNextField(history, lead);
   const firstReply = isFirstAiReply(history);
   const messageCount = history.length;
   const visitActive = lastClientMessageMentionsVisit(history);
   const budgetAmbiguous = isBudgetAmbiguous(history, lead);
   const latestClient = getLastClientMessageText(history);
+  const wantsOptions = clientAskedToSeeOptions(history);
 
   const lines = [
     "---",
@@ -257,17 +275,32 @@ export function buildQualificationDirective(
     `- First AI reply: ${firstReply ? "yes — you may greet briefly" : "no — do NOT greet or re-introduce yourself"}`,
     `- Latest client message: ${latestClient ? `"${latestClient.slice(0, 120)}${latestClient.length > 120 ? "…" : ""}"` : "none"}`,
     "- Reply primarily to the latest client message. Use CRM/history only if clearly still relevant.",
-    "- If the client shared search criteria (tipo, zona, orçamento), acknowledge it and continue qualification naturally.",
+    "- Do NOT repeat criteria the client already gave (budget, zone, type, timeline).",
+    "- Do NOT end with a question unless one key field is genuinely missing.",
     "- Do NOT mention visits unless the latest client message asks about or references one.",
     ...buildSavedLeadMemoryLines(lead),
     ...buildSafetyLines(history, lead),
   ];
 
+  if (propertyBeingSent || (wantsOptions && matchingPropertyCount > 0)) {
+    lines.push(
+      "- Client wants listings / a matching property card will be sent after your reply.",
+      "- Write ONE brief intro sentence only — no question mark, no repeating their search criteria.",
+      "- Do NOT ask what they think, offer to search, or ask qualification questions.",
+      "- Example: 'Tenho uma opção para si 👇' or 'Esta pode encaixar 👇' — then stop."
+    );
+    lines.push(
+      "- Reply in natural conversational Portuguese. Statement only — no question.",
+      "- Never use corporate/customer-support phrasing."
+    );
+    return lines.join("\n");
+  }
+
   if (visitActive && nextField !== "complete") {
     lines.push(
       "- Client wants a visit but qualification is incomplete.",
-      "- Do NOT confirm any visit. Acknowledge naturally, then ask for the missing info below.",
-      "- Example: 'Perfeito 👌 Antes de marcar, só preciso de perceber [missing info] — consegue dizer-me?'"
+      "- Do NOT confirm any visit. Acknowledge briefly.",
+      "- Ask for the missing info ONLY if truly needed — one short question max."
     );
   }
 
@@ -277,54 +310,45 @@ export function buildQualificationDirective(
     );
     if (visitActive) {
       lines.push(
-        "- Client referenced a visit in their latest message: respond naturally — e.g. 'Vou verificar a disponibilidade e já lhe confirmo.'",
+        "- Client referenced a visit: respond naturally — e.g. 'Deixa-me ver a disponibilidade e já te digo.'",
         "- Do NOT confirm a date/time, address, or consultant name."
       );
     } else {
       lines.push(
-        "- Do NOT mention visits or scheduling in this reply unless the client asked.",
-        "- Continue naturally: confirm what you understood and ask a relevant next step (e.g. prazo if still useful), or offer to search options.",
-        "- Example: 'Moradia em Milano até 800 mil — fixe. Tem algum prazo em mente?'"
+        "- Do NOT mention visits or scheduling unless the client asked.",
+        "- Use a short statement — no forced question. Example: 'Perfeito, já tenho o perfil.'",
+        "- Only ask if the client seems stuck and you truly need one detail."
       );
     }
     lines.push("- Keep it short, warm, and conversational — like a real consultant texting.");
   } else {
     lines.push(
-      `- Next qualification focus: ${FIELD_LABELS[nextField]}`,
-      "- Ask ONLY about this one topic in this message.",
-      "- Do not ask about other qualification points yet.",
+      `- Next qualification focus (only if genuinely missing): ${FIELD_LABELS[nextField]}`,
+      "- Ask about this ONLY if you cannot proceed without it — otherwise use a statement.",
       "- Do NOT mention visits in this reply.",
-      "- Sound natural, not like a form. Vary your phrasing."
+      "- Do NOT repeat info the client already shared in their latest message."
     );
 
     switch (nextField) {
       case "property_type":
         lines.push(
-          "- Example tones: 'Que tipo de imóvel procura?' / 'Está à procura de apartamento ou moradia?' / 'Quantos quartos precisa?'"
+          "- If needed: 'Apartamento ou moradia?' — skip if they already said."
         );
         break;
       case "area":
-        lines.push(
-          "- Example tones: 'Boa escolha. Prefere alguma zona específica?' / 'Tem alguma zona em mente?' / 'Lisboa, Porto, ou outra?'"
-        );
+        lines.push("- If needed: 'Alguma zona em mente?' — skip if they already said.");
         break;
       case "budget":
         if (budgetAmbiguous) {
           lines.push(
-            "- Budget seems ambiguous or incomplete.",
-            "- Ask ONE natural clarifying question: compra vs arrendamento, and/or mensal vs total.",
-            "- Example: 'Entendi. Está mais inclinado para compra ou arrendamento?' or 'Esse valor seria mensal?'"
+            "- Budget ambiguous: ONE clarifier only if needed — compra vs arrendamento, or mensal vs total."
           );
         } else {
-          lines.push(
-            "- Example tones: 'E qual seria o orçamento mais ou menos?' / 'Tem alguma faixa de preço em mente?'"
-          );
+          lines.push("- If needed: 'Orçamento mais ou menos?' — skip if they already said.");
         }
         break;
       case "timeline":
-        lines.push(
-          "- Example tones: 'Top. Quando gostaria de avançar?' / 'Tem algum prazo em mente?' / 'É para breve ou ainda a explorar?'"
-        );
+        lines.push("- Timeline is optional — skip unless naturally relevant.");
         break;
     }
   }
@@ -334,12 +358,13 @@ export function buildQualificationDirective(
   );
   if (discussed.length > 0) {
     lines.push(
-      `- Already known: ${discussed.map((f) => FIELD_LABELS[f]).join(", ")}`
+      `- Already known (do NOT repeat back): ${discussed.map((f) => FIELD_LABELS[f]).join(", ")}`
     );
   }
 
   lines.push(
-    "- Reply in natural conversational Portuguese, 1–3 sentences, one question only.",
+    "- Reply in natural conversational Portuguese, 1–2 sentences.",
+    "- Question is optional — prefer a statement when enough context exists.",
     "- Never use corporate/customer-support phrasing."
   );
 

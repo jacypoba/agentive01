@@ -9,7 +9,7 @@ export function buildPropertyRecommendationDirective(
       "Property recommendations:",
       "- No new matching listing to send in this turn (none matched, or all were already shared).",
       "- Do NOT invent or describe fake properties.",
-      "- If the client is looking for options, one casual sentence — e.g. 'Deixa-me ver o que tenho.'",
+      "- One casual sentence if needed — no forced question.",
       "- Do NOT use corporate phrasing like 'vou reunir opções' or 'obrigado pelo interesse'.",
     ].join("\n");
   }
@@ -19,9 +19,9 @@ export function buildPropertyRecommendationDirective(
     "Property recommendations:",
     "- A property card (photo + details + link) will be sent automatically RIGHT AFTER your message.",
     `- Listing: "${property.title}" in ${property.neighborhood ?? property.city}.`,
-    "- Your reply = ONE short, natural intro sentence only — e.g. 'Tenho uma opção que pode fazer sentido 👇'.",
+    "- Your reply = ONE short intro sentence — e.g. 'Tenho uma opção para si 👇'.",
+    "- NO question mark. NO repeating their criteria. NO 'quer que eu...'.",
     "- Do NOT include price, specs, links, or card formatting — the card handles that.",
-    "- Do NOT ask a question in the intro — a natural follow-up comes after the card.",
     "- NEVER invent listings or details.",
   ].join("\n");
 }
