@@ -3,6 +3,7 @@ import {
   sendWhatsAppText,
 } from "@/lib/evolution/client";
 import {
+  formatCatalogSpacer,
   formatPropertyImageCaption,
   formatPropertyListingLabel,
   hasPropertyImage,
@@ -19,6 +20,8 @@ export type OutboundWhatsAppMessage =
       kind: "property_image";
       property: Property;
       fallbackText: string;
+      catalogIndex?: number;
+      catalogTotal?: number;
     }
   | {
       kind: "property_details";
@@ -29,6 +32,9 @@ export type OutboundWhatsAppMessage =
       kind: "property_listing";
       property: Property;
       url: string;
+    }
+  | {
+      kind: "catalog_spacer";
     };
 
 export async function sendOutboundWhatsAppMessages(
@@ -39,6 +45,11 @@ export async function sendOutboundWhatsAppMessages(
   const textFallbackPropertyIds = new Set<string>();
 
   for (const message of messages) {
+    if (message.kind === "catalog_spacer") {
+      await sendWhatsAppText(phoneDigits, formatCatalogSpacer(), instance);
+      continue;
+    }
+
     if (message.kind === "property_image") {
       const imageUrl = message.property.image_url?.trim();
       if (!imageUrl) {
@@ -51,7 +62,11 @@ export async function sendOutboundWhatsAppMessages(
           {
             mediatype: "image",
             media: imageUrl,
-            caption: formatPropertyImageCaption(message.property),
+            caption: formatPropertyImageCaption(
+              message.property,
+              message.catalogIndex,
+              message.catalogTotal
+            ),
             mimetype: guessImageMimeType(imageUrl),
             fileName: buildImageFileName(message.property),
           },
@@ -89,7 +104,9 @@ export async function sendOutboundWhatsAppMessages(
 
 export function buildPropertyOutboundMessages(
   property: Property,
-  detailsText: string
+  detailsText: string,
+  catalogIndex?: number,
+  catalogTotal?: number
 ): OutboundWhatsAppMessage[] {
   const messages: OutboundWhatsAppMessage[] = [];
 
@@ -98,6 +115,8 @@ export function buildPropertyOutboundMessages(
       kind: "property_image",
       property,
       fallbackText: detailsText,
+      catalogIndex,
+      catalogTotal,
     });
   }
 
@@ -115,6 +134,34 @@ export function buildPropertyOutboundMessages(
       url: listingUrl,
     });
   }
+
+  return messages;
+}
+
+export function buildCatalogOutboundMessages(
+  properties: Property[],
+  detailsTexts: string[]
+): OutboundWhatsAppMessage[] {
+  const catalogTotal = properties.length;
+  const messages: OutboundWhatsAppMessage[] = [];
+
+  properties.forEach((property, index) => {
+    const catalogIndex = index + 1;
+    const detailsText = detailsTexts[index] ?? "";
+
+    messages.push(
+      ...buildPropertyOutboundMessages(
+        property,
+        detailsText,
+        catalogIndex,
+        catalogTotal
+      )
+    );
+
+    if (index < properties.length - 1) {
+      messages.push({ kind: "catalog_spacer" });
+    }
+  });
 
   return messages;
 }

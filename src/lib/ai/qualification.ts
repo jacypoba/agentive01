@@ -246,7 +246,7 @@ function buildSavedLeadMemoryLines(lead: Lead): string[] {
 }
 
 export type QualificationDirectiveOptions = {
-  propertyBeingSent?: Property | null;
+  propertiesBeingSent?: Property[];
   matchingPropertyCount?: number;
 };
 
@@ -259,7 +259,8 @@ export function buildQualificationDirective(
   lead: Lead,
   options: QualificationDirectiveOptions = {}
 ): string {
-  const { propertyBeingSent = null, matchingPropertyCount = 0 } = options;
+  const { propertiesBeingSent = [], matchingPropertyCount = 0 } = options;
+  const catalogCount = propertiesBeingSent.length;
   const nextField = getNextField(history, lead);
   const firstReply = isFirstAiReply(history);
   const messageCount = history.length;
@@ -282,7 +283,21 @@ export function buildQualificationDirective(
     ...buildSafetyLines(history, lead),
   ];
 
-  if (propertyBeingSent || (wantsOptions && matchingPropertyCount > 0)) {
+  if (catalogCount >= 2) {
+    lines.push(
+      `- A catalog of ${catalogCount} property cards will be sent after your reply.`,
+      "- Write ONE brief catalog intro — no question mark, no repeating their search criteria.",
+      "- Example: 'Tenho estas opções 👇' or 'Encontrei algumas que encaixam bem.' — then stop.",
+      "- Do NOT ask what they think or ask qualification questions."
+    );
+    lines.push(
+      "- Reply in natural conversational Portuguese. Statement only — no question.",
+      "- Never use corporate/customer-support phrasing."
+    );
+    return lines.join("\n");
+  }
+
+  if (catalogCount === 1 || (wantsOptions && matchingPropertyCount > 0)) {
     lines.push(
       "- Client wants listings / a matching property card will be sent after your reply.",
       "- Write ONE brief intro sentence only — no question mark, no repeating their search criteria.",

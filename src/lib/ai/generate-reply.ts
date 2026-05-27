@@ -72,7 +72,7 @@ function buildConversationSummary(history: Conversation[]): string {
 function toOpenAIMessages(
   history: Conversation[],
   lead: Lead,
-  propertyToRecommend: Property | null,
+  propertiesToRecommend: Property[],
   matchingPropertyCount: number
 ): OpenAI.Chat.ChatCompletionMessageParam[] {
   const recentHistory = history.slice(-MEMORY_MESSAGE_LIMIT);
@@ -80,12 +80,12 @@ function toOpenAIMessages(
     recentHistory,
     lead,
     {
-      propertyBeingSent: propertyToRecommend,
+      propertiesBeingSent: propertiesToRecommend,
       matchingPropertyCount,
     }
   );
   const propertyDirective =
-    buildPropertyRecommendationDirective(propertyToRecommend);
+    buildPropertyRecommendationDirective(propertiesToRecommend);
 
   const systemContent = [
     REAL_ESTATE_ASSISTANT_PROMPT,
@@ -121,14 +121,14 @@ function toOpenAIMessages(
 export async function generateAIReply(
   lead: Lead,
   history: Conversation[],
-  propertyToRecommend: Property | null = null,
+  propertiesToRecommend: Property[] = [],
   matchingPropertyCount = 0
 ): Promise<string> {
   const openai = getOpenAIClient();
   const messages = toOpenAIMessages(
     history,
     lead,
-    propertyToRecommend,
+    propertiesToRecommend,
     matchingPropertyCount
   );
 

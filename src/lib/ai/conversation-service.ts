@@ -9,13 +9,16 @@ import {
 import { findPropertyRecommendations } from "@/lib/properties/find-recommendations";
 import { derivePropertySearchCriteria } from "@/lib/properties/search-criteria";
 import {
+  buildCatalogClosingText,
   buildPropertyFollowUpText,
   formatPropertyCard,
   formatPropertyListingRecord,
-  selectNextPropertyToRecommend,
+  isCatalogBatch,
+  selectPropertiesForCatalog,
   wasPropertyAlreadySent,
 } from "@/lib/properties/property-cards";
 import {
+  buildCatalogOutboundMessages,
   buildPropertyOutboundMessages,
   type OutboundWhatsAppMessage,
 } from "@/lib/properties/send-whatsapp";
@@ -38,6 +41,7 @@ export type SendWithAIResult = {
   aiMessages: Conversation[];
   outboundMessages: OutboundWhatsAppMessage[];
   recommendedProperty?: Property;
+  recommendedProperties?: Property[];
   lead: Lead;
 };
 
@@ -51,6 +55,26 @@ async function saveAiMessage(
     message,
     sender: "ai",
   });
+}
+
+async function persistPropertyRecommendation(
+  supabase: Client,
+  leadId: string,
+  property: Property,
+  catalogIndex?: number,
+  catalogTotal?: number
+): Promise<Conversation[]> {
+  const saved: Conversation[] = [];
+  const detailsText = formatPropertyCard(property, catalogIndex, catalogTotal);
+
+  saved.push(await saveAiMessage(supabase, leadId, detailsText));
+
+  const listingRecord = formatPropertyListingRecord(property);
+  if (listingRecord) {
+    saved.push(await saveAiMessage(supabase, leadId, listingRecord));
+  }
+
+  return saved;
 }
 
 /** Core flow: save client message → generate AI reply → save AI message → extract qualification. */
@@ -88,19 +112,19 @@ export async function processClientMessageWithAI(
     matchingProperties.map((property) => property.title)
   );
 
-  const propertyToRecommend = selectNextPropertyToRecommend(
+  const propertiesToRecommend = selectPropertiesForCatalog(
     matchingProperties,
     history
   );
   console.log(
-    "[WhatsApp debug] Selected property title:",
-    propertyToRecommend?.title ?? null
+    "[WhatsApp debug] Catalog batch:",
+    propertiesToRecommend.map((property) => property.title)
   );
 
   const aiReply = await generateAIReply(
     memoryLead,
     history,
-    propertyToRecommend,
+    propertiesToRecommend,
     matchingProperties.length
   );
 
@@ -111,32 +135,62 @@ export async function processClientMessageWithAI(
   aiMessages.push(introMessage);
   outboundMessages.push({ kind: "text", text: aiReply });
 
-  if (propertyToRecommend) {
-    const detailsText = formatPropertyCard(propertyToRecommend);
+  const clientAskedForOptions = clientAskedToSeeOptions(history);
 
-    const detailsMessage = await saveAiMessage(supabase, lead.id, detailsText);
-    aiMessages.push(detailsMessage);
+  if (isCatalogBatch(propertiesToRecommend)) {
+    const catalogTotal = propertiesToRecommend.length;
+    const detailsTexts = propertiesToRecommend.map((property, index) =>
+      formatPropertyCard(property, index + 1, catalogTotal)
+    );
 
-    const listingRecord = formatPropertyListingRecord(propertyToRecommend);
-    if (listingRecord) {
-      const listingMessage = await saveAiMessage(
+    for (let index = 0; index < propertiesToRecommend.length; index++) {
+      const propertyMessages = await persistPropertyRecommendation(
         supabase,
         lead.id,
-        listingRecord
+        propertiesToRecommend[index],
+        index + 1,
+        catalogTotal
       );
-      aiMessages.push(listingMessage);
+      aiMessages.push(...propertyMessages);
     }
 
     outboundMessages.push(
-      ...buildPropertyOutboundMessages(propertyToRecommend, detailsText)
+      ...buildCatalogOutboundMessages(propertiesToRecommend, detailsTexts)
+    );
+
+    const closingText = buildCatalogClosingText(propertiesToRecommend, {
+      clientAskedForOptions,
+    });
+    if (closingText) {
+      const closingMessage = await saveAiMessage(
+        supabase,
+        lead.id,
+        closingText
+      );
+      aiMessages.push(closingMessage);
+      outboundMessages.push({ kind: "text", text: closingText });
+    }
+  } else if (propertiesToRecommend.length === 1) {
+    const property = propertiesToRecommend[0];
+    const detailsText = formatPropertyCard(property);
+
+    const propertyMessages = await persistPropertyRecommendation(
+      supabase,
+      lead.id,
+      property
+    );
+    aiMessages.push(...propertyMessages);
+
+    outboundMessages.push(
+      ...buildPropertyOutboundMessages(property, detailsText)
     );
 
     const unsentMatches = matchingProperties.filter(
-      (property) => !wasPropertyAlreadySent(history, property)
+      (match) => !wasPropertyAlreadySent(history, match)
     );
     const followUpText = buildPropertyFollowUpText({
       hasMoreMatches: unsentMatches.length > 1,
-      clientAskedForOptions: clientAskedToSeeOptions(history),
+      clientAskedForOptions,
     });
 
     if (followUpText) {
@@ -167,7 +221,9 @@ export async function processClientMessageWithAI(
     aiMessage: aiMessages[0],
     aiMessages,
     outboundMessages,
-    recommendedProperty: propertyToRecommend ?? undefined,
+    recommendedProperty: propertiesToRecommend[0],
+    recommendedProperties:
+      propertiesToRecommend.length > 0 ? propertiesToRecommend : undefined,
     lead: updatedLead,
   };
 }
