@@ -4,34 +4,25 @@ import type { Conversation, Property } from "@/types/database";
 const CARD_MARKER = "🏡";
 const IMAGE_MARKER = "📷";
 const LISTING_MARKER = "🔗 Ver detalhes";
-const CATALOG_SPACER = "· · ·";
+const CATALOG_SPACER = "—";
 
 export const CATALOG_MAX = 4;
 export const CATALOG_MIN = 2;
 
-export function formatPropertyImageCaption(
-  property: Property,
-  catalogIndex?: number,
-  catalogTotal?: number
-): string {
-  if (catalogTotal && catalogTotal > 1 && catalogIndex) {
-    return `${catalogIndex}/${catalogTotal} · ${property.title}`;
-  }
-  return property.title;
+/** Image carries the visual — title lives in the text card only. */
+export function formatPropertyImageCaption(_property: Property): string {
+  return "";
 }
 
-/** Clean property card for CRM and WhatsApp text — no image URL, no raw listing URL. */
-export function formatPropertyCard(
-  property: Property,
-  catalogIndex?: number,
-  catalogTotal?: number
-): string {
-  const titleLines = [`${CARD_MARKER} ${property.title}`];
-  if (catalogTotal && catalogTotal > 1 && catalogIndex) {
-    titleLines.push(`${catalogIndex} / ${catalogTotal}`);
+/** Premium property card for CRM and WhatsApp — no image URL, no raw listing URL. */
+export function formatPropertyCard(property: Property): string {
+  const blocks: string[] = [`${CARD_MARKER} ${property.title}`, ...buildPropertyDetailLines(property)];
+
+  if (hasPropertyListing(property)) {
+    blocks.push("", LISTING_MARKER);
   }
 
-  return [...titleLines, ...buildPropertyDetailLines(property)].join("\n");
+  return blocks.join("\n");
 }
 
 export function formatPropertyDetails(property: Property): string {
@@ -58,7 +49,7 @@ function buildPropertyDetailLines(property: Property): string[] {
     ? `${property.neighborhood}, ${property.city}`
     : property.city;
 
-  const lines = [`💰 ${formatPropertyPrice(property.price)}`];
+  const lines: string[] = ["", `💰 ${formatPropertyPrice(property.price)}`];
 
   const roomParts: string[] = [];
   if (property.bedrooms != null) {
@@ -78,13 +69,13 @@ function buildPropertyDetailLines(property: Property): string[] {
   lines.push(`📍 ${location}`);
 
   if (property.description?.trim()) {
-    lines.push(truncateDescription(property.description.trim()));
+    lines.push("", truncateDescription(property.description.trim()));
   }
 
   return lines;
 }
 
-function truncateDescription(description: string, maxLength = 120): string {
+function truncateDescription(description: string, maxLength = 100): string {
   if (description.length <= maxLength) return description;
   return `${description.slice(0, maxLength - 1).trim()}…`;
 }
@@ -164,9 +155,8 @@ export function buildPropertyFollowUpText(
 
   if (options.hasMoreMatches) {
     const withMore = [
-      "Tenho também outras opções semelhantes, se quiser ver depois.",
-      "Esta foi a primeira — tenho mais no mesmo perfil.",
-      "Esta encaixa bem no que pediu. Há mais no mesmo estilo.",
+      "Tenho mais opções semelhantes, se quiser ver depois.",
+      "Há mais no mesmo perfil.",
     ];
     return withMore[Math.floor(Math.random() * withMore.length)];
   }
@@ -176,9 +166,8 @@ export function buildPropertyFollowUpText(
   }
 
   const singleMatch = [
-    "Esta foi a melhor opção que encontrei dentro do perfil.",
-    "Esta encaixa bem no que pediu.",
-    "Acho que esta faz sentido para o perfil.",
+    "Esta encaixa bem no perfil.",
+    "Acho que faz sentido para o que pediu.",
   ];
   return singleMatch[Math.floor(Math.random() * singleMatch.length)];
 }

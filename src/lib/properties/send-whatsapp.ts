@@ -5,7 +5,6 @@ import {
 import {
   formatCatalogSpacer,
   formatPropertyImageCaption,
-  formatPropertyListingLabel,
   hasPropertyImage,
   hasPropertyListing,
 } from "@/lib/properties/property-cards";
@@ -20,8 +19,6 @@ export type OutboundWhatsAppMessage =
       kind: "property_image";
       property: Property;
       fallbackText: string;
-      catalogIndex?: number;
-      catalogTotal?: number;
     }
   | {
       kind: "property_details";
@@ -56,17 +53,15 @@ export async function sendOutboundWhatsAppMessages(
         continue;
       }
 
+      const caption = formatPropertyImageCaption(message.property);
+
       try {
         await sendWhatsAppMedia(
           phoneDigits,
           {
             mediatype: "image",
             media: imageUrl,
-            caption: formatPropertyImageCaption(
-              message.property,
-              message.catalogIndex,
-              message.catalogTotal
-            ),
+            ...(caption ? { caption } : {}),
             mimetype: guessImageMimeType(imageUrl),
             fileName: buildImageFileName(message.property),
           },
@@ -93,7 +88,7 @@ export async function sendOutboundWhatsAppMessages(
     }
 
     if (message.kind === "property_listing") {
-      await sendWhatsAppText(phoneDigits, formatPropertyListingLabel(), instance);
+      // URL-only message — WhatsApp renders a link preview instead of raw text.
       await sendWhatsAppText(phoneDigits, message.url, instance);
       continue;
     }
@@ -104,9 +99,7 @@ export async function sendOutboundWhatsAppMessages(
 
 export function buildPropertyOutboundMessages(
   property: Property,
-  detailsText: string,
-  catalogIndex?: number,
-  catalogTotal?: number
+  detailsText: string
 ): OutboundWhatsAppMessage[] {
   const messages: OutboundWhatsAppMessage[] = [];
 
@@ -115,8 +108,6 @@ export function buildPropertyOutboundMessages(
       kind: "property_image",
       property,
       fallbackText: detailsText,
-      catalogIndex,
-      catalogTotal,
     });
   }
 
@@ -142,21 +133,12 @@ export function buildCatalogOutboundMessages(
   properties: Property[],
   detailsTexts: string[]
 ): OutboundWhatsAppMessage[] {
-  const catalogTotal = properties.length;
   const messages: OutboundWhatsAppMessage[] = [];
 
   properties.forEach((property, index) => {
-    const catalogIndex = index + 1;
     const detailsText = detailsTexts[index] ?? "";
 
-    messages.push(
-      ...buildPropertyOutboundMessages(
-        property,
-        detailsText,
-        catalogIndex,
-        catalogTotal
-      )
-    );
+    messages.push(...buildPropertyOutboundMessages(property, detailsText));
 
     if (index < properties.length - 1) {
       messages.push({ kind: "catalog_spacer" });

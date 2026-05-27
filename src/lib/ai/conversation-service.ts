@@ -60,12 +60,10 @@ async function saveAiMessage(
 async function persistPropertyRecommendation(
   supabase: Client,
   leadId: string,
-  property: Property,
-  catalogIndex?: number,
-  catalogTotal?: number
+  property: Property
 ): Promise<Conversation[]> {
   const saved: Conversation[] = [];
-  const detailsText = formatPropertyCard(property, catalogIndex, catalogTotal);
+  const detailsText = formatPropertyCard(property);
 
   saved.push(await saveAiMessage(supabase, leadId, detailsText));
 
@@ -138,18 +136,15 @@ export async function processClientMessageWithAI(
   const clientAskedForOptions = clientAskedToSeeOptions(history);
 
   if (isCatalogBatch(propertiesToRecommend)) {
-    const catalogTotal = propertiesToRecommend.length;
-    const detailsTexts = propertiesToRecommend.map((property, index) =>
-      formatPropertyCard(property, index + 1, catalogTotal)
+    const detailsTexts = propertiesToRecommend.map((property) =>
+      formatPropertyCard(property)
     );
 
-    for (let index = 0; index < propertiesToRecommend.length; index++) {
+    for (const property of propertiesToRecommend) {
       const propertyMessages = await persistPropertyRecommendation(
         supabase,
         lead.id,
-        propertiesToRecommend[index],
-        index + 1,
-        catalogTotal
+        property
       );
       aiMessages.push(...propertyMessages);
     }

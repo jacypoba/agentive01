@@ -167,9 +167,19 @@ export function buildHeuristicCatalogComparison(
       : 0;
 
   if (priceSpread >= 0.08 && cheapestIdx >= 0) {
-    observations.push(
-      `${ordinalForIndex(cheapestIdx)} parece mais equilibrada pelo preço.`
+    const maxBeds = Math.max(...properties.map((p) => p.bedrooms ?? 0));
+    const spaciousIdx = properties.findIndex(
+      (p) => (p.bedrooms ?? 0) === maxBeds && maxBeds >= 3
     );
+    if (spaciousIdx === cheapestIdx && maxBeds >= 3) {
+      observations.push(
+        `${ordinalForIndex(cheapestIdx)} parece mais equilibrada pelo espaço interior.`
+      );
+    } else {
+      observations.push(
+        `${ordinalForIndex(cheapestIdx)} parece mais equilibrada pelo preço.`
+      );
+    }
   }
 
   if (
@@ -178,9 +188,20 @@ export function buildHeuristicCatalogComparison(
     priceSpread >= 0.12 &&
     observations.length < 2
   ) {
-    observations.push(
-      `${ordinalForIndex(priciestIdx)} tem um perfil mais premium.`
-    );
+    const signals = getPropertySignals(properties[priciestIdx]);
+    if (signals.garden && signals.modern) {
+      observations.push(
+        `${ordinalForIndex(priciestIdx)} destaca-se mais pelo jardim e estilo moderno.`
+      );
+    } else if (signals.garden) {
+      observations.push(
+        `${ordinalForIndex(priciestIdx)} destaca-se mais pelo jardim.`
+      );
+    } else {
+      observations.push(
+        `${ordinalForIndex(priciestIdx)} tem um perfil mais premium.`
+      );
+    }
   }
 
   for (const pref of preferences) {
@@ -231,12 +252,12 @@ export function buildHeuristicCatalogComparison(
 
   if (observations.length === 0) {
     observations.push(
-      `${ordinalForIndex(0)} encaixa bem no perfil geral.`,
+      `${ordinalForIndex(0)} encaixa bem no perfil.`,
       properties.length >= 2
         ? `${ordinalForIndex(1)} é uma alternativa sólida.`
         : ""
     );
   }
 
-  return observations.filter(Boolean).slice(0, 2).join(" ");
+  return observations.filter(Boolean).slice(0, 2).join("\n");
 }

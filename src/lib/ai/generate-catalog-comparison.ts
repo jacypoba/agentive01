@@ -10,22 +10,20 @@ import type { Conversation, Lead, Property } from "@/types/database";
 
 const DEFAULT_MODEL = "gpt-4.1-mini";
 
-const CATALOG_COMPARISON_PROMPT = `You are a premium real estate consultant on WhatsApp. The client just received a numbered catalog of property cards (already sent). Write a brief, consultative comparison — like a real advisor texting after sharing options.
+const CATALOG_COMPARISON_PROMPT = `You are a premium real estate consultant on WhatsApp. The client just received property cards (already sent). Write a brief, elegant comparison — like a confident advisor, not a brochure.
 
 RULES:
-- 1–2 short sentences MAX. One or two observations total — never a list of all properties.
-- Reference listings as "a primeira", "a segunda", "a terceira", "a quarta" (matching send order).
-- Compare real differences: price, size, location, style — only from the listing data provided.
-- If client preferences are known, connect one observation to them naturally.
-- Confident, human, modern Portuguese (Portugal). Premium but not corporate.
-- NO questions. NO generic closings ("veja com calma", "qualquer dúvida", "fico ao dispor").
-- NEVER invent features, renovations, views, or details not in the listing data.
+- Exactly 1–2 short lines. One observation per line. Separate lines with a single newline.
+- Each line under ~80 characters. No paragraphs, no lists, no bullet points.
+- Reference listings as "A primeira", "A segunda", etc. (matching send order).
+- Compare real differences from the listing data only — interior space, garden, style, location, price tier.
+- If client preferences are known, weave one in naturally.
+- Modern Portuguese (Portugal). Premium, human, understated.
+- NO questions. NO generic closings. NO invented details.
 
-TONE EXAMPLES (adapt to actual data):
-- "A primeira parece mais equilibrada pelo preço."
-- "A segunda tem um perfil mais premium."
-- "A terceira pode fazer mais sentido se valoriza espaço exterior."
-- "Esta encaixa melhor para quem quer algo mais moderno."`;
+STYLE EXAMPLE (adapt to data):
+A primeira parece mais equilibrada pelo espaço interior.
+A segunda destaca-se mais pelo jardim e estilo moderno.`;
 
 function getOpenAIClient() {
   const apiKey = process.env.OPENAI_API_KEY;
@@ -79,14 +77,14 @@ export async function generateCatalogComparison(
             "Últimas mensagens do cliente:",
             buildRecentClientContext(history.slice(-MEMORY_MESSAGE_LIMIT)),
             "",
-            "Escreve 1–2 frases curtas de comparação consultiva.",
+            "Escreve 1–2 linhas curtas. Uma observação por linha.",
           ].join("\n"),
         },
       ],
-      temperature: 0.82,
-      max_tokens: 90,
-      presence_penalty: 0.5,
-      frequency_penalty: 0.6,
+      temperature: 0.78,
+      max_tokens: 65,
+      presence_penalty: 0.55,
+      frequency_penalty: 0.65,
     });
 
     const reply = completion.choices[0]?.message?.content?.trim();
@@ -104,12 +102,22 @@ export async function generateCatalogComparison(
 }
 
 function sanitizeComparison(text: string): string {
-  return text
-    .replace(/\?+$/g, ".")
+  const cleaned = text
+    .replace(/\?+$/gm, ".")
     .replace(
       /\b(posso ajudar|fico ao dispor|qualquer dúvida|veja com calma)\b/gi,
       ""
     )
-    .replace(/\s{2,}/g, " ")
+    .replace(/^[•·]\s*/gm, "")
+    .replace(/\n{3,}/g, "\n")
     .trim();
+
+  const lines = cleaned
+    .split(/\n+/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((line) => (line.length > 90 ? `${line.slice(0, 87).trim()}…` : line));
+
+  return lines.join("\n");
 }
