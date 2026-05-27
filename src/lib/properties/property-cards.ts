@@ -100,7 +100,12 @@ export function selectNextPropertyToRecommend(
 }
 
 export function buildPropertyFollowUpText(): string {
-  return "Gostava de saber o que acha desta opção? 🙂";
+  const options = [
+    "O que acha desta opção?",
+    "Quer saber mais sobre este imóvel?",
+    "Fala comigo se quiser avançar 🙂",
+  ];
+  return options[Math.floor(Math.random() * options.length)];
 }
 
 export function isPropertyCardMessage(message: string): boolean {

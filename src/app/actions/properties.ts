@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createProperty, updateProperty } from "@/lib/data/properties";
+import { createProperty, deleteProperty, updateProperty } from "@/lib/data/properties";
 import { createClient } from "@/lib/supabase/server";
 import type { PropertyUpdate } from "@/types/database";
 
@@ -147,4 +147,33 @@ export async function updatePropertyAction(
 
   revalidatePropertyPaths();
   return { success: "Property updated successfully." };
+}
+
+export async function deletePropertyAction(
+  propertyId: string
+): Promise<PropertyActionState> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { error: "You must be signed in." };
+  }
+
+  if (!propertyId.trim()) {
+    return { error: "Property ID is required." };
+  }
+
+  try {
+    await deleteProperty(supabase, propertyId, user.id);
+  } catch (error) {
+    return {
+      error:
+        error instanceof Error ? error.message : "Failed to delete property.",
+    };
+  }
+
+  revalidatePropertyPaths();
+  return { success: "Property deleted successfully." };
 }

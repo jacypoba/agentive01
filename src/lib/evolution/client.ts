@@ -63,11 +63,36 @@ export async function sendWhatsAppMedia(
   payload: SendMediaPayload,
   instance?: string
 ): Promise<SendTextResult> {
-  console.log("[MEDIA DISABLED - TEXT ONLY]");
-  console.log("[MEDIA DISABLED - TEXT ONLY] Skipped sendWhatsAppMedia", {
-    phoneDigits,
+  const { baseUrl, apiKey, instanceName } = getEvolutionConfig(instance);
+  const endpoint = `${baseUrl}/message/sendMedia/${encodeURIComponent(instanceName)}`;
+  const requestBody = {
+    number: phoneDigits,
+    mediatype: payload.mediatype,
+    mimetype: payload.mimetype,
+    caption: payload.caption,
     media: payload.media,
-    instance: instance ?? process.env.EVOLUTION_INSTANCE_NAME ?? null,
+    fileName: payload.fileName,
+  };
+
+  const response = await fetch(endpoint, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      apikey: apiKey,
+    },
+    body: JSON.stringify(requestBody),
   });
-  return { success: true, status: 200 };
+
+  if (!response.ok) {
+    const rawData = await response.text();
+    console.error("[EVOLUTION MEDIA ERROR] response.status:", response.status);
+    console.error("[EVOLUTION MEDIA ERROR] response.data:", rawData);
+    console.error("[EVOLUTION MEDIA ERROR] endpoint URL:", endpoint);
+    console.error("[EVOLUTION MEDIA ERROR] payload:", requestBody);
+    throw new Error(
+      `Evolution API media send failed (${response.status}): ${rawData}`
+    );
+  }
+
+  return { success: true, status: response.status };
 }

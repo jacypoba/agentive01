@@ -64,6 +64,22 @@ export async function updateProperty(
   return normalizeProperty(data);
 }
 
+export async function deleteProperty(
+  supabase: Client,
+  propertyId: string,
+  userId: string
+): Promise<void> {
+  const { error } = await supabase
+    .from("properties")
+    .delete()
+    .eq("id", propertyId)
+    .eq("user_id", userId);
+
+  if (error) {
+    throw new Error(`Failed to delete property: ${error.message}`);
+  }
+}
+
 function normalizeProperty(row: Property): Property {
   return {
     ...row,

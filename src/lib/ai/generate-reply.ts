@@ -121,9 +121,9 @@ export async function generateAIReply(
     model: getModel(),
     messages,
     temperature: 0.78,
-    max_tokens: 180,
-    presence_penalty: 0.45,
-    frequency_penalty: 0.55,
+    max_tokens: 100,
+    presence_penalty: 0.55,
+    frequency_penalty: 0.65,
   });
 
   const reply = completion.choices[0]?.message?.content?.trim();
