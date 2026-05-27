@@ -3,6 +3,8 @@ import { MEMORY_MESSAGE_LIMIT } from "@/lib/ai/conversation-memory";
 import { buildQualificationDirective } from "@/lib/ai/qualification";
 import { REAL_ESTATE_ASSISTANT_PROMPT } from "@/lib/ai/prompts";
 import { buildPropertyRecommendationDirective } from "@/lib/properties/recommendations";
+import type { PropertyAvailability } from "@/lib/properties/property-availability";
+import { buildAvailabilityDirective } from "@/lib/properties/property-availability";
 import { getIntentStatusLabel } from "@/lib/leads/qualification-display";
 import type { Conversation, Lead, Property } from "@/types/database";
 
@@ -73,7 +75,8 @@ function toOpenAIMessages(
   history: Conversation[],
   lead: Lead,
   propertiesToRecommend: Property[],
-  matchingPropertyCount: number
+  availability: PropertyAvailability,
+  clientAskedForMore: boolean
 ): OpenAI.Chat.ChatCompletionMessageParam[] {
   const recentHistory = history.slice(-MEMORY_MESSAGE_LIMIT);
   const qualificationDirective = buildQualificationDirective(
@@ -81,11 +84,19 @@ function toOpenAIMessages(
     lead,
     {
       propertiesBeingSent: propertiesToRecommend,
-      matchingPropertyCount,
+      matchingPropertyCount: availability.matchingTotal,
+      availability,
+      clientAskedForMore,
     }
   );
-  const propertyDirective =
-    buildPropertyRecommendationDirective(propertiesToRecommend);
+  const propertyDirective = buildPropertyRecommendationDirective(
+    propertiesToRecommend,
+    availability
+  );
+  const availabilityDirective = buildAvailabilityDirective(
+    availability,
+    clientAskedForMore
+  );
 
   const systemContent = [
     REAL_ESTATE_ASSISTANT_PROMPT,
@@ -101,6 +112,8 @@ function toOpenAIMessages(
     qualificationDirective,
     "",
     propertyDirective,
+    "",
+    availabilityDirective,
   ].join("\n");
 
   const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
@@ -122,14 +135,16 @@ export async function generateAIReply(
   lead: Lead,
   history: Conversation[],
   propertiesToRecommend: Property[] = [],
-  matchingPropertyCount = 0
+  availability: PropertyAvailability,
+  clientAskedForMore = false
 ): Promise<string> {
   const openai = getOpenAIClient();
   const messages = toOpenAIMessages(
     history,
     lead,
     propertiesToRecommend,
-    matchingPropertyCount
+    availability,
+    clientAskedForMore
   );
 
   const completion = await openai.chat.completions.create({

@@ -131,16 +131,29 @@ function resolveBudgetText(lead: Lead, history: Conversation[]): string | null {
 }
 
 /**
- * Returns search criteria when city, property type, and a parseable budget are available.
+ * Returns search criteria when city and property type are available.
+ * Strict mode (default) also requires a parseable budget.
  */
 export function derivePropertySearchCriteria(
   lead: Lead,
-  history: Conversation[]
+  history: Conversation[],
+  options?: { relaxed?: boolean }
 ): PropertySearchCriteria | null {
   const city = resolveCity(lead, history);
   const propertyType = resolvePropertyType(lead, history);
   const budgetText = resolveBudgetText(lead, history);
   const maxBudget = parseBudgetMax(budgetText);
+
+  if (options?.relaxed) {
+    if (!city || !propertyType) {
+      return null;
+    }
+    return {
+      city,
+      propertyType,
+      maxBudget: maxBudget ?? undefined,
+    };
+  }
 
   if (!city || !propertyType || maxBudget == null) {
     return null;

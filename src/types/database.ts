@@ -213,7 +213,7 @@ export type PropertyUpdate = {
 export type PropertySearchCriteria = {
   city: string;
   propertyType: string;
-  maxBudget: number;
+  maxBudget?: number | null;
 };
 
 export type DashboardStats = {

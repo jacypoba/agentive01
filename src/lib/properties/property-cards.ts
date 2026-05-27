@@ -33,11 +33,13 @@ export function formatCatalogSpacer(): string {
   return CATALOG_SPACER;
 }
 
-/** Saved in conversation history for dedup; includes URL for matching only. */
+/** Saved in conversation history for dedup; includes URL and property ID. */
 export function formatPropertyListingRecord(property: Property): string | null {
   const listingUrl = property.listing_url?.trim();
-  if (!listingUrl) return null;
-  return `${LISTING_MARKER}\n${listingUrl}`;
+  if (!listingUrl) {
+    return `[property:${property.id}]`;
+  }
+  return `${LISTING_MARKER}\n${listingUrl}\n[property:${property.id}]`;
 }
 
 export function formatPropertyListingLabel(): string {
@@ -84,12 +86,18 @@ export function wasPropertyAlreadySent(
   history: Conversation[],
   property: Property
 ): boolean {
+  const idMarker = `[property:${property.id}]`;
+
   return history.some((item) => {
     if (item.sender !== "ai" && item.sender !== "agent") {
       return false;
     }
 
     const message = item.message;
+    if (message.includes(idMarker)) {
+      return true;
+    }
+
     if (property.listing_url && message.includes(property.listing_url)) {
       return true;
     }
@@ -103,6 +111,20 @@ export function wasPropertyAlreadySent(
       message.includes(property.title)
     );
   });
+}
+
+export function getShownPropertyIds(history: Conversation[]): Set<string> {
+  const ids = new Set<string>();
+  for (const item of history) {
+    if (item.sender !== "ai" && item.sender !== "agent") {
+      continue;
+    }
+    const matches = item.message.matchAll(/\[property:([a-f0-9-]+)\]/gi);
+    for (const match of matches) {
+      if (match[1]) ids.add(match[1]);
+    }
+  }
+  return ids;
 }
 
 export function selectNextPropertyToRecommend(

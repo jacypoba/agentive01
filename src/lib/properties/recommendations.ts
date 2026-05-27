@@ -1,17 +1,40 @@
 import { getCatalogCityHint, isCatalogBatch } from "@/lib/properties/property-cards";
+import type { PropertyAvailability } from "@/lib/properties/property-availability";
 import type { Property } from "@/types/database";
 
 export function buildPropertyRecommendationDirective(
-  properties: Property[]
+  properties: Property[],
+  availability: PropertyAvailability
 ): string {
   if (properties.length === 0) {
+    if (availability.allShown) {
+      return [
+        "---",
+        "Property recommendations:",
+        "- All matching listings were already shared. Zero remaining in database.",
+        "- NO cards will be sent.",
+        '- Reply: "Por agora estas são as melhores dentro do perfil. Se entrar algo novo, aviso."',
+        '- Do NOT say "não tenho mais opções" or "não há mais imóveis" — use the line above.',
+      ].join("\n");
+    }
+
+    if (availability.noMatchesInDatabase) {
+      return [
+        "---",
+        "Property recommendations:",
+        "- Database returned zero matches for this profile.",
+        "- NO cards will be sent.",
+        '- Do NOT say "não tenho mais opções".',
+        '- Say naturally that nothing matched right now — one short sentence.',
+      ].join("\n");
+    }
+
     return [
       "---",
       "Property recommendations:",
-      "- No new matching listing to send in this turn (none matched, or all were already shared).",
-      "- Do NOT invent or describe fake properties.",
+      "- No listings to send this turn.",
+      "- Do NOT invent properties or claim the database is empty unless confirmed above.",
       "- One casual sentence if needed — no forced question.",
-      "- Do NOT use corporate phrasing like 'vou reunir opções' or 'obrigado pelo interesse'.",
     ].join("\n");
   }
 
@@ -23,14 +46,10 @@ export function buildPropertyRecommendationDirective(
     return [
       "---",
       "Property recommendations:",
-      `- A catalog of ${properties.length} property cards will be sent RIGHT AFTER your message (photo + details + link for each).`,
+      `- Sending ${properties.length} more listing(s) from database RIGHT AFTER your message.`,
       `- Listings${cityClause}: ${titles}.`,
-      "- Your reply = ONE short catalog intro only — natural, not robotic.",
-      cityHint
-        ? `- Example: 'Tenho estas opções em ${cityHint} 👇' or 'Encontrei algumas que encaixam bem${cityClause}.'`
-        : "- Example: 'Encontrei algumas que encaixam bem 👇' or 'Tenho estas opções para si.'",
-      "- NO question mark. NO repeating their criteria. NO listing details or prices.",
-      "- A soft, consultative comparison (1–2 sentences) may follow the catalog — do NOT preview it in your intro.",
+      "- Your reply = ONE short intro only — e.g. 'Tenho mais algumas 👇' or 'Estas também encaixam.'",
+      "- NO question mark. NO saying there are no more options.",
       "- NEVER invent listings or details.",
     ].join("\n");
   }
@@ -39,11 +58,10 @@ export function buildPropertyRecommendationDirective(
   return [
     "---",
     "Property recommendations:",
-    "- A property card (photo + details + link) will be sent automatically RIGHT AFTER your message.",
+    "- A property card will be sent automatically RIGHT AFTER your message.",
     `- Listing: "${property.title}" in ${property.neighborhood ?? property.city}.`,
-    "- Your reply = ONE short intro sentence — e.g. 'Tenho uma opção para si 👇'.",
-    "- NO question mark. NO repeating their criteria. NO 'quer que eu...'.",
-    "- Do NOT include price, specs, links, or card formatting — the card handles that.",
+    "- Your reply = ONE short intro sentence — e.g. 'Tenho mais uma opção 👇'.",
+    "- NO question mark. NO saying there are no more options.",
     "- NEVER invent listings or details.",
   ].join("\n");
 }

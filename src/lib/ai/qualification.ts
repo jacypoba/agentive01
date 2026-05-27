@@ -1,4 +1,5 @@
 import type { Conversation, Lead, Property } from "@/types/database";
+import type { PropertyAvailability } from "@/lib/properties/property-availability";
 
 type QualificationField =
   | "budget"
@@ -155,6 +156,9 @@ const VISIT_PATTERN =
 const OPTIONS_REQUEST_PATTERN =
   /\b(opções|opcões|imóveis|imoveis|mostra|mostrar|envia|enviar|manda|mandar|partilha|partilhar|recomenda|sugere|tens algo|tem algo|alguma coisa|algum imóvel|quero ver|ver opções|ver imóveis|mandar opções|enviar opções|procura algo|procuro algo)\b/i;
 
+const MORE_OPTIONS_PATTERN =
+  /\b(mostra outras|outras opções|outras opcões|tem mais|tens mais|há mais|ha mais|mais opções|mais opcões|ver semelhantes|semelhantes|outras moradias|outros imóveis|outras casas|mais imóveis|mais imoveis|envia mais|manda mais|outra opção|outra opcão|outras opcoes|alguma mais|mais alguma)\b/i;
+
 function getLastClientMessage(history: Conversation[]): Conversation | null {
   return (
     [...history].reverse().find((item) => item.sender === "client") ?? null
@@ -169,7 +173,17 @@ export function getLastClientMessageText(history: Conversation[]): string | null
 export function clientAskedToSeeOptions(history: Conversation[]): boolean {
   const last = getLastClientMessage(history);
   if (!last) return false;
-  return OPTIONS_REQUEST_PATTERN.test(last.message);
+  return (
+    OPTIONS_REQUEST_PATTERN.test(last.message) ||
+    MORE_OPTIONS_PATTERN.test(last.message)
+  );
+}
+
+/** Client asked for additional / more listings (re-query database). */
+export function clientAskedForMoreOptions(history: Conversation[]): boolean {
+  const last = getLastClientMessage(history);
+  if (!last) return false;
+  return MORE_OPTIONS_PATTERN.test(last.message);
 }
 
 /** Visit topic is active only when the latest client message explicitly references it. */
@@ -248,6 +262,8 @@ function buildSavedLeadMemoryLines(lead: Lead): string[] {
 export type QualificationDirectiveOptions = {
   propertiesBeingSent?: Property[];
   matchingPropertyCount?: number;
+  availability?: PropertyAvailability;
+  clientAskedForMore?: boolean;
 };
 
 /**
@@ -259,7 +275,7 @@ export function buildQualificationDirective(
   lead: Lead,
   options: QualificationDirectiveOptions = {}
 ): string {
-  const { propertiesBeingSent = [], matchingPropertyCount = 0 } = options;
+  const { propertiesBeingSent = [], matchingPropertyCount = 0, availability, clientAskedForMore = false } = options;
   const catalogCount = propertiesBeingSent.length;
   const nextField = getNextField(history, lead);
   const firstReply = isFirstAiReply(history);
@@ -287,8 +303,8 @@ export function buildQualificationDirective(
     lines.push(
       `- A catalog of ${catalogCount} property cards will be sent after your reply.`,
       "- Write ONE brief catalog intro — no question mark, no repeating their search criteria.",
-      "- Example: 'Tenho estas opções 👇' or 'Encontrei algumas que encaixam bem.' — then stop.",
-      "- Do NOT ask what they think or ask qualification questions."
+      "- Example: 'Tenho mais algumas 👇' or 'Estas também encaixam.' — then stop.",
+      "- Do NOT ask what they think or say there are no more options."
     );
     lines.push(
       "- Reply in natural conversational Portuguese. Statement only — no question.",
@@ -297,12 +313,30 @@ export function buildQualificationDirective(
     return lines.join("\n");
   }
 
-  if (catalogCount === 1 || (wantsOptions && matchingPropertyCount > 0)) {
+  if (catalogCount === 1) {
     lines.push(
-      "- Client wants listings / a matching property card will be sent after your reply.",
-      "- Write ONE brief intro sentence only — no question mark, no repeating their search criteria.",
-      "- Do NOT ask what they think, offer to search, or ask qualification questions.",
-      "- Example: 'Tenho uma opção para si 👇' or 'Esta pode encaixar 👇' — then stop."
+      "- A matching property card will be sent after your reply.",
+      "- Write ONE brief intro sentence only — no question mark.",
+      "- Do NOT say there are no more options — a listing is being sent.",
+      "- Example: 'Tenho mais uma opção 👇' — then stop."
+    );
+    lines.push(
+      "- Reply in natural conversational Portuguese. Statement only — no question.",
+      "- Never use corporate/customer-support phrasing."
+    );
+    return lines.join("\n");
+  }
+
+  if (
+    catalogCount === 0 &&
+    availability &&
+    (availability.allShown || availability.noMatchesInDatabase) &&
+    (clientAskedForMore || wantsOptions)
+  ) {
+    lines.push(
+      "- Client asked for more listings but NONE will be sent this turn (see availability block).",
+      "- Follow the availability directive exactly — do NOT promise new cards.",
+      "- Do NOT say 'não tenho mais opções' or 'não há mais imóveis' robotically."
     );
     lines.push(
       "- Reply in natural conversational Portuguese. Statement only — no question.",

@@ -2,20 +2,22 @@ import { extractAndApplyLeadQualification } from "@/lib/ai/apply-qualification";
 import { loadConversationMemory } from "@/lib/ai/conversation-memory";
 import { generateAIReply } from "@/lib/ai/generate-reply";
 import { generateCatalogComparison } from "@/lib/ai/generate-catalog-comparison";
-import { clientAskedToSeeOptions } from "@/lib/ai/qualification";
+import {
+  clientAskedForMoreOptions,
+  clientAskedToSeeOptions,
+} from "@/lib/ai/qualification";
 import {
   createConversation,
   getConversationsByLead,
 } from "@/lib/data/conversations";
 import { findPropertyRecommendations } from "@/lib/properties/find-recommendations";
-import { derivePropertySearchCriteria } from "@/lib/properties/search-criteria";
+import { analyzePropertyAvailability } from "@/lib/properties/property-availability";
 import {
   buildPropertyFollowUpText,
   formatPropertyCard,
   formatPropertyListingRecord,
+  getShownPropertyIds,
   isCatalogBatch,
-  selectPropertiesForCatalog,
-  wasPropertyAlreadySent,
 } from "@/lib/properties/property-cards";
 import {
   buildCatalogOutboundMessages,
@@ -70,6 +72,10 @@ async function persistPropertyRecommendation(
   const listingRecord = formatPropertyListingRecord(property);
   if (listingRecord) {
     saved.push(await saveAiMessage(supabase, leadId, listingRecord));
+  } else {
+    saved.push(
+      await saveAiMessage(supabase, leadId, `[property:${property.id}]`)
+    );
   }
 
   return saved;
@@ -92,38 +98,31 @@ export async function processClientMessageWithAI(
     lead
   );
 
-  const criteria = derivePropertySearchCriteria(memoryLead, history);
-  console.log("[WhatsApp debug] Extracted criteria:", criteria);
+  const clientAskedForMore = clientAskedForMoreOptions(history);
+  const clientAskedForOptions = clientAskedToSeeOptions(history);
 
-  const matchingProperties = await findPropertyRecommendations(
-    supabase,
-    memoryLead,
-    history,
-    10
-  );
-  console.log(
-    "[WhatsApp debug] Matching properties count:",
-    matchingProperties.length
-  );
-  console.log(
-    "[WhatsApp debug] Matching property titles:",
-    matchingProperties.map((property) => property.title)
-  );
+  const { properties: matchingProperties, criteria } =
+    await findPropertyRecommendations(supabase, memoryLead, history, 20);
 
-  const propertiesToRecommend = selectPropertiesForCatalog(
+  const availability = analyzePropertyAvailability(
     matchingProperties,
-    history
+    history,
+    criteria != null
   );
-  console.log(
-    "[WhatsApp debug] Catalog batch:",
-    propertiesToRecommend.map((property) => property.title)
-  );
+  const propertiesToRecommend = availability.toSend;
+
+  console.log("[WhatsApp debug] Search criteria:", criteria);
+  console.log("[WhatsApp debug] Matching properties count:", availability.matchingTotal);
+  console.log("[WhatsApp debug] Shown property IDs:", [...getShownPropertyIds(history)]);
+  console.log("[WhatsApp debug] Remaining unsent:", availability.remainingCount);
+  console.log("[WhatsApp debug] Sending this turn:", propertiesToRecommend.map((p) => p.title));
 
   const aiReply = await generateAIReply(
     memoryLead,
     history,
     propertiesToRecommend,
-    matchingProperties.length
+    availability,
+    clientAskedForMore
   );
 
   const aiMessages: Conversation[] = [];
@@ -132,8 +131,6 @@ export async function processClientMessageWithAI(
   const introMessage = await saveAiMessage(supabase, lead.id, aiReply);
   aiMessages.push(introMessage);
   outboundMessages.push({ kind: "text", text: aiReply });
-
-  const clientAskedForOptions = clientAskedToSeeOptions(history);
 
   if (isCatalogBatch(propertiesToRecommend)) {
     const detailsTexts = propertiesToRecommend.map((property) =>
@@ -182,11 +179,8 @@ export async function processClientMessageWithAI(
       ...buildPropertyOutboundMessages(property, detailsText)
     );
 
-    const unsentMatches = matchingProperties.filter(
-      (match) => !wasPropertyAlreadySent(history, match)
-    );
     const followUpText = buildPropertyFollowUpText({
-      hasMoreMatches: unsentMatches.length > 1,
+      hasMoreMatches: availability.remainingAfterSend > 0,
       clientAskedForOptions,
     });
 
