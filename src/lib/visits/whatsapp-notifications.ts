@@ -6,34 +6,26 @@ import type { Database, Lead, VisitRequestStatus } from "@/types/database";
 
 type Client = SupabaseClient<Database>;
 
-function firstName(clientName: string): string {
-  const trimmed = clientName.trim();
-  if (!trimmed) return "Olá";
-  return trimmed.split(/\s+/)[0] ?? trimmed;
-}
-
 export function buildVisitConfirmedMessage(
-  clientName: string,
+  _clientName: string,
   requestedDatetimeText: string | null
 ): string {
-  const name = firstName(clientName);
   const whenClause = requestedDatetimeText
     ? ` para ${requestedDatetimeText}`
     : "";
 
-  return `Perfeito, ${name} 👌 A visita ficou confirmada${whenClause}. Já trato dos detalhes finais e volto a falar consigo em breve.`;
+  return `Visita confirmada${whenClause} 👌 Trato já dos detalhes e falo contigo em breve.`;
 }
 
 export function buildVisitCancelledMessage(
-  clientName: string,
+  _clientName: string,
   requestedDatetimeText: string | null
 ): string {
-  const name = firstName(clientName);
   const slotClause = requestedDatetimeText
     ? ` para ${requestedDatetimeText}`
     : "";
 
-  return `${name}, esse horário${slotClause} já não dá infelizmente 🙏 Tem outra data ou horário que lhe funcione melhor?`;
+  return `Esse horário${slotClause} já não dá infelizmente 🙏 Tens outra data que te dê jeito?`;
 }
 
 export function resolveLeadPhoneDigits(lead: Lead): string | null {

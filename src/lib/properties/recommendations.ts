@@ -9,19 +9,19 @@ export function buildPropertyRecommendationDirective(
       "Property recommendations:",
       "- No new matching listing to send in this turn (none matched, or all were already shared).",
       "- Do NOT invent or describe fake properties.",
-      "- If the client is looking for options, say naturally you'll share more soon — one short sentence.",
-      "- Example: 'Vou ver o que tenho e mando já.' — NOT 'vou reunir opções para si'.",
+      "- If the client is looking for options, one casual sentence — e.g. 'Deixa-me ver o que tenho.'",
+      "- Do NOT use corporate phrasing like 'vou reunir opções' or 'obrigado pelo interesse'.",
     ].join("\n");
   }
 
   return [
     "---",
     "Property recommendations:",
-    "- A real property card will be sent automatically RIGHT AFTER your message (separate WhatsApp message).",
+    "- A property card (photo + details + link) will be sent automatically RIGHT AFTER your message.",
     `- Listing: "${property.title}" in ${property.neighborhood ?? property.city}.`,
-    "- Your reply must be ONLY one brief intro sentence — e.g. 'Encontrei uma opção que pode gostar 👇'.",
-    "- Do NOT include property details, price, links, emojis for the listing, or formatted card text — the card handles that.",
-    "- Do NOT ask a qualification question in the same message — the follow-up after the card will invite feedback.",
+    "- Your reply = ONE short, natural intro sentence only — e.g. 'Tenho uma opção que pode fazer sentido 👇'.",
+    "- Do NOT include price, specs, links, or card formatting — the card handles that.",
+    "- Do NOT ask a question in the intro — a natural follow-up comes after the card.",
     "- NEVER invent listings or details.",
   ].join("\n");
 }

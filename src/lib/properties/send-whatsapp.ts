@@ -4,7 +4,9 @@ import {
 } from "@/lib/evolution/client";
 import {
   formatPropertyImageCaption,
+  formatPropertyListingLabel,
   hasPropertyImage,
+  hasPropertyListing,
 } from "@/lib/properties/property-cards";
 import type { Property } from "@/types/database";
 
@@ -22,6 +24,11 @@ export type OutboundWhatsAppMessage =
       kind: "property_details";
       text: string;
       property: Property;
+    }
+  | {
+      kind: "property_listing";
+      property: Property;
+      url: string;
     };
 
 export async function sendOutboundWhatsAppMessages(
@@ -66,6 +73,14 @@ export async function sendOutboundWhatsAppMessages(
       if (textFallbackPropertyIds.has(message.property.id)) {
         continue;
       }
+      await sendWhatsAppText(phoneDigits, message.text, instance);
+      continue;
+    }
+
+    if (message.kind === "property_listing") {
+      await sendWhatsAppText(phoneDigits, formatPropertyListingLabel(), instance);
+      await sendWhatsAppText(phoneDigits, message.url, instance);
+      continue;
     }
 
     await sendWhatsAppText(phoneDigits, message.text, instance);
@@ -91,6 +106,15 @@ export function buildPropertyOutboundMessages(
     text: detailsText,
     property,
   });
+
+  const listingUrl = property.listing_url?.trim();
+  if (hasPropertyListing(property) && listingUrl) {
+    messages.push({
+      kind: "property_listing",
+      property,
+      url: listingUrl,
+    });
+  }
 
   return messages;
 }

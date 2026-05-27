@@ -10,6 +10,7 @@ import { derivePropertySearchCriteria } from "@/lib/properties/search-criteria";
 import {
   buildPropertyFollowUpText,
   formatPropertyCard,
+  formatPropertyListingRecord,
   selectNextPropertyToRecommend,
 } from "@/lib/properties/property-cards";
 import {
@@ -112,6 +113,16 @@ export async function processClientMessageWithAI(
 
     const detailsMessage = await saveAiMessage(supabase, lead.id, detailsText);
     aiMessages.push(detailsMessage);
+
+    const listingRecord = formatPropertyListingRecord(propertyToRecommend);
+    if (listingRecord) {
+      const listingMessage = await saveAiMessage(
+        supabase,
+        lead.id,
+        listingRecord
+      );
+      aiMessages.push(listingMessage);
+    }
 
     outboundMessages.push(
       ...buildPropertyOutboundMessages(propertyToRecommend, detailsText)

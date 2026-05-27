@@ -46,7 +46,8 @@ function buildLeadContext(lead: Lead): string {
     `Data/hora visita (histórico): ${formatKnown(lead.visit_datetime_text)}`,
     "",
     "Memória persistente: contexto de apoio apenas. Responda sobretudo à última mensagem do cliente.",
-    "Não assuma que pedidos antigos (ex. visitas) continuam ativos. Não invente horários ou confirmações passadas."
+    "Não assuma que pedidos antigos (ex. visitas) continuam ativos. Não invente horários ou confirmações passadas.",
+    "Use o nome do cliente no máximo 1 vez a cada 3–4 mensagens — só quando soar natural."
   );
 
   return parts.join("\n");
