@@ -407,6 +407,58 @@ export type RecentActivity = {
   kind: "lead" | "conversation";
 };
 
+export type PlanName = "starter" | "pro" | "enterprise";
+
+export type SubscriptionStatus =
+  | "trialing"
+  | "active"
+  | "past_due"
+  | "canceled"
+  | "incomplete"
+  | "incomplete_expired"
+  | "unpaid"
+  | "paused";
+
+export type Subscription = {
+  id: string;
+  workspace_id: string;
+  user_id: string;
+  stripe_customer_id: string | null;
+  stripe_subscription_id: string | null;
+  stripe_price_id: string | null;
+  plan_name: PlanName;
+  subscription_status: SubscriptionStatus;
+  current_period_end: string | null;
+  trial_ends_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type SubscriptionInsert = {
+  id?: string;
+  workspace_id: string;
+  user_id: string;
+  stripe_customer_id?: string | null;
+  stripe_subscription_id?: string | null;
+  stripe_price_id?: string | null;
+  plan_name?: PlanName;
+  subscription_status?: SubscriptionStatus;
+  current_period_end?: string | null;
+  trial_ends_at?: string | null;
+  created_at?: string;
+  updated_at?: string;
+};
+
+export type SubscriptionUpdate = Partial<
+  Omit<SubscriptionInsert, "workspace_id" | "user_id">
+>;
+
+export type CurrentSubscription = Subscription & {
+  isTrialing: boolean;
+  isActive: boolean;
+  daysLeftInTrial: number | null;
+};
+
 export type Database = {
   public: {
     Tables: {
@@ -462,6 +514,12 @@ export type Database = {
         Row: WorkspaceMember;
         Insert: WorkspaceMemberInsert;
         Update: Partial<WorkspaceMemberInsert>;
+        Relationships: [];
+      };
+      subscriptions: {
+        Row: Subscription;
+        Insert: SubscriptionInsert;
+        Update: SubscriptionUpdate;
         Relationships: [];
       };
     };
