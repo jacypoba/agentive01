@@ -42,6 +42,7 @@ function buildAnalyticsKpis(input: {
       value: String(input.leads),
       change: input.rangeLabel,
       accent: "text-[#00D4FF]",
+      href: "/leads",
     },
     {
       id: "conversion",
@@ -49,6 +50,7 @@ function buildAnalyticsKpis(input: {
       value: `${input.conversionRate}%`,
       change: "Qualified ÷ leads in period",
       accent: "text-white",
+      href: "/leads?status=qualified",
     },
     {
       id: "visits",
@@ -56,6 +58,7 @@ function buildAnalyticsKpis(input: {
       value: String(input.visits),
       change: `${input.confirmedVisits} confirmed`,
       accent: "text-amber-300",
+      href: "/visits",
     },
     {
       id: "whatsapp",
@@ -63,6 +66,7 @@ function buildAnalyticsKpis(input: {
       value: String(input.whatsappInbound),
       change: "Client messages received",
       accent: "text-emerald-300",
+      href: "/leads",
     },
     {
       id: "follow-ups",
@@ -70,6 +74,7 @@ function buildAnalyticsKpis(input: {
       value: String(input.followUpsSent),
       change: "Automated re-engagement",
       accent: "text-[#00D4FF]",
+      href: "/follow-ups?group=sent",
     },
     {
       id: "properties",
@@ -77,6 +82,7 @@ function buildAnalyticsKpis(input: {
       value: String(input.properties),
       change: "Total catalog inventory",
       accent: "text-white",
+      href: "/properties",
     },
   ];
 }

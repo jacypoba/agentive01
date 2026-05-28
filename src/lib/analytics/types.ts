@@ -40,6 +40,7 @@ export type AnalyticsKpi = {
   value: string;
   change: string;
   accent: string;
+  href: string;
 };
 
 export type AnalyticsInsight = {
