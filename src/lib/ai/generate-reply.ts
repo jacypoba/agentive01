@@ -1,5 +1,9 @@
 import OpenAI from "openai";
 import { dedupeAiReply } from "@/lib/ai/dedupe-reply";
+import {
+  finalizeWhatsAppText,
+  wasCutByTokenLimit,
+} from "@/lib/ai/complete-response";
 import { MEMORY_MESSAGE_LIMIT } from "@/lib/ai/conversation-memory";
 import type { MessageIntent } from "@/lib/ai/intent-classifier";
 import { buildQualificationDirective } from "@/lib/ai/qualification";
@@ -181,16 +185,38 @@ export async function generateAIReply(
     model: getModel(),
     messages,
     temperature: 0.78,
-    max_tokens: 100,
+    max_tokens: 120,
     presence_penalty: 0.55,
     frequency_penalty: 0.65,
   });
 
-  const reply = completion.choices[0]?.message?.content?.trim();
+  const choice = completion.choices[0];
+  const reply = choice?.message?.content?.trim();
   if (!reply) {
     throw new Error("OpenAI returned an empty response.");
   }
 
+  if (wasCutByTokenLimit(choice?.finish_reason)) {
+    console.warn("[AI reply] Model output hit token limit", {
+      leadId: lead.id,
+      preview: reply.slice(0, 80),
+    });
+    return "";
+  }
+
   const deduped = dedupeAiReply(reply, history);
-  return enforceReplyLanguage(deduped, language).text;
+  if (!deduped) {
+    return "";
+  }
+
+  const finalized = finalizeWhatsAppText(deduped);
+  if (!finalized) {
+    console.warn("[AI reply] Incomplete reply discarded", {
+      leadId: lead.id,
+      preview: deduped.slice(0, 80),
+    });
+    return "";
+  }
+
+  return enforceReplyLanguage(finalized, language).text;
 }

@@ -13,6 +13,7 @@ import {
   getClosingReplies,
 } from "@/lib/i18n/messages";
 import { enforceReplyLanguage } from "@/lib/i18n/language-purity";
+import { finalizeWhatsAppText } from "@/lib/ai/complete-response";
 import { getLeadLanguage } from "@/lib/i18n/sync-language";
 import type { SupportedLanguage } from "@/lib/i18n/types";
 
@@ -120,7 +121,15 @@ export function sanitizeGuardedReply(
     });
   }
 
-  return pureText;
+  const finalized = finalizeWhatsAppText(pureText);
+  if (!finalized) {
+    console.log("[WhatsApp guardrails] Blocked incomplete reply", {
+      preview: pureText.slice(0, 80),
+    });
+    return null;
+  }
+
+  return finalized;
 }
 
 export function logIntentDecision(

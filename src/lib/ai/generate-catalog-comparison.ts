@@ -1,5 +1,9 @@
 import OpenAI from "openai";
 import { dedupeAiReply } from "@/lib/ai/dedupe-reply";
+import {
+  finalizeWhatsAppLines,
+  wasCutByTokenLimit,
+} from "@/lib/ai/complete-response";
 import { MEMORY_MESSAGE_LIMIT } from "@/lib/ai/conversation-memory";
 import {
   AI_LANGUAGE_INSTRUCTION,
@@ -23,8 +27,10 @@ const DEFAULT_MODEL = "gpt-4.1-mini";
 const CATALOG_COMPARISON_BASE = `You are a premium real estate consultant on WhatsApp. The client just received property cards (already sent). Write a brief, elegant comparison — like a confident advisor, not a brochure.
 
 RULES:
-- Exactly 1–2 short lines. One observation per line. Separate lines with a single newline.
-- Each line under ~80 characters. No paragraphs, no lists, no bullet points.
+- Exactly 1–2 short lines. One complete observation per line. Separate lines with a single newline.
+- Each line must be a FULL sentence ending with . ! or ?
+- NEVER trail off with "...", "both...", "and...", "but...", "however...", or any unfinished clause.
+- Each line under ~90 characters. No paragraphs, no lists, no bullet points.
 - Compare real differences from the listing data only — interior space, garden, style, location, price tier.
 - If client preferences are known, weave one in naturally.
 - Premium, human, understated.
@@ -100,16 +106,28 @@ export async function generateCatalogComparison(
         },
       ],
       temperature: 0.78,
-      max_tokens: 65,
+      max_tokens: 140,
       presence_penalty: 0.55,
       frequency_penalty: 0.65,
     });
 
-    const reply = completion.choices[0]?.message?.content?.trim();
-    if (reply && reply.length > 10) {
+    const choice = completion.choices[0];
+    const reply = choice?.message?.content?.trim();
+    const cutShort = wasCutByTokenLimit(choice?.finish_reason);
+
+    if (reply && reply.length > 10 && !cutShort) {
       const sanitized = sanitizeComparison(dedupeAiReply(reply, history));
-      const { text } = enforceReplyLanguage(sanitized, language);
-      return text;
+      if (sanitized) {
+        const { text } = enforceReplyLanguage(sanitized, language);
+        return text;
+      }
+    }
+
+    if (cutShort) {
+      console.warn("[Catalog comparison] Model output hit token limit — using heuristic", {
+        leadId: lead.id,
+        preview: reply?.slice(0, 80),
+      });
     }
   } catch (error) {
     console.warn("[Catalog comparison] AI generation failed, using heuristic", {
@@ -122,15 +140,20 @@ export async function generateCatalogComparison(
     preferences,
     language
   );
-  const sanitized = fallback.trim() ? sanitizeComparison(fallback) : null;
+  const sanitized = fallback.trim()
+    ? sanitizeComparison(fallback)
+    : null;
   if (!sanitized) {
     return null;
   }
   const deduped = dedupeAiReply(sanitized, history);
+  if (!deduped) {
+    return null;
+  }
   return enforceReplyLanguage(deduped, language).text;
 }
 
-function sanitizeComparison(text: string): string {
+function sanitizeComparison(text: string): string | null {
   const cleaned = text
     .replace(/\?+$/gm, ".")
     .replace(
@@ -141,12 +164,5 @@ function sanitizeComparison(text: string): string {
     .replace(/\n{3,}/g, "\n")
     .trim();
 
-  const lines = cleaned
-    .split(/\n+/)
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((line) => (line.length > 90 ? `${line.slice(0, 87).trim()}…` : line));
-
-  return lines.join("\n");
+  return finalizeWhatsAppLines(cleaned, { maxLines: 2, maxLineLength: 100 });
 }
