@@ -22,6 +22,7 @@ type CalendarSettingsFormProps = {
     visitDurationMinutes: number;
   };
   oauthError?: string | null;
+  oauthStep?: string | null;
   oauthConnected?: boolean;
 };
 
@@ -33,6 +34,7 @@ export function CalendarSettingsForm({
   googleConfigured,
   settings,
   oauthError,
+  oauthStep,
   oauthConnected,
 }: CalendarSettingsFormProps) {
   const [state, formAction, isPending] = useActionState(
@@ -68,7 +70,23 @@ export function CalendarSettingsForm({
     <div className="space-y-6">
       {oauthError && (
         <div className="rounded-2xl border border-red-500/30 bg-red-500/10 px-5 py-4 text-sm text-red-200">
-          Google connection failed: {oauthError}
+          <p className="font-medium">Google connection failed</p>
+          {oauthStep && (
+            <p className="mt-1 font-mono text-xs text-red-300/80">
+              step: {oauthStep}
+            </p>
+          )}
+          <p className="mt-2">{oauthError}</p>
+          <p className="mt-3 text-xs text-red-200/70">
+            Debug:{" "}
+            <Link href="/debug-google" className="underline">
+              /debug-google
+            </Link>{" "}
+            ·{" "}
+            <Link href="/api/debug/google-status" className="underline">
+              /api/debug/google-status
+            </Link>
+          </p>
         </div>
       )}
 

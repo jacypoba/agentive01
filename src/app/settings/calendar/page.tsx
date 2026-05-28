@@ -9,7 +9,7 @@ export const metadata: Metadata = {
 };
 
 type CalendarSettingsPageProps = {
-  searchParams: Promise<{ error?: string; connected?: string }>;
+  searchParams: Promise<{ error?: string; connected?: string; step?: string }>;
 };
 
 export default async function CalendarSettingsPage({
@@ -68,6 +68,7 @@ export default async function CalendarSettingsPage({
               visitDurationMinutes: settings.visitDurationMinutes,
             }}
             oauthError={params.error ?? null}
+            oauthStep={params.step ?? null}
             oauthConnected={params.connected === "1"}
           />
         </div>
