@@ -10,6 +10,34 @@ function firstRow<T>(rows: T[] | null | undefined): T | null {
   return rows?.[0] ?? null;
 }
 
+function buildProfilePayload(
+  userId: string,
+  fields: ProfileUpdate,
+  seed?: ProfileSeed
+): ProfileInsert {
+  const payload: ProfileInsert = {
+    id: userId,
+    user_id: userId,
+    ...fields,
+  };
+
+  if (seed?.full_name != null) {
+    payload.full_name = seed.full_name;
+  }
+  if (seed?.email != null) {
+    payload.email = seed.email;
+  }
+
+  return payload;
+}
+
+function isRlsError(error: { code?: string; message?: string }): boolean {
+  return (
+    error.code === "42501" ||
+    Boolean(error.message?.toLowerCase().includes("row-level security"))
+  );
+}
+
 export function profileSeedFromAuthUser(user: {
   email?: string | null;
   user_metadata?: Record<string, unknown>;
@@ -71,6 +99,7 @@ export async function ensureProfile(
     .from("profiles")
     .insert({
       id: userId,
+      user_id: userId,
       full_name: seed?.full_name ?? null,
       email: seed?.email ?? null,
     })
@@ -110,17 +139,7 @@ export async function upsertProfile(
   fields: ProfileUpdate,
   seed?: ProfileSeed
 ): Promise<Profile> {
-  const payload: ProfileInsert = {
-    id: userId,
-    ...fields,
-  };
-
-  if (seed?.full_name != null) {
-    payload.full_name = seed.full_name;
-  }
-  if (seed?.email != null) {
-    payload.email = seed.email;
-  }
+  const payload = buildProfilePayload(userId, fields, seed);
 
   console.log("[Profiles] Upserting profile", {
     userId,
@@ -137,7 +156,17 @@ export async function upsertProfile(
       userId,
       error: error.message,
       code: error.code,
+      rls: isRlsError(error),
     });
+
+    if (isRlsError(error)) {
+      console.warn("[Profiles] Retrying via ensureProfile + update after RLS upsert failure", {
+        userId,
+      });
+      await ensureProfile(supabase, userId, seed);
+      return updateProfile(supabase, userId, fields, seed);
+    }
+
     throw new Error(`Failed to save profile: ${error.message}`);
   }
 

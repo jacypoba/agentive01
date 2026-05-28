@@ -10,6 +10,7 @@ export type ConversationSender = "client" | "ai" | "agent";
 
 export type Profile = {
   id: string;
+  user_id: string;
   full_name: string | null;
   email: string | null;
   created_at: string;
@@ -69,6 +70,7 @@ export type Conversation = {
 
 export type ProfileInsert = {
   id: string;
+  user_id?: string;
   full_name?: string | null;
   email?: string | null;
   created_at?: string;
