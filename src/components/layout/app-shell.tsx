@@ -37,35 +37,44 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
       <GridBackground />
 
       <header className="fixed inset-x-0 top-0 z-50 border-b border-white/5 bg-black/60 backdrop-blur-xl">
-        <nav className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-4 sm:gap-4 sm:px-6 lg:px-8">
-          <div className="shrink-0">
-            <Logo href="/dashboard" />
-          </div>
-          <div className="min-w-0 flex-1 overflow-x-auto md:overflow-visible">
-            <AppNav />
-          </div>
-          <div className="flex shrink-0 items-center gap-2 sm:gap-3">
-            <span className="max-w-[120px] truncate text-sm text-white/50 md:max-w-[140px]">
-              {displayName}
-            </span>
-            <Suspense fallback={<WorkspacePillFallback />}>
-              <WorkspaceSwitcher userId={user.id} />
-            </Suspense>
-            <span
-              className="shrink-0 text-[11px] font-bold uppercase tracking-widest text-lime-400"
-              data-testid="workspace-test-marker"
-            >
-              WORKSPACE TEST
-            </span>
-            <LogoutButton />
-          </div>
-        </nav>
-        <div className="mx-auto max-w-6xl px-6 pb-3 md:hidden lg:px-8">
+        <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
+          <nav
+            aria-label="Main"
+            className="grid h-14 grid-cols-[auto_1fr_auto] items-center gap-3 md:h-[4.25rem] lg:gap-4"
+          >
+            <div className="min-w-0 shrink-0">
+              <Logo href="/dashboard" />
+            </div>
+
+            <div className="hidden min-w-0 justify-center md:flex">
+              <div className="max-w-full overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                <AppNav />
+              </div>
+            </div>
+
+            <div className="flex min-w-0 shrink-0 items-center justify-end gap-2 sm:gap-2.5">
+              <div className="flex min-w-0 max-w-[min(100%,11rem)] items-center gap-2 rounded-full border border-white/[0.07] bg-white/[0.025] py-1 pl-2 pr-2.5 sm:max-w-[13rem] sm:gap-2.5 sm:pl-2.5 sm:pr-3 lg:max-w-[15rem]">
+                <Suspense fallback={<WorkspacePillFallback />}>
+                  <WorkspaceSwitcher userId={user.id} />
+                </Suspense>
+                <span
+                  className="hidden min-w-0 truncate text-[11px] text-white/45 lg:inline lg:max-w-[5.5rem] xl:max-w-[7rem]"
+                  title={displayName}
+                >
+                  {displayName}
+                </span>
+              </div>
+              <LogoutButton />
+            </div>
+          </nav>
+        </div>
+
+        <div className="mx-auto max-w-6xl border-t border-white/[0.04] px-4 pb-3 pt-2 md:hidden sm:px-6 lg:px-8">
           <AppNavMobile />
         </div>
       </header>
 
-      <div className="relative z-10 pt-28 md:pt-24">{children}</div>
+      <div className="relative z-10 pt-[7.25rem] md:pt-[4.25rem]">{children}</div>
     </div>
   );
 }

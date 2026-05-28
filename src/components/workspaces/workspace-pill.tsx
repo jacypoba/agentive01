@@ -1,5 +1,5 @@
 const pillClassName =
-  "inline-flex shrink-0 max-w-[140px] truncate rounded-full border border-white/10 bg-gradient-to-r from-white/[0.06] to-white/[0.02] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-white/60 shadow-sm shadow-black/20";
+  "inline-flex min-w-0 max-w-[5.5rem] shrink truncate rounded-full px-1.5 py-0.5 text-[10px] font-medium normal-case tracking-normal text-white/40 sm:max-w-[6.5rem] lg:max-w-[7.5rem]";
 
 type WorkspacePillProps = {
   label: string;

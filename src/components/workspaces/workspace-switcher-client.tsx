@@ -95,7 +95,7 @@ export function WorkspaceSwitcherClient({
         aria-label={`Workspace: ${displayLabel}`}
         disabled={pending}
         onClick={() => setOpen((value) => !value)}
-        className="inline-flex max-w-[160px] shrink-0 items-center gap-1.5 rounded-full border border-white/10 bg-gradient-to-r from-white/[0.06] to-white/[0.02] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-white/60 shadow-sm shadow-black/20 transition-all hover:border-[#0066FF]/30 hover:text-white/80 disabled:opacity-60"
+        className="inline-flex min-w-0 max-w-[5.5rem] shrink items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium normal-case tracking-normal text-white/40 transition-colors hover:text-white/60 disabled:opacity-60 sm:max-w-[6.5rem] lg:max-w-[7.5rem]"
       >
         <span className="truncate">{displayLabel}</span>
         <svg

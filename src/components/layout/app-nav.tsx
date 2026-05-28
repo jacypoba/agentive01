@@ -16,7 +16,7 @@ export function AppNav() {
   const pathname = usePathname();
 
   return (
-    <nav className="hidden items-center gap-1 rounded-full border border-white/10 bg-white/5 p-1 md:flex">
+    <nav className="hidden w-max items-center gap-0.5 rounded-full border border-white/10 bg-white/[0.04] p-0.5 md:flex lg:gap-1 lg:p-1">
       {links.map((link) => {
         const isActive =
           pathname === link.href || pathname.startsWith(`${link.href}/`);
@@ -25,7 +25,7 @@ export function AppNav() {
           <Link
             key={link.href}
             href={link.href}
-            className={`rounded-full px-4 py-1.5 text-sm font-medium transition-all ${
+            className={`whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-medium transition-all lg:px-3.5 lg:py-1.5 lg:text-sm ${
               isActive
                 ? "bg-gradient-to-r from-[#0066FF] to-[#0088FF] text-white shadow-lg shadow-[#0066FF]/20"
                 : "text-white/50 hover:text-white"
