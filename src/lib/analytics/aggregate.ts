@@ -1,6 +1,10 @@
 import {
   buildDayKeys,
+  buildDayKeysBetween,
   formatChartDayLabel,
+  formatChartMonthLabel,
+  startOfMonthKey,
+  startOfWeekKey,
   toDayKey,
 } from "@/lib/analytics/date-ranges";
 import type {
@@ -11,20 +15,77 @@ import type {
 } from "@/lib/analytics/types";
 import type { LeadStatus } from "@/types/database";
 
+type TimeBucketMode = "day" | "week" | "month";
+
+function resolveTimeBucketMode(dayCount: number): TimeBucketMode {
+  if (dayCount > 180) return "month";
+  if (dayCount > 60) return "week";
+  return "day";
+}
+
+function bucketKeyForRow(dayKey: string, mode: TimeBucketMode): string {
+  if (mode === "week") return startOfWeekKey(dayKey);
+  if (mode === "month") return startOfMonthKey(dayKey);
+  return dayKey;
+}
+
+function formatBucketLabel(bucketKey: string, mode: TimeBucketMode): string {
+  if (mode === "month") return formatChartMonthLabel(bucketKey);
+  return formatChartDayLabel(bucketKey);
+}
+
+function buildBucketKeys(
+  rows: { created_at: string }[],
+  range: AnalyticsDateRange
+): { keys: string[]; mode: TimeBucketMode } {
+  if (!range.allTime) {
+    const keys = buildDayKeys(range);
+    return { keys, mode: resolveTimeBucketMode(keys.length) };
+  }
+
+  if (rows.length === 0) {
+    return { keys: [], mode: "day" };
+  }
+
+  const dayKeys = rows.map((row) => toDayKey(row.created_at)).sort();
+  const startKey = dayKeys[0]!;
+  const endKey = toDayKey(new Date().toISOString());
+  const spanKeys = buildDayKeysBetween(startKey, endKey);
+  const mode = resolveTimeBucketMode(spanKeys.length);
+
+  if (mode === "day") {
+    return { keys: spanKeys, mode };
+  }
+
+  const bucketKeys = new Set<string>();
+  for (const dayKey of spanKeys) {
+    bucketKeys.add(bucketKeyForRow(dayKey, mode));
+  }
+
+  return { keys: [...bucketKeys].sort(), mode };
+}
+
 export function bucketRowsByDay(
   rows: { created_at: string }[],
   range: AnalyticsDateRange
 ): TimeSeriesPoint[] {
+  const { keys, mode } = buildBucketKeys(rows, range);
+
+  if (keys.length === 0) {
+    return [];
+  }
+
   const counts = new Map<string, number>();
 
   for (const row of rows) {
-    const key = toDayKey(row.created_at);
-    counts.set(key, (counts.get(key) ?? 0) + 1);
+    const dayKey = toDayKey(row.created_at);
+    const bucketKey = bucketKeyForRow(dayKey, mode);
+    counts.set(bucketKey, (counts.get(bucketKey) ?? 0) + 1);
   }
 
-  return buildDayKeys(range).map((date) => ({
+  return keys.map((date) => ({
     date,
-    label: formatChartDayLabel(date),
+    label: formatBucketLabel(date, mode),
     value: counts.get(date) ?? 0,
   }));
 }

@@ -7,6 +7,7 @@ import { FollowUpsPanel } from "@/components/dashboard/follow-ups-panel";
 import { WhatsAppLiveFeed } from "@/components/dashboard/whatsapp-live-feed";
 import { VisitRequestsPanel } from "@/components/visits/visit-requests-panel";
 import { createClient } from "@/lib/supabase/server";
+import { parseAnalyticsPeriod } from "@/lib/analytics/periods";
 import {
   formatRelativeTime,
   getActivityLabel,
@@ -52,7 +53,14 @@ const quickActions = [
   },
 ];
 
-export default async function DashboardPage() {
+type DashboardPageProps = {
+  searchParams: Promise<{ period?: string }>;
+};
+
+export default async function DashboardPage({ searchParams }: DashboardPageProps) {
+  const params = await searchParams;
+  const analyticsPeriod = parseAnalyticsPeriod(params.period);
+
   const supabase = await createClient();
   const {
     data: { user },
@@ -189,7 +197,9 @@ export default async function DashboardPage() {
               ))}
             </section>
 
-            {user && <AnalyticsSection userId={user.id} />}
+            {user && (
+              <AnalyticsSection userId={user.id} period={analyticsPeriod} />
+            )}
 
             <section className="mt-12 grid gap-6 lg:grid-cols-3">
               <div className="lg:col-span-2">

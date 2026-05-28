@@ -6,12 +6,14 @@ import {
   buildConversionFunnel,
   countQualifiedLeads,
 } from "@/lib/analytics/aggregate";
-import { buildAnalyticsDateRange } from "@/lib/analytics/date-ranges";
+import { buildAnalyticsDateRangeForPeriod } from "@/lib/analytics/date-ranges";
 import { generateAnalyticsInsights } from "@/lib/analytics/insights";
 import {
+  DEFAULT_ANALYTICS_PERIOD,
+  type AnalyticsPeriodKey,
+} from "@/lib/analytics/periods";
+import {
   countInboundWhatsAppMessages,
-  fetchAllLeadRowsForFunnel,
-  fetchAllVisitRowsForFunnel,
   fetchFollowUpAnalyticsRows,
   fetchLeadAnalyticsRows,
   fetchPropertyAnalyticsRows,
@@ -22,8 +24,6 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 
 type Client = SupabaseClient<Database>;
-
-const DEFAULT_RANGE_DAYS = 30;
 
 function buildAnalyticsKpis(input: {
   leads: number;
@@ -47,7 +47,7 @@ function buildAnalyticsKpis(input: {
       id: "conversion",
       label: "Qualification rate",
       value: `${input.conversionRate}%`,
-      change: "Qualified ÷ total pipeline",
+      change: "Qualified ÷ leads in period",
       accent: "text-white",
     },
     {
@@ -75,7 +75,7 @@ function buildAnalyticsKpis(input: {
       id: "properties",
       label: "Active listings",
       value: String(input.properties),
-      change: "Catalog inventory",
+      change: "Total catalog inventory",
       accent: "text-white",
     },
   ];
@@ -84,24 +84,22 @@ function buildAnalyticsKpis(input: {
 export async function getAnalyticsDashboardData(
   supabase: Client,
   userId: string,
-  days = DEFAULT_RANGE_DAYS
+  period: AnalyticsPeriodKey = DEFAULT_ANALYTICS_PERIOD
 ): Promise<AnalyticsDashboardData> {
-  const range = buildAnalyticsDateRange(days);
+  const range = buildAnalyticsDateRangeForPeriod(period);
 
   const [
     leadRows,
-    allLeadRows,
-    allVisitRows,
     visitRows,
     followUpRows,
-    propertyRows,
+    propertyRowsInRange,
+    totalPropertyRows,
     whatsappInbound,
   ] = await Promise.all([
     fetchLeadAnalyticsRows(supabase, userId, range),
-    fetchAllLeadRowsForFunnel(supabase, userId),
-    fetchAllVisitRowsForFunnel(supabase, userId),
     fetchVisitAnalyticsRows(supabase, userId, range),
     fetchFollowUpAnalyticsRows(supabase, userId, range),
+    fetchPropertyAnalyticsRows(supabase, userId, range),
     fetchPropertyAnalyticsRows(supabase, userId),
     countInboundWhatsAppMessages(supabase, userId, range),
   ]);
@@ -121,27 +119,26 @@ export async function getAnalyticsDashboardData(
   ).length;
 
   const conversionFunnel = buildConversionFunnel({
-    totalLeads: allLeadRows.length,
-    qualifiedLeads: countQualifiedLeads(allLeadRows),
-    visitRequestedLeads: allLeadRows.filter((row) => row.visit_requested).length,
-    confirmedVisits: allVisitRows.filter((row) => row.status === "confirmed")
-      .length,
-    closedLeads: allLeadRows.filter((row) => row.status === "closed").length,
+    totalLeads: leadRows.length,
+    qualifiedLeads: qualifiedInRange,
+    visitRequestedLeads: leadRows.filter((row) => row.visit_requested).length,
+    confirmedVisits,
+    closedLeads: leadRows.filter((row) => row.status === "closed").length,
   });
 
   const languageDistribution = aggregateLanguageDistribution(leadRows);
   const propertyTypeDistribution = aggregatePropertyTypeDistribution(
     leadRows,
-    propertyRows
+    propertyRowsInRange
   );
-  const topCities = aggregateTopCities(leadRows, propertyRows);
+  const topCities = aggregateTopCities(leadRows, propertyRowsInRange);
 
   const totals = {
     leads: leadRows.length,
     visits: visitRows.length,
     followUpsSent,
     whatsappInbound,
-    properties: propertyRows.length,
+    properties: totalPropertyRows.length,
     conversionRate,
   };
 
@@ -154,7 +151,7 @@ export async function getAnalyticsDashboardData(
       confirmedVisits,
       followUpsSent,
       whatsappInbound,
-      properties: propertyRows.length,
+      properties: totalPropertyRows.length,
       conversionRate,
       rangeLabel: range.label,
     }),

@@ -4,6 +4,17 @@ import type { Database } from "@/types/database";
 
 type Client = SupabaseClient<Database>;
 
+function applyCreatedAtRange<T extends { gte: (col: string, val: string) => T; lte: (col: string, val: string) => T }>(
+  query: T,
+  range: AnalyticsDateRange
+): T {
+  if (range.allTime || !range.start || !range.end) {
+    return query;
+  }
+
+  return query.gte("created_at", range.start).lte("created_at", range.end);
+}
+
 export type LeadAnalyticsRow = {
   created_at: string;
   status: Database["public"]["Tables"]["leads"]["Row"]["status"];
@@ -35,15 +46,15 @@ export async function fetchLeadAnalyticsRows(
   userId: string,
   range: AnalyticsDateRange
 ): Promise<LeadAnalyticsRow[]> {
-  const { data, error } = await supabase
-    .from("leads")
-    .select(
-      "created_at, status, preferred_language, preferred_area, property_type, visit_requested"
-    )
-    .eq("user_id", userId)
-    .gte("created_at", range.start)
-    .lte("created_at", range.end)
-    .order("created_at", { ascending: true });
+  const { data, error } = await applyCreatedAtRange(
+    supabase
+      .from("leads")
+      .select(
+        "created_at, status, preferred_language, preferred_area, property_type, visit_requested"
+      )
+      .eq("user_id", userId),
+    range
+  ).order("created_at", { ascending: true });
 
   if (error) {
     throw new Error(`Failed to fetch lead analytics: ${error.message}`);
@@ -75,13 +86,13 @@ export async function fetchVisitAnalyticsRows(
   userId: string,
   range: AnalyticsDateRange
 ): Promise<VisitAnalyticsRow[]> {
-  const { data, error } = await supabase
-    .from("visit_requests")
-    .select("created_at, status")
-    .eq("user_id", userId)
-    .gte("created_at", range.start)
-    .lte("created_at", range.end)
-    .order("created_at", { ascending: true });
+  const { data, error } = await applyCreatedAtRange(
+    supabase
+      .from("visit_requests")
+      .select("created_at, status")
+      .eq("user_id", userId),
+    range
+  ).order("created_at", { ascending: true });
 
   if (error) {
     throw new Error(`Failed to fetch visit analytics: ${error.message}`);
@@ -95,12 +106,13 @@ export async function fetchFollowUpAnalyticsRows(
   userId: string,
   range: AnalyticsDateRange
 ): Promise<FollowUpAnalyticsRow[]> {
-  const { data, error } = await supabase
-    .from("follow_ups")
-    .select("created_at, sent_at, status")
-    .eq("user_id", userId)
-    .gte("created_at", range.start)
-    .lte("created_at", range.end);
+  const { data, error } = await applyCreatedAtRange(
+    supabase
+      .from("follow_ups")
+      .select("created_at, sent_at, status")
+      .eq("user_id", userId),
+    range
+  );
 
   if (error) {
     throw new Error(`Failed to fetch follow-up analytics: ${error.message}`);
@@ -127,12 +139,17 @@ export async function fetchAllVisitRowsForFunnel(
 
 export async function fetchPropertyAnalyticsRows(
   supabase: Client,
-  userId: string
+  userId: string,
+  range?: AnalyticsDateRange
 ): Promise<PropertyAnalyticsRow[]> {
-  const { data, error } = await supabase
+  const baseQuery = supabase
     .from("properties")
     .select("created_at, city, property_type")
     .eq("user_id", userId);
+
+  const { data, error } = range
+    ? await applyCreatedAtRange(baseQuery, range)
+    : await baseQuery;
 
   if (error) {
     throw new Error(`Failed to fetch property analytics: ${error.message}`);
@@ -161,13 +178,19 @@ export async function countInboundWhatsAppMessages(
 
   const leadIds = leads.map((lead) => lead.id);
 
-  const { count, error } = await supabase
+  let messageQuery = supabase
     .from("conversations")
     .select("*", { count: "exact", head: true })
     .in("lead_id", leadIds)
-    .eq("sender", "client")
-    .gte("created_at", range.start)
-    .lte("created_at", range.end);
+    .eq("sender", "client");
+
+  if (!range.allTime && range.start && range.end) {
+    messageQuery = messageQuery
+      .gte("created_at", range.start)
+      .lte("created_at", range.end);
+  }
+
+  const { count, error } = await messageQuery;
 
   if (error) {
     throw new Error(`Failed to count WhatsApp messages: ${error.message}`);

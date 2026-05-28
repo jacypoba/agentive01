@@ -1,3 +1,5 @@
+import type { AnalyticsPeriodKey } from "@/lib/analytics/periods";
+
 /** Analytics domain types — scoped per tenant via userId (future Stripe org mapping). */
 
 export type AnalyticsTenantScope = {
@@ -6,9 +8,11 @@ export type AnalyticsTenantScope = {
 
 export type AnalyticsDateRange = {
   label: string;
-  days: number;
-  start: string;
-  end: string;
+  period: AnalyticsPeriodKey;
+  days: number | null;
+  start: string | null;
+  end: string | null;
+  allTime: boolean;
 };
 
 export type TimeSeriesPoint = {
