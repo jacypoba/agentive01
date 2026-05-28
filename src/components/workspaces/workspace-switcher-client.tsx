@@ -3,20 +3,23 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { switchDefaultWorkspaceAction } from "@/app/actions/workspaces";
+import {
+  WORKSPACE_FALLBACK_LABEL,
+  WorkspacePill,
+} from "@/components/workspaces/workspace-pill";
 import type { CurrentWorkspace } from "@/lib/workspaces/get-current-workspace";
-
-const pillClassName =
-  "inline-flex max-w-[180px] truncate rounded-full border border-white/10 bg-white/[0.03] px-2.5 py-1 text-[10px] font-medium uppercase tracking-wider text-white/45";
 
 type WorkspaceSwitcherClientProps = {
   workspaces: CurrentWorkspace[];
   currentWorkspaceId: string | null;
+  fallbackLabel?: string;
   isUnset?: boolean;
 };
 
 export function WorkspaceSwitcherClient({
   workspaces,
   currentWorkspaceId,
+  fallbackLabel = WORKSPACE_FALLBACK_LABEL,
   isUnset = false,
 }: WorkspaceSwitcherClientProps) {
   const router = useRouter();
@@ -28,6 +31,9 @@ export function WorkspaceSwitcherClient({
 
   const current =
     workspaces.find((workspace) => workspace.id === activeId) ?? workspaces[0];
+
+  const displayLabel =
+    isUnset || !current?.name?.trim() ? fallbackLabel : current.name;
 
   useEffect(() => {
     setActiveId(currentWorkspaceId ?? "");
@@ -51,23 +57,12 @@ export function WorkspaceSwitcherClient({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [open]);
 
-  if (isUnset || !current) {
-    return (
-      <span
-        className={`${pillClassName} border-amber-500/20 bg-amber-500/10 text-amber-200/70`}
-        title="No workspace is configured for this account yet"
-      >
-        Workspace not set
-      </span>
-    );
+  if (isUnset || workspaces.length === 0 || !current) {
+    return <WorkspacePill label={displayLabel} title={displayLabel} />;
   }
 
   if (workspaces.length === 1) {
-    return (
-      <span className={pillClassName} title={current.name}>
-        {current.name}
-      </span>
-    );
+    return <WorkspacePill label={displayLabel} title={displayLabel} />;
   }
 
   function handleSelect(workspaceId: string) {
@@ -92,20 +87,21 @@ export function WorkspaceSwitcherClient({
   }
 
   return (
-    <div ref={containerRef} className="relative">
+    <div ref={containerRef} className="relative shrink-0">
       <button
         type="button"
         aria-haspopup="listbox"
         aria-expanded={open}
+        aria-label={`Workspace: ${displayLabel}`}
         disabled={pending}
         onClick={() => setOpen((value) => !value)}
-        className="inline-flex max-w-[200px] items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-left text-xs font-medium text-white/70 transition-all hover:border-[#0066FF]/30 hover:bg-[#0066FF]/10 hover:text-white disabled:opacity-60"
+        className="inline-flex max-w-[160px] shrink-0 items-center gap-1.5 rounded-full border border-white/10 bg-gradient-to-r from-white/[0.06] to-white/[0.02] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-white/60 shadow-sm shadow-black/20 transition-all hover:border-[#0066FF]/30 hover:text-white/80 disabled:opacity-60"
       >
-        <span className="truncate">{current.name}</span>
+        <span className="truncate">{displayLabel}</span>
         <svg
           aria-hidden
           viewBox="0 0 20 20"
-          className={`h-3.5 w-3.5 shrink-0 text-white/40 transition-transform ${open ? "rotate-180" : ""}`}
+          className={`h-3 w-3 shrink-0 text-white/35 transition-transform ${open ? "rotate-180" : ""}`}
           fill="currentColor"
         >
           <path
@@ -120,7 +116,7 @@ export function WorkspaceSwitcherClient({
         <div
           role="listbox"
           aria-label="Switch workspace"
-          className="absolute right-0 z-50 mt-2 min-w-[220px] overflow-hidden rounded-xl border border-white/10 bg-[#0a0a0a]/95 p-1 shadow-xl shadow-black/40 backdrop-blur-xl"
+          className="absolute right-0 z-[60] mt-2 min-w-[220px] overflow-hidden rounded-xl border border-white/10 bg-[#0a0a0a]/95 p-1 shadow-xl shadow-black/40 backdrop-blur-xl"
         >
           <p className="px-3 py-2 text-[10px] font-medium uppercase tracking-wider text-white/35">
             Workspace

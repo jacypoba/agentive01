@@ -1,8 +1,10 @@
+import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { LogoutButton } from "@/components/auth/logout-button";
 import { AppNav, AppNavMobile } from "@/components/layout/app-nav";
 import { GridBackground } from "@/components/ui/grid-background";
 import { Logo } from "@/components/ui/logo";
+import { WorkspacePillFallback } from "@/components/workspaces/workspace-pill";
 import { WorkspaceSwitcher } from "@/components/workspaces/workspace-switcher";
 import { getProfile } from "@/lib/data/profiles";
 import { createClient } from "@/lib/supabase/server";
@@ -35,14 +37,20 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
       <GridBackground />
 
       <header className="fixed inset-x-0 top-0 z-50 border-b border-white/5 bg-black/60 backdrop-blur-xl">
-        <nav className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-6 py-4 lg:px-8">
-          <Logo href="/dashboard" />
-          <AppNav />
-          <div className="flex items-center gap-3 sm:gap-4">
-            <WorkspaceSwitcher userId={user.id} />
-            <span className="hidden text-sm text-white/50 lg:inline">
+        <nav className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-4 sm:gap-4 sm:px-6 lg:px-8">
+          <div className="shrink-0">
+            <Logo href="/dashboard" />
+          </div>
+          <div className="min-w-0 flex-1 overflow-x-auto md:overflow-visible">
+            <AppNav />
+          </div>
+          <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+            <span className="hidden max-w-[100px] truncate text-sm text-white/50 sm:inline md:max-w-[140px]">
               {displayName}
             </span>
+            <Suspense fallback={<WorkspacePillFallback />}>
+              <WorkspaceSwitcher userId={user.id} />
+            </Suspense>
             <LogoutButton />
           </div>
         </nav>
