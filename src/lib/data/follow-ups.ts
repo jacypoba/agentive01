@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type {
   Database,
   FollowUp,
+  FollowUpBuckets,
   FollowUpContextSnapshot,
   FollowUpInsert,
   FollowUpStatus,
@@ -180,6 +181,96 @@ export async function getFollowUpsForUser(
   return (data ?? []) as FollowUpWithLead[];
 }
 
+export async function getFollowUpById(
+  supabase: Client,
+  userId: string,
+  followUpId: string
+): Promise<FollowUpWithLead | null> {
+  const { data, error } = await supabase
+    .from("follow_ups")
+    .select(
+      `
+      *,
+      leads!inner (
+        id,
+        client_name,
+        phone,
+        phone_normalized,
+        status,
+        intent_status,
+        preferred_area,
+        property_type,
+        budget,
+        user_id
+      )
+    `
+    )
+    .eq("id", followUpId)
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(`Failed to fetch follow-up: ${error.message}`);
+  }
+
+  return (data as FollowUpWithLead | null) ?? null;
+}
+
+export async function countPendingFollowUps(
+  supabase: Client,
+  userId: string
+): Promise<number> {
+  const { count, error } = await supabase
+    .from("follow_ups")
+    .select("*", { count: "exact", head: true })
+    .eq("user_id", userId)
+    .eq("status", "pending");
+
+  if (error) {
+    throw new Error(`Failed to count pending follow-ups: ${error.message}`);
+  }
+
+  return count ?? 0;
+}
+
+function startOfTodayIso(): string {
+  const now = new Date();
+  now.setHours(0, 0, 0, 0);
+  return now.toISOString();
+}
+
+export async function countSentFollowUpsToday(
+  supabase: Client,
+  userId: string
+): Promise<number> {
+  const { count, error } = await supabase
+    .from("follow_ups")
+    .select("*", { count: "exact", head: true })
+    .eq("user_id", userId)
+    .eq("status", "sent")
+    .gte("sent_at", startOfTodayIso());
+
+  if (error) {
+    throw new Error(`Failed to count sent follow-ups: ${error.message}`);
+  }
+
+  return count ?? 0;
+}
+
+export async function getFollowUpsGrouped(
+  supabase: Client,
+  userId: string,
+  limit = 100
+): Promise<FollowUpBuckets> {
+  const followUps = await getFollowUpsForUser(supabase, userId, limit);
+
+  return {
+    pending: followUps.filter((item) => item.status === "pending"),
+    sent: followUps.filter((item) => item.status === "sent"),
+    failed: followUps.filter((item) => item.status === "failed"),
+  };
+}
+
 export async function updateFollowUpStatus(
   supabase: Client,
   followUpId: string,
@@ -210,11 +301,7 @@ export async function updateFollowUpStatus(
 export async function getFollowUpBuckets(
   supabase: Client,
   userId: string
-): Promise<{
-  pending: FollowUpWithLead[];
-  sent: FollowUpWithLead[];
-  failed: FollowUpWithLead[];
-}> {
+): Promise<FollowUpBuckets> {
   const followUps = await getFollowUpsForUser(supabase, userId, 40);
 
   return {

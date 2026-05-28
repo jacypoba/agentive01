@@ -59,11 +59,19 @@ function formatWhen(iso: string): string {
 export function FollowUpsPanel({ buckets }: FollowUpsPanelProps) {
   return (
     <section className="mt-12">
-      <div>
-        <h2 className="text-lg font-semibold">Follow-ups</h2>
-        <p className="mt-1 text-sm text-white/45">
-          Automated WhatsApp re-engagement — pending, sent, and failed.
-        </p>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h2 className="text-lg font-semibold">Follow-ups</h2>
+          <p className="mt-1 text-sm text-white/45">
+            Automated WhatsApp re-engagement — pending, sent, and failed.
+          </p>
+        </div>
+        <Link
+          href="/follow-ups"
+          className="inline-flex w-fit rounded-full border border-white/10 px-4 py-1.5 text-xs font-medium text-white/60 transition hover:border-[#0066FF]/40 hover:text-[#00D4FF]"
+        >
+          View all
+        </Link>
       </div>
 
       <div className="mt-4 grid gap-4 lg:grid-cols-3">

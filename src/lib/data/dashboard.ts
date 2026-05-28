@@ -10,7 +10,7 @@ import {
   getCalendarVisitBuckets,
   getRecentVisitRequests,
 } from "@/lib/data/visit-requests";
-import { getFollowUpBuckets } from "@/lib/data/follow-ups";
+import { getFollowUpBuckets, countPendingFollowUps, countSentFollowUpsToday } from "@/lib/data/follow-ups";
 import { getStatusBadgeColor } from "@/lib/leads/status";
 import type {
   CalendarVisitBuckets,
@@ -121,6 +121,8 @@ export async function getDashboardData(
     recentVisitRequests,
     calendarBuckets,
     followUpBuckets,
+    pendingFollowUps,
+    sentFollowUpsToday,
   ] = await Promise.all([
     getProfile(supabase, userId),
     countLeads(supabase, userId),
@@ -133,6 +135,8 @@ export async function getDashboardData(
     getRecentVisitRequests(supabase, userId, 5),
     getCalendarVisitBuckets(supabase, userId),
     getFollowUpBuckets(supabase, userId),
+    countPendingFollowUps(supabase, userId),
+    countSentFollowUpsToday(supabase, userId),
   ]);
 
   return {
@@ -143,6 +147,8 @@ export async function getDashboardData(
       scheduledLeads,
       recentConversations,
       pendingVisitRequests,
+      pendingFollowUps,
+      sentFollowUpsToday,
     },
     recentActivity: mergeRecentActivity(
       mapConversationToActivity(conversations),

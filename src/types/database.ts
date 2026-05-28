@@ -336,6 +336,8 @@ export type DashboardStats = {
   scheduledLeads: number;
   recentConversations: number;
   pendingVisitRequests: number;
+  pendingFollowUps: number;
+  sentFollowUpsToday: number;
 };
 
 export type RecentActivity = {

@@ -2,6 +2,10 @@
 
 import { revalidatePath } from "next/cache";
 import { getConversationsByLead } from "@/lib/data/conversations";
+import {
+  getFollowUpById,
+  updateFollowUpStatus,
+} from "@/lib/data/follow-ups";
 import { getLeadById } from "@/lib/data/leads";
 import { buildFollowUpContext } from "@/lib/follow-ups/context";
 import { generateFollowUpMessage } from "@/lib/follow-ups/messages";
@@ -14,6 +18,106 @@ export type FollowUpActionState = {
   error?: string;
   success?: string;
 };
+
+function revalidateFollowUpPaths(leadId?: string) {
+  revalidatePath("/dashboard");
+  revalidatePath("/follow-ups");
+  if (leadId) {
+    revalidatePath(`/leads/${leadId}`);
+  }
+}
+
+export async function sendFollowUpByIdAction(
+  followUpId: string
+): Promise<FollowUpActionState> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { error: "You must be signed in." };
+  }
+
+  const followUp = await getFollowUpById(supabase, user.id, followUpId);
+  if (!followUp) {
+    return { error: "Follow-up not found." };
+  }
+
+  if (followUp.status !== "pending" && followUp.status !== "failed") {
+    return { error: "Only pending or failed follow-ups can be sent." };
+  }
+
+  if (followUp.status === "failed") {
+    await updateFollowUpStatus(supabase, followUpId, "pending");
+  }
+
+  const result = await sendFollowUpImmediately(supabase, followUpId);
+  revalidateFollowUpPaths(followUp.lead_id);
+
+  if (result.sent) {
+    return { success: "Follow-up sent on WhatsApp." };
+  }
+
+  return {
+    error: result.error ?? "Follow-up could not be sent.",
+  };
+}
+
+export async function markFollowUpSentAction(
+  followUpId: string
+): Promise<FollowUpActionState> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { error: "You must be signed in." };
+  }
+
+  const followUp = await getFollowUpById(supabase, user.id, followUpId);
+  if (!followUp) {
+    return { error: "Follow-up not found." };
+  }
+
+  if (followUp.status !== "pending" && followUp.status !== "failed") {
+    return { error: "Only pending or failed follow-ups can be marked as sent." };
+  }
+
+  await updateFollowUpStatus(supabase, followUpId, "sent", {
+    sent_at: new Date().toISOString(),
+  });
+
+  revalidateFollowUpPaths(followUp.lead_id);
+  return { success: "Follow-up marked as sent." };
+}
+
+export async function cancelFollowUpAction(
+  followUpId: string
+): Promise<FollowUpActionState> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { error: "You must be signed in." };
+  }
+
+  const followUp = await getFollowUpById(supabase, user.id, followUpId);
+  if (!followUp) {
+    return { error: "Follow-up not found." };
+  }
+
+  if (followUp.status !== "pending") {
+    return { error: "Only pending follow-ups can be cancelled." };
+  }
+
+  await updateFollowUpStatus(supabase, followUpId, "cancelled");
+  revalidateFollowUpPaths(followUp.lead_id);
+  return { success: "Follow-up cancelled." };
+}
 
 export async function triggerFollowUpNowAction(
   leadId: string,
@@ -56,9 +160,7 @@ export async function triggerFollowUpNowAction(
     }
 
     const result = await sendFollowUpImmediately(supabase, followUp.id);
-
-    revalidatePath("/dashboard");
-    revalidatePath(`/leads/${leadId}`);
+    revalidateFollowUpPaths(leadId);
 
     if (result.sent) {
       return { success: "Follow-up sent on WhatsApp." };

@@ -38,6 +38,12 @@ const quickActions = [
     badge: "Visits",
   },
   {
+    title: "Follow-ups",
+    description: "Review and send automated WhatsApp re-engagement.",
+    href: "/follow-ups",
+    badge: "Follow-ups",
+  },
+  {
     title: "View leads",
     description: "Browse and search your full leads pipeline.",
     href: "/leads",
@@ -95,10 +101,24 @@ export default async function DashboardPage() {
           href: "/visits?status=pending",
         },
         {
+          label: "Pending follow-ups",
+          value: String(dashboardData.stats.pendingFollowUps),
+          change: `${dashboardData.stats.sentFollowUpsToday} sent today`,
+          accent: "text-[#00D4FF]",
+          href: "/follow-ups?group=pending",
+        },
+        {
+          label: "Sent follow-ups today",
+          value: String(dashboardData.stats.sentFollowUpsToday),
+          change: "WhatsApp re-engagement",
+          accent: "text-emerald-300",
+          href: "/follow-ups?group=sent",
+        },
+        {
           label: "Total pipeline",
           value: String(dashboardData.stats.totalLeads),
           change: "All captured leads",
-          accent: "text-[#00D4FF]",
+          accent: "text-white",
           href: "/leads",
         },
       ]
@@ -146,7 +166,7 @@ export default async function DashboardPage() {
 
         {dashboardData && (
           <>
-            <section className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <section className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {stats.map((stat) => (
                 <Link
                   key={stat.label}
