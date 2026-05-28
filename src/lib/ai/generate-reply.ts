@@ -1,4 +1,5 @@
 import OpenAI from "openai";
+import { dedupeAiReply } from "@/lib/ai/dedupe-reply";
 import { MEMORY_MESSAGE_LIMIT } from "@/lib/ai/conversation-memory";
 import { buildQualificationDirective } from "@/lib/ai/qualification";
 import { REAL_ESTATE_ASSISTANT_PROMPT } from "@/lib/ai/prompts";
@@ -76,7 +77,8 @@ function toOpenAIMessages(
   lead: Lead,
   propertiesToRecommend: Property[],
   availability: PropertyAvailability,
-  clientAskedForMore: boolean
+  clientAskedForMore: boolean,
+  clientAskedToReshow = false
 ): OpenAI.Chat.ChatCompletionMessageParam[] {
   const recentHistory = history.slice(-MEMORY_MESSAGE_LIMIT);
   const qualificationDirective = buildQualificationDirective(
@@ -87,6 +89,7 @@ function toOpenAIMessages(
       matchingPropertyCount: availability.matchingTotal,
       availability,
       clientAskedForMore,
+      clientAskedToReshow,
     }
   );
   const propertyDirective = buildPropertyRecommendationDirective(
@@ -136,7 +139,8 @@ export async function generateAIReply(
   history: Conversation[],
   propertiesToRecommend: Property[] = [],
   availability: PropertyAvailability,
-  clientAskedForMore = false
+  clientAskedForMore = false,
+  clientAskedToReshow = false
 ): Promise<string> {
   const openai = getOpenAIClient();
   const messages = toOpenAIMessages(
@@ -144,7 +148,8 @@ export async function generateAIReply(
     lead,
     propertiesToRecommend,
     availability,
-    clientAskedForMore
+    clientAskedForMore,
+    clientAskedToReshow
   );
 
   const completion = await openai.chat.completions.create({
@@ -161,5 +166,5 @@ export async function generateAIReply(
     throw new Error("OpenAI returned an empty response.");
   }
 
-  return reply;
+  return dedupeAiReply(reply, history);
 }

@@ -1,4 +1,5 @@
 import OpenAI from "openai";
+import { dedupeAiReply } from "@/lib/ai/dedupe-reply";
 import { MEMORY_MESSAGE_LIMIT } from "@/lib/ai/conversation-memory";
 import {
   buildCatalogComparisonContext,
@@ -89,7 +90,7 @@ export async function generateCatalogComparison(
 
     const reply = completion.choices[0]?.message?.content?.trim();
     if (reply && reply.length > 10) {
-      return sanitizeComparison(reply);
+      return sanitizeComparison(dedupeAiReply(reply, history));
     }
   } catch (error) {
     console.warn("[Catalog comparison] AI generation failed, using heuristic", {
@@ -98,7 +99,8 @@ export async function generateCatalogComparison(
   }
 
   const fallback = buildHeuristicCatalogComparison(properties, preferences);
-  return fallback.trim() || null;
+  const sanitized = fallback.trim() ? sanitizeComparison(fallback) : null;
+  return sanitized ? dedupeAiReply(sanitized, history) : null;
 }
 
 function sanitizeComparison(text: string): string {

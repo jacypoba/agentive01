@@ -16,6 +16,8 @@ export type PropertyAvailability = {
   noMatchesInDatabase: boolean;
   /** Could not build search criteria from CRM/history. */
   criteriaMissing: boolean;
+  /** Re-sending a previously shown batch (not new listings). */
+  isReshow?: boolean;
 };
 
 export function analyzePropertyAvailability(
@@ -37,6 +39,30 @@ export function analyzePropertyAvailability(
     allShown: matchingProperties.length > 0 && unsent.length === 0,
     noMatchesInDatabase: criteriaAvailable && matchingProperties.length === 0,
     criteriaMissing: !criteriaAvailable,
+    isReshow: false,
+  };
+}
+
+export function buildReshowAvailability(
+  reshownProperties: Property[],
+  matchingProperties: Property[],
+  history: Conversation[],
+  criteriaAvailable: boolean
+): PropertyAvailability {
+  const unsent = matchingProperties.filter(
+    (property) => !wasPropertyAlreadySent(history, property)
+  );
+
+  return {
+    matchingTotal: matchingProperties.length,
+    shownCount: matchingProperties.length - unsent.length,
+    remainingCount: unsent.length,
+    toSend: reshownProperties,
+    remainingAfterSend: unsent.length,
+    allShown: false,
+    noMatchesInDatabase: false,
+    criteriaMissing: !criteriaAvailable,
+    isReshow: true,
   };
 }
 
@@ -64,6 +90,16 @@ export function buildAvailabilityDirective(
   }
 
   if (availability.toSend.length > 0) {
+    if (availability.isReshow) {
+      lines.push(
+        "- Previously shown listings WILL be re-sent after your message.",
+        "- Write ONE brief line only — e.g. 'Claro — volto a enviar 👇'.",
+        "- NEVER say 'já mostrei', 'já enviei', or 'já partilhei' without the cards going out.",
+        "- Do NOT ask a question."
+      );
+      return lines.join("\n");
+    }
+
     lines.push(
       "- New property card(s) WILL be sent after your message.",
       "- Write a brief intro only — the system handles the listings.",

@@ -141,6 +141,63 @@ export function getLastShownPropertyId(history: Conversation[]): string | null {
   return lastId;
 }
 
+/** Property IDs from the most recent recommendation turn (before the latest client message). */
+export function getLastShownPropertyBatchIds(history: Conversation[]): string[] {
+  if (history.length === 0) {
+    return [];
+  }
+
+  let scanEnd = history.length - 1;
+  if (history[scanEnd]?.sender === "client") {
+    scanEnd -= 1;
+  }
+
+  const ids: string[] = [];
+
+  for (let i = scanEnd; i >= 0; i -= 1) {
+    const item = history[i];
+    if (item.sender === "client") {
+      break;
+    }
+
+    for (const match of item.message.matchAll(/\[property:([a-f0-9-]+)\]/gi)) {
+      const id = match[1];
+      if (id && !ids.includes(id)) {
+        ids.unshift(id);
+      }
+    }
+  }
+
+  return ids;
+}
+
+function hashPick(seed: string, count: number): number {
+  let hash = 0;
+  for (let i = 0; i < seed.length; i += 1) {
+    hash = (hash * 31 + seed.charCodeAt(i)) >>> 0;
+  }
+  return count > 0 ? hash % count : 0;
+}
+
+const RESHOW_CATALOG_INTROS = [
+  "Claro — volto a enviar 👇",
+  "Estas foram as opções 👇",
+  "Sem problema — mando outra vez 👇",
+  "Aqui estão outra vez 👇",
+];
+
+const RESHOW_SINGLE_INTROS = [
+  "Claro — esta era a opção 👇",
+  "Volto a enviar 👇",
+  "Aqui está outra vez 👇",
+];
+
+export function buildReshowIntroText(seed: string, propertyCount: number): string {
+  const variants =
+    propertyCount === 1 ? RESHOW_SINGLE_INTROS : RESHOW_CATALOG_INTROS;
+  return variants[hashPick(seed, variants.length)];
+}
+
 export function selectNextPropertyToRecommend(
   properties: Property[],
   history: Conversation[]

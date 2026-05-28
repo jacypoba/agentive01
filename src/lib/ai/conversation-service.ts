@@ -1,25 +1,38 @@
 import { extractAndApplyLeadQualification } from "@/lib/ai/apply-qualification";
 import { loadConversationMemory } from "@/lib/ai/conversation-memory";
+import {
+  dedupeAiReply,
+  EXHAUSTED_MATCH_LINES,
+  normalizeForDedupe,
+  pickUnusedVariant,
+} from "@/lib/ai/dedupe-reply";
 import { generateAIReply } from "@/lib/ai/generate-reply";
 import { generateCatalogComparison } from "@/lib/ai/generate-catalog-comparison";
 import {
   clientAskedForMoreOptions,
+  clientAskedToReshowOptions,
   clientAskedToSeeOptions,
 } from "@/lib/ai/qualification";
 import {
   createConversation,
   getConversationsByLead,
 } from "@/lib/data/conversations";
+import { getPropertiesByIds } from "@/lib/data/properties";
 import {
   cancelFollowUpsOnClientReply,
   scheduleAfterPropertyRecommendations,
 } from "@/lib/follow-ups/scheduler";
 import { findPropertyRecommendations } from "@/lib/properties/find-recommendations";
-import { analyzePropertyAvailability } from "@/lib/properties/property-availability";
+import {
+  analyzePropertyAvailability,
+  buildReshowAvailability,
+} from "@/lib/properties/property-availability";
 import {
   buildPropertyFollowUpText,
+  buildReshowIntroText,
   formatPropertyCard,
   formatPropertyListingRecord,
+  getLastShownPropertyBatchIds,
   getShownPropertyIds,
   isCatalogBatch,
 } from "@/lib/properties/property-cards";
@@ -85,6 +98,132 @@ async function persistPropertyRecommendation(
   return saved;
 }
 
+function prepareUniqueAiText(
+  text: string,
+  history: Conversation[],
+  seenThisTurn: Set<string>
+): string | null {
+  const deduped = dedupeAiReply(text, history).trim();
+  if (!deduped) {
+    return null;
+  }
+
+  const normalized = normalizeForDedupe(deduped);
+  if (seenThisTurn.has(normalized)) {
+    return null;
+  }
+
+  seenThisTurn.add(normalized);
+  return deduped;
+}
+
+async function appendUniqueTextReply(
+  supabase: Client,
+  leadId: string,
+  history: Conversation[],
+  seenThisTurn: Set<string>,
+  text: string,
+  aiMessages: Conversation[],
+  outboundMessages: OutboundWhatsAppMessage[]
+): Promise<void> {
+  const unique = prepareUniqueAiText(text, history, seenThisTurn);
+  if (!unique) {
+    return;
+  }
+
+  const saved = await saveAiMessage(supabase, leadId, unique);
+  aiMessages.push(saved);
+  outboundMessages.push({ kind: "text", text: unique });
+}
+
+async function resolvePropertiesToRecommend(
+  supabase: Client,
+  memoryLead: Lead,
+  history: Conversation[],
+  clientAskedToReshow: boolean,
+  clientAskedForMore: boolean
+) {
+  const { properties: matchingProperties, criteria } =
+    await findPropertyRecommendations(supabase, memoryLead, history, 20);
+
+  if (clientAskedToReshow && !clientAskedForMore) {
+    const lastBatchIds = getLastShownPropertyBatchIds(history);
+    if (lastBatchIds.length > 0) {
+      const reshown = await getPropertiesByIds(
+        supabase,
+        memoryLead.user_id,
+        lastBatchIds
+      );
+
+      if (reshown.length > 0) {
+        return {
+          propertiesToRecommend: reshown,
+          availability: buildReshowAvailability(
+            reshown,
+            matchingProperties,
+            history,
+            criteria != null
+          ),
+          criteria,
+          isReshow: true,
+        };
+      }
+    }
+  }
+
+  const availability = analyzePropertyAvailability(
+    matchingProperties,
+    history,
+    criteria != null
+  );
+
+  return {
+    propertiesToRecommend: availability.toSend,
+    availability,
+    criteria,
+    isReshow: false,
+  };
+}
+
+async function buildIntroReply(
+  memoryLead: Lead,
+  history: Conversation[],
+  propertiesToRecommend: Property[],
+  availability: Awaited<
+    ReturnType<typeof resolvePropertiesToRecommend>
+  >["availability"],
+  clientAskedForMore: boolean,
+  isReshow: boolean
+): Promise<string> {
+  if (isReshow && propertiesToRecommend.length > 0) {
+    return buildReshowIntroText(
+      `${memoryLead.id}:${propertiesToRecommend.map((item) => item.id).join(",")}`,
+      propertiesToRecommend.length
+    );
+  }
+
+  if (
+    propertiesToRecommend.length === 0 &&
+    availability.allShown &&
+    (clientAskedForMore || clientAskedToSeeOptions(history))
+  ) {
+    return pickUnusedVariant(
+      EXHAUSTED_MATCH_LINES,
+      history,
+      `${memoryLead.id}:exhausted`
+    );
+  }
+
+  return generateAIReply(
+    memoryLead,
+    history,
+    propertiesToRecommend,
+    availability,
+    clientAskedForMore,
+    isReshow
+  );
+}
+
 /** Core flow: save client message → generate AI reply → save AI message → extract qualification. */
 export async function processClientMessageWithAI(
   supabase: Client,
@@ -104,46 +243,92 @@ export async function processClientMessageWithAI(
     lead
   );
 
+  const clientAskedToReshow = clientAskedToReshowOptions(history);
   const clientAskedForMore = clientAskedForMoreOptions(history);
   const clientAskedForOptions = clientAskedToSeeOptions(history);
 
-  const { properties: matchingProperties, criteria } =
-    await findPropertyRecommendations(supabase, memoryLead, history, 20);
-
-  const availability = analyzePropertyAvailability(
-    matchingProperties,
-    history,
-    criteria != null
-  );
-  const propertiesToRecommend = availability.toSend;
+  const { propertiesToRecommend, availability, criteria, isReshow } =
+    await resolvePropertiesToRecommend(
+      supabase,
+      memoryLead,
+      history,
+      clientAskedToReshow,
+      clientAskedForMore
+    );
 
   console.log("[WhatsApp debug] Search criteria:", criteria);
   console.log("[WhatsApp debug] Matching properties count:", availability.matchingTotal);
   console.log("[WhatsApp debug] Shown property IDs:", [...getShownPropertyIds(history)]);
   console.log("[WhatsApp debug] Remaining unsent:", availability.remainingCount);
+  console.log("[WhatsApp debug] Re-show:", isReshow);
   console.log("[WhatsApp debug] Sending this turn:", propertiesToRecommend.map((p) => p.title));
 
-  const aiReply = await generateAIReply(
+  const aiReply = await buildIntroReply(
     memoryLead,
     history,
     propertiesToRecommend,
     availability,
-    clientAskedForMore
+    clientAskedForMore,
+    isReshow
   );
 
   const aiMessages: Conversation[] = [];
   const outboundMessages: OutboundWhatsAppMessage[] = [];
+  const seenThisTurn = new Set<string>();
 
-  const introMessage = await saveAiMessage(supabase, lead.id, aiReply);
-  aiMessages.push(introMessage);
-  outboundMessages.push({ kind: "text", text: aiReply });
+  await appendUniqueTextReply(
+    supabase,
+    lead.id,
+    history,
+    seenThisTurn,
+    aiReply,
+    aiMessages,
+    outboundMessages
+  );
 
   if (isCatalogBatch(propertiesToRecommend)) {
     const detailsTexts = propertiesToRecommend.map((property) =>
       formatPropertyCard(property)
     );
 
-    for (const property of propertiesToRecommend) {
+    if (!isReshow) {
+      for (const property of propertiesToRecommend) {
+        const propertyMessages = await persistPropertyRecommendation(
+          supabase,
+          lead.id,
+          property
+        );
+        aiMessages.push(...propertyMessages);
+      }
+    }
+
+    outboundMessages.push(
+      ...buildCatalogOutboundMessages(propertiesToRecommend, detailsTexts)
+    );
+
+    if (!isReshow) {
+      const closingText = await generateCatalogComparison(
+        memoryLead,
+        history,
+        propertiesToRecommend
+      );
+      if (closingText) {
+        await appendUniqueTextReply(
+          supabase,
+          lead.id,
+          history,
+          seenThisTurn,
+          closingText,
+          aiMessages,
+          outboundMessages
+        );
+      }
+    }
+  } else if (propertiesToRecommend.length === 1) {
+    const property = propertiesToRecommend[0];
+    const detailsText = formatPropertyCard(property);
+
+    if (!isReshow) {
       const propertyMessages = await persistPropertyRecommendation(
         supabase,
         lead.id,
@@ -153,51 +338,26 @@ export async function processClientMessageWithAI(
     }
 
     outboundMessages.push(
-      ...buildCatalogOutboundMessages(propertiesToRecommend, detailsTexts)
-    );
-
-    const closingText = await generateCatalogComparison(
-      memoryLead,
-      history,
-      propertiesToRecommend
-    );
-    if (closingText) {
-      const closingMessage = await saveAiMessage(
-        supabase,
-        lead.id,
-        closingText
-      );
-      aiMessages.push(closingMessage);
-      outboundMessages.push({ kind: "text", text: closingText });
-    }
-  } else if (propertiesToRecommend.length === 1) {
-    const property = propertiesToRecommend[0];
-    const detailsText = formatPropertyCard(property);
-
-    const propertyMessages = await persistPropertyRecommendation(
-      supabase,
-      lead.id,
-      property
-    );
-    aiMessages.push(...propertyMessages);
-
-    outboundMessages.push(
       ...buildPropertyOutboundMessages(property, detailsText)
     );
 
-    const followUpText = buildPropertyFollowUpText({
-      hasMoreMatches: availability.remainingAfterSend > 0,
-      clientAskedForOptions,
-    });
+    if (!isReshow) {
+      const followUpText = buildPropertyFollowUpText({
+        hasMoreMatches: availability.remainingAfterSend > 0,
+        clientAskedForOptions,
+      });
 
-    if (followUpText) {
-      const followUpMessage = await saveAiMessage(
-        supabase,
-        lead.id,
-        followUpText
-      );
-      aiMessages.push(followUpMessage);
-      outboundMessages.push({ kind: "text", text: followUpText });
+      if (followUpText) {
+        await appendUniqueTextReply(
+          supabase,
+          lead.id,
+          history,
+          seenThisTurn,
+          followUpText,
+          aiMessages,
+          outboundMessages
+        );
+      }
     }
   }
 
@@ -213,7 +373,7 @@ export async function processClientMessageWithAI(
     fullHistory
   );
 
-  if (propertiesToRecommend.length > 0) {
+  if (propertiesToRecommend.length > 0 && !isReshow) {
     await scheduleAfterPropertyRecommendations(
       supabase,
       updatedLead,

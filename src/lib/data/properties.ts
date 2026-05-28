@@ -45,6 +45,34 @@ export async function getPropertyById(
   return data ? normalizeProperty(data) : null;
 }
 
+export async function getPropertiesByIds(
+  supabase: Client,
+  userId: string,
+  ids: string[]
+): Promise<Property[]> {
+  if (ids.length === 0) {
+    return [];
+  }
+
+  const { data, error } = await supabase
+    .from("properties")
+    .select("*")
+    .eq("user_id", userId)
+    .in("id", ids);
+
+  if (error) {
+    throw new Error(`Failed to fetch properties: ${error.message}`);
+  }
+
+  const byId = new Map(
+    (data ?? []).map((item) => [item.id, normalizeProperty(item)])
+  );
+
+  return ids
+    .map((id) => byId.get(id))
+    .filter((item): item is Property => item != null);
+}
+
 export async function createProperty(
   supabase: Client,
   property: PropertyInsert

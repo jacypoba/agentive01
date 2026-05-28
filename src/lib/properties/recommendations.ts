@@ -7,6 +7,15 @@ export function buildPropertyRecommendationDirective(
   availability: PropertyAvailability
 ): string {
   if (properties.length === 0) {
+    if (availability.isReshow) {
+      return [
+        "---",
+        "Property recommendations:",
+        "- Re-sending previously shown listings after your message.",
+        "- Brief intro only — cards follow automatically.",
+      ].join("\n");
+    }
+
     if (availability.allShown) {
       return [
         "---",
@@ -39,6 +48,17 @@ export function buildPropertyRecommendationDirective(
   }
 
   if (isCatalogBatch(properties)) {
+    if (availability.isReshow) {
+      const titles = properties.map((property) => property.title).join(", ");
+      return [
+        "---",
+        "Property recommendations:",
+        `- Re-sending ${properties.length} previously shown listing(s): ${titles}.`,
+        "- ONE short intro — e.g. 'Estas foram as opções 👇'.",
+        "- NEVER say you already showed them without re-sending.",
+      ].join("\n");
+    }
+
     const cityHint = getCatalogCityHint(properties);
     const cityClause = cityHint ? ` in ${cityHint}` : "";
     const titles = properties.map((property) => property.title).join(", ");

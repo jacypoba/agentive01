@@ -159,6 +159,9 @@ const OPTIONS_REQUEST_PATTERN =
 const MORE_OPTIONS_PATTERN =
   /\b(mostra outras|outras opções|outras opcões|tem mais|tens mais|há mais|ha mais|mais opções|mais opcões|ver semelhantes|semelhantes|outras moradias|outros imóveis|outras casas|mais imóveis|mais imoveis|envia mais|manda mais|outra opção|outra opcão|outras opcoes|alguma mais|mais alguma)\b/i;
 
+const RESHOW_OPTIONS_PATTERN =
+  /\b(mostra de novo|mostra novamente|mostra outra vez|envia de novo|enviar de novo|manda de novo|mandar de novo|reenvia|reenviar|podes reenviar|pode reenviar|outra vez|manda outra vez|envia outra vez|volta a enviar|volta a mandar|quais\s*(mesmo|são|sao|eram|opções|opcoes|imóveis|imoveis)?|quais opções|quais opcoes|quais imóveis|quais imoveis)\b/i;
+
 function getLastClientMessage(history: Conversation[]): Conversation | null {
   return (
     [...history].reverse().find((item) => item.sender === "client") ?? null
@@ -173,10 +176,39 @@ export function getLastClientMessageText(history: Conversation[]): string | null
 export function clientAskedToSeeOptions(history: Conversation[]): boolean {
   const last = getLastClientMessage(history);
   if (!last) return false;
+  if (clientAskedToReshowOptions(history)) {
+    return false;
+  }
   return (
     OPTIONS_REQUEST_PATTERN.test(last.message) ||
     MORE_OPTIONS_PATTERN.test(last.message)
   );
+}
+
+/** Client asked to see the same options again — re-send last batch. */
+export function clientAskedToReshowOptions(history: Conversation[]): boolean {
+  const last = getLastClientMessage(history);
+  if (!last) return false;
+
+  const text = last.message.trim();
+
+  if (MORE_OPTIONS_PATTERN.test(text)) {
+    return false;
+  }
+
+  if (RESHOW_OPTIONS_PATTERN.test(text)) {
+    return true;
+  }
+
+  if (/^quais\s*\??$/i.test(text)) {
+    return true;
+  }
+
+  if (/^quais são\s*\??$/i.test(text)) {
+    return true;
+  }
+
+  return false;
 }
 
 /** Client asked for additional / more listings (re-query database). */
@@ -264,6 +296,7 @@ export type QualificationDirectiveOptions = {
   matchingPropertyCount?: number;
   availability?: PropertyAvailability;
   clientAskedForMore?: boolean;
+  clientAskedToReshow?: boolean;
 };
 
 /**
@@ -275,7 +308,7 @@ export function buildQualificationDirective(
   lead: Lead,
   options: QualificationDirectiveOptions = {}
 ): string {
-  const { propertiesBeingSent = [], matchingPropertyCount = 0, availability, clientAskedForMore = false } = options;
+  const { propertiesBeingSent = [], matchingPropertyCount = 0, availability, clientAskedForMore = false, clientAskedToReshow = false } = options;
   const catalogCount = propertiesBeingSent.length;
   const nextField = getNextField(history, lead);
   const firstReply = isFirstAiReply(history);
@@ -302,8 +335,12 @@ export function buildQualificationDirective(
   if (catalogCount >= 2) {
     lines.push(
       `- A catalog of ${catalogCount} property cards will be sent after your reply.`,
-      "- Write ONE brief catalog intro — no question mark, no repeating their search criteria.",
-      "- Example: 'Tenho mais algumas 👇' or 'Estas também encaixam.' — then stop.",
+      clientAskedToReshow
+        ? "- Client asked to see the same options again — brief re-send intro only."
+        : "- Write ONE brief catalog intro — no question mark, no repeating their search criteria.",
+      clientAskedToReshow
+        ? "- NEVER say 'já mostrei' or 'já enviei' — the cards are going out now."
+        : "- Example: 'Tenho mais algumas 👇' or 'Estas também encaixam.' — then stop.",
       "- Do NOT ask what they think or say there are no more options."
     );
     lines.push(
@@ -316,9 +353,15 @@ export function buildQualificationDirective(
   if (catalogCount === 1) {
     lines.push(
       "- A matching property card will be sent after your reply.",
-      "- Write ONE brief intro sentence only — no question mark.",
-      "- Do NOT say there are no more options — a listing is being sent.",
-      "- Example: 'Tenho mais uma opção 👇' — then stop."
+      clientAskedToReshow
+        ? "- Client asked to see the same option again — one brief re-send line only."
+        : "- Write ONE brief intro sentence only — no question mark.",
+      clientAskedToReshow
+        ? "- NEVER say 'já mostrei' without the card following."
+        : "- Do NOT say there are no more options — a listing is being sent.",
+      clientAskedToReshow
+        ? "- Example: 'Volto a enviar 👇' — then stop."
+        : "- Example: 'Tenho mais uma opção 👇' — then stop."
     );
     lines.push(
       "- Reply in natural conversational Portuguese. Statement only — no question.",
