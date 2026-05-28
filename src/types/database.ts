@@ -28,6 +28,7 @@ export type FollowUpContextSnapshot = {
   property_title?: string | null;
   new_property_title?: string | null;
   client_name?: string | null;
+  preferred_language?: string | null;
 };
 
 export type FollowUp = {
@@ -69,6 +70,7 @@ export type FollowUpWithLead = FollowUp & {
     | "property_type"
     | "budget"
     | "user_id"
+    | "preferred_language"
   >;
 };
 
@@ -117,6 +119,7 @@ export type Lead = {
   intent_status: IntentStatus | null;
   visit_requested: boolean;
   visit_datetime_text: string | null;
+  preferred_language: string | null;
   created_at: string;
 };
 
@@ -190,6 +193,7 @@ export type LeadUpdate = {
   intent_status?: IntentStatus | null;
   visit_requested?: boolean;
   visit_datetime_text?: string | null;
+  preferred_language?: string | null;
 };
 
 export type ConversationInsert = {
@@ -201,7 +205,10 @@ export type ConversationInsert = {
 };
 
 export type ConversationWithLead = Conversation & {
-  leads: Pick<Lead, "id" | "client_name" | "interest" | "status" | "user_id">;
+  leads: Pick<
+    Lead,
+    "id" | "client_name" | "interest" | "status" | "user_id" | "preferred_language"
+  >;
 };
 
 export type ProcessedWhatsAppMessage = {
@@ -349,6 +356,7 @@ export type RecentActivity = {
   client_name: string;
   interest: string | null;
   status: LeadStatus;
+  preferred_language: string | null;
   kind: "lead" | "conversation";
 };
 

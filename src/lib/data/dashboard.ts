@@ -62,6 +62,7 @@ function mapConversationToActivity(
     client_name: item.leads.client_name,
     interest: item.leads.interest,
     status: item.leads.status,
+    preferred_language: item.leads.preferred_language,
     kind: "conversation" as const,
   }));
 }
@@ -76,6 +77,7 @@ function mapLeadToActivity(lead: Lead): RecentActivity {
     client_name: lead.client_name,
     interest: lead.interest,
     status: lead.status,
+    preferred_language: lead.preferred_language,
     kind: "lead",
   };
 }

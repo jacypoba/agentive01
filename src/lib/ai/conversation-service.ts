@@ -2,7 +2,6 @@ import { extractAndApplyLeadQualification } from "@/lib/ai/apply-qualification";
 import { loadConversationMemory } from "@/lib/ai/conversation-memory";
 import {
   dedupeAiReply,
-  EXHAUSTED_MATCH_LINES,
   normalizeForDedupe,
   pickUnusedVariant,
 } from "@/lib/ai/dedupe-reply";
@@ -26,6 +25,9 @@ import {
 } from "@/lib/data/conversations";
 import { getPropertiesByIds } from "@/lib/data/properties";
 import { cancelFollowUpsOnClientReply } from "@/lib/follow-ups/scheduler";
+import { getExhaustedMatchLines } from "@/lib/i18n/messages";
+import { getLeadLanguage, syncLeadPreferredLanguage } from "@/lib/i18n/sync-language";
+import type { SupportedLanguage } from "@/lib/i18n/types";
 import { findPropertyRecommendations } from "@/lib/properties/find-recommendations";
 import {
   analyzePropertyAvailability,
@@ -95,14 +97,15 @@ async function saveAiMessage(
 async function persistPropertyRecommendation(
   supabase: Client,
   leadId: string,
-  property: Property
+  property: Property,
+  language: SupportedLanguage
 ): Promise<Conversation[]> {
   const saved: Conversation[] = [];
-  const detailsText = formatPropertyCard(property);
+  const detailsText = formatPropertyCard(property, language);
 
   saved.push(await saveAiMessage(supabase, leadId, detailsText));
 
-  const listingRecord = formatPropertyListingRecord(property);
+  const listingRecord = formatPropertyListingRecord(property, language);
   if (listingRecord) {
     saved.push(await saveAiMessage(supabase, leadId, listingRecord));
   } else {
@@ -145,6 +148,7 @@ async function appendUniqueTextReply(
     intent: ReturnType<typeof classifyMessageIntent>["intent"];
     freshQueryMade: boolean;
     propertiesSent: boolean;
+    language: SupportedLanguage;
   }
 ): Promise<void> {
   let candidate = text;
@@ -235,10 +239,12 @@ async function buildIntroReply(
   availability: PropertyAvailability,
   classified: ReturnType<typeof classifyMessageIntent>,
   isReshow: boolean,
-  freshQueryMade: boolean
+  freshQueryMade: boolean,
+  language: SupportedLanguage
 ): Promise<string> {
   if (isReshow && propertiesToRecommend.length > 0) {
     return buildReshowIntroText(
+      language,
       `${memoryLead.id}:${propertiesToRecommend.map((item) => item.id).join(",")}`,
       propertiesToRecommend.length
     );
@@ -251,7 +257,7 @@ async function buildIntroReply(
     freshQueryMade
   ) {
     return pickUnusedVariant(
-      EXHAUSTED_MATCH_LINES,
+      getExhaustedMatchLines(language),
       history,
       `${memoryLead.id}:exhausted`
     );
@@ -296,8 +302,16 @@ export async function processClientMessageWithAI(
     lead
   );
 
-  const classified = classifyMessageIntent(history, memoryLead);
-  logIntentDecision(lead.id, classified);
+  const languageLead = await syncLeadPreferredLanguage(
+    supabase,
+    memoryLead,
+    message,
+    history
+  );
+  const language = getLeadLanguage(languageLead);
+
+  const classified = classifyMessageIntent(history, languageLead);
+  logIntentDecision(lead.id, classified, language);
 
   const aiMessages: Conversation[] = [];
   const outboundMessages: OutboundWhatsAppMessage[] = [];
@@ -318,6 +332,7 @@ export async function processClientMessageWithAI(
           intent: classified.intent,
           freshQueryMade: false,
           propertiesSent: false,
+          language,
         }
       );
     } else {
@@ -372,16 +387,18 @@ export async function processClientMessageWithAI(
     intent: classified.intent,
     freshQueryMade,
     propertiesSent: propertiesToRecommend.length > 0,
+    language,
   };
 
   const aiReply = await buildIntroReply(
-    memoryLead,
+    languageLead,
     history,
     propertiesToRecommend,
     availability,
     classified,
     isReshow,
-    freshQueryMade
+    freshQueryMade,
+    language
   );
 
   if (aiReply) {
@@ -399,7 +416,7 @@ export async function processClientMessageWithAI(
 
   if (isCatalogBatch(propertiesToRecommend)) {
     const detailsTexts = propertiesToRecommend.map((property) =>
-      formatPropertyCard(property)
+      formatPropertyCard(property, language)
     );
 
     if (!isReshow) {
@@ -407,7 +424,8 @@ export async function processClientMessageWithAI(
         const propertyMessages = await persistPropertyRecommendation(
           supabase,
           lead.id,
-          property
+          property,
+          language
         );
         aiMessages.push(...propertyMessages);
       }
@@ -419,7 +437,7 @@ export async function processClientMessageWithAI(
 
     if (!isReshow) {
       const closingText = await generateCatalogComparison(
-        memoryLead,
+        languageLead,
         history,
         propertiesToRecommend
       );
@@ -438,13 +456,14 @@ export async function processClientMessageWithAI(
     }
   } else if (propertiesToRecommend.length === 1) {
     const property = propertiesToRecommend[0];
-    const detailsText = formatPropertyCard(property);
+    const detailsText = formatPropertyCard(property, language);
 
     if (!isReshow) {
       const propertyMessages = await persistPropertyRecommendation(
         supabase,
         lead.id,
-        property
+        property,
+        language
       );
       aiMessages.push(...propertyMessages);
     }

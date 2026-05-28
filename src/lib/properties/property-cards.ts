@@ -1,13 +1,26 @@
-import { formatPropertyPrice } from "@/lib/properties/search-criteria";
+import {
+  buildReshowIntroText as buildLocalizedReshowIntro,
+  LISTING_LABELS,
+  PROPERTY_CARD_LABELS,
+} from "@/lib/i18n/messages";
+import { getLanguageLocale, normalizeLanguage, type SupportedLanguage } from "@/lib/i18n/types";
+import { formatPropertyPriceForLanguage } from "@/lib/properties/search-criteria";
 import type { Conversation, Property } from "@/types/database";
 
 const CARD_MARKER = "🏡";
 const IMAGE_MARKER = "📷";
-const LISTING_MARKER = "🔗 Ver detalhes";
 const CATALOG_SPACER = "—";
 
 export const CATALOG_MAX = 4;
 export const CATALOG_MIN = 2;
+
+export function getListingMarker(language: SupportedLanguage): string {
+  return LISTING_LABELS[normalizeLanguage(language)];
+}
+
+export function getAllListingMarkers(): string[] {
+  return Object.values(LISTING_LABELS);
+}
 
 /** Image carries the visual — title lives in the text card only. */
 export function formatPropertyImageCaption(_property: Property): string {
@@ -15,18 +28,28 @@ export function formatPropertyImageCaption(_property: Property): string {
 }
 
 /** Premium property card for CRM and WhatsApp — no image URL, no raw listing URL. */
-export function formatPropertyCard(property: Property): string {
-  const blocks: string[] = [`${CARD_MARKER} ${property.title}`, ...buildPropertyDetailLines(property)];
+export function formatPropertyCard(
+  property: Property,
+  language: SupportedLanguage = "pt"
+): string {
+  const lang = normalizeLanguage(language);
+  const blocks: string[] = [
+    `${CARD_MARKER} ${property.title}`,
+    ...buildPropertyDetailLines(property, lang),
+  ];
 
   if (hasPropertyListing(property)) {
-    blocks.push("", LISTING_MARKER);
+    blocks.push("", getListingMarker(lang));
   }
 
   return blocks.join("\n");
 }
 
-export function formatPropertyDetails(property: Property): string {
-  return buildPropertyDetailLines(property).join("\n");
+export function formatPropertyDetails(
+  property: Property,
+  language: SupportedLanguage = "pt"
+): string {
+  return buildPropertyDetailLines(property, normalizeLanguage(language)).join("\n");
 }
 
 export function formatCatalogSpacer(): string {
@@ -34,34 +57,45 @@ export function formatCatalogSpacer(): string {
 }
 
 /** Saved in conversation history for dedup; includes URL and property ID. */
-export function formatPropertyListingRecord(property: Property): string | null {
+export function formatPropertyListingRecord(
+  property: Property,
+  language: SupportedLanguage = "pt"
+): string | null {
   const listingUrl = property.listing_url?.trim();
+  const marker = getListingMarker(normalizeLanguage(language));
   if (!listingUrl) {
     return `[property:${property.id}]`;
   }
-  return `${LISTING_MARKER}\n${listingUrl}\n[property:${property.id}]`;
+  return `${marker}\n${listingUrl}\n[property:${property.id}]`;
 }
 
-export function formatPropertyListingLabel(): string {
-  return LISTING_MARKER;
+export function formatPropertyListingLabel(language: SupportedLanguage = "pt"): string {
+  return getListingMarker(normalizeLanguage(language));
 }
 
-function buildPropertyDetailLines(property: Property): string[] {
+function buildPropertyDetailLines(
+  property: Property,
+  language: SupportedLanguage
+): string[] {
+  const labels = PROPERTY_CARD_LABELS[language];
   const location = property.neighborhood
     ? `${property.neighborhood}, ${property.city}`
     : property.city;
 
-  const lines: string[] = ["", `💰 ${formatPropertyPrice(property.price)}`];
+  const lines: string[] = [
+    "",
+    `💰 ${formatPropertyPriceForLanguage(property.price, language)}`,
+  ];
 
   const roomParts: string[] = [];
   if (property.bedrooms != null) {
     roomParts.push(
-      `${property.bedrooms} ${property.bedrooms === 1 ? "quarto" : "quartos"}`
+      `${property.bedrooms} ${property.bedrooms === 1 ? labels.bedroom : labels.bedrooms}`
     );
   }
   if (property.bathrooms != null) {
     roomParts.push(
-      `${property.bathrooms} ${property.bathrooms === 1 ? "wc" : "wcs"}`
+      `${property.bathrooms} ${property.bathrooms === 1 ? labels.bathroom : labels.bathrooms}`
     );
   }
   if (roomParts.length > 0) {
@@ -87,6 +121,7 @@ export function wasPropertyAlreadySent(
   property: Property
 ): boolean {
   const idMarker = `[property:${property.id}]`;
+  const listingMarkers = getAllListingMarkers();
 
   return history.some((item) => {
     if (item.sender !== "ai" && item.sender !== "agent") {
@@ -103,6 +138,13 @@ export function wasPropertyAlreadySent(
     }
 
     if (property.image_url && message.includes(property.image_url)) {
+      return true;
+    }
+
+    if (
+      listingMarkers.some((marker) => message.includes(marker)) &&
+      message.includes(property.title)
+    ) {
       return true;
     }
 
@@ -127,7 +169,6 @@ export function getShownPropertyIds(history: Conversation[]): Set<string> {
   return ids;
 }
 
-/** Most recently recommended property in conversation (for visit context). */
 export function getLastShownPropertyId(history: Conversation[]): string | null {
   let lastId: string | null = null;
   for (const item of history) {
@@ -141,7 +182,6 @@ export function getLastShownPropertyId(history: Conversation[]): string | null {
   return lastId;
 }
 
-/** Property IDs from the most recent recommendation turn (before the latest client message). */
 export function getLastShownPropertyBatchIds(history: Conversation[]): string[] {
   if (history.length === 0) {
     return [];
@@ -171,31 +211,12 @@ export function getLastShownPropertyBatchIds(history: Conversation[]): string[] 
   return ids;
 }
 
-function hashPick(seed: string, count: number): number {
-  let hash = 0;
-  for (let i = 0; i < seed.length; i += 1) {
-    hash = (hash * 31 + seed.charCodeAt(i)) >>> 0;
-  }
-  return count > 0 ? hash % count : 0;
-}
-
-const RESHOW_CATALOG_INTROS = [
-  "Claro — volto a enviar 👇",
-  "Estas foram as opções 👇",
-  "Sem problema — mando outra vez 👇",
-  "Aqui estão outra vez 👇",
-];
-
-const RESHOW_SINGLE_INTROS = [
-  "Claro — esta era a opção 👇",
-  "Volto a enviar 👇",
-  "Aqui está outra vez 👇",
-];
-
-export function buildReshowIntroText(seed: string, propertyCount: number): string {
-  const variants =
-    propertyCount === 1 ? RESHOW_SINGLE_INTROS : RESHOW_CATALOG_INTROS;
-  return variants[hashPick(seed, variants.length)];
+export function buildReshowIntroText(
+  language: SupportedLanguage,
+  seed: string,
+  propertyCount: number
+): string {
+  return buildLocalizedReshowIntro(normalizeLanguage(language), seed, propertyCount);
 }
 
 export function selectNextPropertyToRecommend(
@@ -206,7 +227,6 @@ export function selectNextPropertyToRecommend(
   return batch[0] ?? null;
 }
 
-/** Returns 2–4 unsent matches for a catalog, or 0–1 for single-property flow. */
 export function selectPropertiesForCatalog(
   properties: Property[],
   history: Conversation[],
@@ -233,38 +253,6 @@ export function getCatalogCityHint(properties: Property[]): string | null {
   return first.city?.trim() || first.neighborhood?.trim() || null;
 }
 
-export type PropertyFollowUpOptions = {
-  hasMoreMatches: boolean;
-  clientAskedForOptions: boolean;
-};
-
-/** Optional statement after a single property — never a question. Returns null to skip. */
-export function buildPropertyFollowUpText(
-  options: PropertyFollowUpOptions
-): string | null {
-  if (options.clientAskedForOptions) {
-    return null;
-  }
-
-  if (options.hasMoreMatches) {
-    const withMore = [
-      "Tenho mais opções semelhantes, se quiser ver depois.",
-      "Há mais no mesmo perfil.",
-    ];
-    return withMore[Math.floor(Math.random() * withMore.length)];
-  }
-
-  if (Math.random() < 0.45) {
-    return null;
-  }
-
-  const singleMatch = [
-    "Esta encaixa bem no perfil.",
-    "Acho que faz sentido para o que pediu.",
-  ];
-  return singleMatch[Math.floor(Math.random() * singleMatch.length)];
-}
-
 export function isPropertyCardMessage(message: string): boolean {
   return message.startsWith(CARD_MARKER) && !message.startsWith(IMAGE_MARKER);
 }
@@ -276,3 +264,5 @@ export function hasPropertyImage(property: Property): boolean {
 export function hasPropertyListing(property: Property): boolean {
   return Boolean(property.listing_url?.trim());
 }
+
+export { getLanguageLocale };

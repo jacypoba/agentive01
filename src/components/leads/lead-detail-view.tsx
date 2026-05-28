@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { ConversationPanel } from "@/components/leads/conversation-panel";
+import { LanguageBadge } from "@/components/leads/language-badge";
 import { LeadFollowUpsPanel } from "@/components/leads/lead-follow-ups-panel";
 import { LeadQualificationSummary } from "@/components/leads/lead-qualification-summary";
+import { getLanguageLabel, normalizeLanguage } from "@/lib/i18n/types";
 import { formatLeadDate, getStatusBadgeColor } from "@/lib/leads/status";
 import type { Conversation, Lead } from "@/types/database";
 
@@ -94,9 +96,12 @@ export function LeadDetailView({ lead, conversations }: LeadDetailViewProps) {
 
             <div className="relative">
               <div className="flex flex-wrap items-start justify-between gap-3">
-                <h1 className="text-2xl font-semibold tracking-tight text-white">
-                  {lead.client_name}
-                </h1>
+                <div className="flex flex-wrap items-center gap-2">
+                  <h1 className="text-2xl font-semibold tracking-tight text-white">
+                    {lead.client_name}
+                  </h1>
+                  <LanguageBadge language={lead.preferred_language} />
+                </div>
                 <span
                   className={`rounded-full border px-3 py-1 text-xs font-semibold capitalize ${getStatusBadgeColor(lead.status)}`}
                 >
@@ -132,6 +137,18 @@ export function LeadDetailView({ lead, conversations }: LeadDetailViewProps) {
                     </div>
                   </div>
                 )}
+
+                <div className="flex items-start gap-3">
+                  <CalendarIcon />
+                  <div>
+                    <dt className="text-[10px] font-medium uppercase tracking-wider text-white/30">
+                      Language
+                    </dt>
+                    <dd className="mt-0.5 text-sm text-white/80">
+                      {getLanguageLabel(normalizeLanguage(lead.preferred_language))}
+                    </dd>
+                  </div>
+                </div>
 
                 <div className="flex items-start gap-3">
                   <CalendarIcon />

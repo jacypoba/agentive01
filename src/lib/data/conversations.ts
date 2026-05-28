@@ -80,7 +80,8 @@ export async function getRecentConversationsForUser(
         client_name,
         interest,
         status,
-        user_id
+        user_id,
+        preferred_language
       )
     `
     )

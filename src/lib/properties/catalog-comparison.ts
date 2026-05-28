@@ -1,7 +1,14 @@
-import { formatPropertyPrice } from "@/lib/properties/search-criteria";
+import {
+  CATALOG_CONTEXT_LABELS,
+  getComparisonOrdinal,
+  getHeuristicComparisonLine,
+} from "@/lib/i18n/messages";
+import type { SupportedLanguage } from "@/lib/i18n/types";
+import { normalizeLanguage } from "@/lib/i18n/types";
+import {
+  formatPropertyPriceForLanguage,
+} from "@/lib/properties/search-criteria";
 import type { Conversation, Lead, Property } from "@/types/database";
-
-const ORDINALS = ["A primeira", "A segunda", "A terceira", "A quarta"];
 
 export type ClientPreference =
   | "garden"
@@ -57,19 +64,21 @@ export function extractClientPreferences(
 
 export function formatPropertyComparisonLine(
   index: number,
-  property: Property
+  property: Property,
+  language: SupportedLanguage = "pt"
 ): string {
+  const labels = CATALOG_CONTEXT_LABELS[language];
   const ordinal = index + 1;
   const location = property.neighborhood
     ? `${property.neighborhood}, ${property.city}`
     : property.city;
 
-  const specs: string[] = [formatPropertyPrice(property.price)];
+  const specs: string[] = [formatPropertyPriceForLanguage(property.price, language)];
   if (property.bedrooms != null) {
-    specs.push(`${property.bedrooms} quartos`);
+    specs.push(`${property.bedrooms} ${labels.bedrooms}`);
   }
   if (property.bathrooms != null) {
-    specs.push(`${property.bathrooms} wc`);
+    specs.push(`${property.bathrooms} ${labels.bathrooms}`);
   }
 
   const description = property.description?.trim();
@@ -91,27 +100,31 @@ export function formatPropertyComparisonLine(
 export function buildCatalogComparisonContext(
   properties: Property[],
   lead: Lead,
-  history: Conversation[]
+  history: Conversation[],
+  language: SupportedLanguage = normalizeLanguage(lead.preferred_language)
 ): string {
+  const labels = CATALOG_CONTEXT_LABELS[language];
   const preferences = extractClientPreferences(lead, history);
   const preferenceLine =
     preferences.length > 0
       ? preferences.map((p) => PREFERENCE_LABELS[p]).join(", ")
-      : "nenhuma preferência explícita detectada";
+      : labels.noPreferences;
 
   const listings = properties
-    .map((property, index) => formatPropertyComparisonLine(index, property))
+    .map((property, index) =>
+      formatPropertyComparisonLine(index, property, language)
+    )
     .join("\n\n");
 
   return [
-    "Listagens enviadas (por ordem):",
+    labels.listingsHeader,
     listings,
     "",
-    "Preferências do cliente (CRM + conversa):",
+    labels.preferencesHeader,
     preferenceLine,
-    lead.budget ? `Orçamento: ${lead.budget}` : null,
-    lead.preferred_area ? `Zona: ${lead.preferred_area}` : null,
-    lead.property_type ? `Tipo: ${lead.property_type}` : null,
+    lead.budget ? `${labels.budget}: ${lead.budget}` : null,
+    lead.preferred_area ? `${labels.area}: ${lead.preferred_area}` : null,
+    lead.property_type ? `${labels.type}: ${lead.property_type}` : null,
   ]
     .filter(Boolean)
     .join("\n");
@@ -143,14 +156,11 @@ function getPropertySignals(property: Property): PropertySignals {
   };
 }
 
-function ordinalForIndex(index: number): string {
-  return ORDINALS[index] ?? `A opção ${index + 1}`;
-}
-
 /** Rule-based fallback when AI is unavailable. */
 export function buildHeuristicCatalogComparison(
   properties: Property[],
-  preferences: ClientPreference[]
+  preferences: ClientPreference[],
+  language: SupportedLanguage = "pt"
 ): string {
   if (properties.length < 2) return "";
 
@@ -171,13 +181,14 @@ export function buildHeuristicCatalogComparison(
     const spaciousIdx = properties.findIndex(
       (p) => (p.bedrooms ?? 0) === maxBeds && maxBeds >= 3
     );
+    const ordinal = getComparisonOrdinal(language, cheapestIdx);
     if (spaciousIdx === cheapestIdx && maxBeds >= 3) {
       observations.push(
-        `${ordinalForIndex(cheapestIdx)} parece mais equilibrada pelo espaço interior.`
+        getHeuristicComparisonLine(language, "balanced_space", ordinal)
       );
     } else {
       observations.push(
-        `${ordinalForIndex(cheapestIdx)} parece mais equilibrada pelo preço.`
+        getHeuristicComparisonLine(language, "balanced_price", ordinal)
       );
     }
   }
@@ -189,17 +200,18 @@ export function buildHeuristicCatalogComparison(
     observations.length < 2
   ) {
     const signals = getPropertySignals(properties[priciestIdx]);
+    const ordinal = getComparisonOrdinal(language, priciestIdx);
     if (signals.garden && signals.modern) {
       observations.push(
-        `${ordinalForIndex(priciestIdx)} destaca-se mais pelo jardim e estilo moderno.`
+        getHeuristicComparisonLine(language, "premium_garden_modern", ordinal)
       );
     } else if (signals.garden) {
       observations.push(
-        `${ordinalForIndex(priciestIdx)} destaca-se mais pelo jardim.`
+        getHeuristicComparisonLine(language, "premium_garden", ordinal)
       );
     } else {
       observations.push(
-        `${ordinalForIndex(priciestIdx)} tem um perfil mais premium.`
+        getHeuristicComparisonLine(language, "premium_profile", ordinal)
       );
     }
   }
@@ -220,17 +232,19 @@ export function buildHeuristicCatalogComparison(
 
       if (!matches) continue;
 
-      const line =
+      const ordinal = getComparisonOrdinal(language, index);
+      const key =
         pref === "garden"
-          ? `${ordinalForIndex(index)} pode fazer mais sentido se valoriza espaço exterior.`
+          ? "pref_garden"
           : pref === "modern"
-            ? `${ordinalForIndex(index)} encaixa melhor para quem quer algo mais moderno.`
+            ? "pref_modern"
             : pref === "central"
-              ? `${ordinalForIndex(index)} destaca-se pela localização mais central.`
+              ? "pref_central"
               : pref === "family"
-                ? `${ordinalForIndex(index)} parece a mais indicada para família — mais espaço.`
-                : `${ordinalForIndex(index)} pode ser interessante a nível de investimento.`;
+                ? "pref_family"
+                : "pref_investment";
 
+      const line = getHeuristicComparisonLine(language, key, ordinal);
       if (!observations.includes(line)) {
         observations.push(line);
         break;
@@ -245,16 +259,28 @@ export function buildHeuristicCatalogComparison(
     );
     if (spaciousIdx >= 0 && properties.length >= 2) {
       observations.push(
-        `${ordinalForIndex(spaciousIdx)} destaca-se pelo espaço.`
+        getHeuristicComparisonLine(
+          language,
+          "spacious",
+          getComparisonOrdinal(language, spaciousIdx)
+        )
       );
     }
   }
 
   if (observations.length === 0) {
     observations.push(
-      `${ordinalForIndex(0)} encaixa bem no perfil.`,
+      getHeuristicComparisonLine(
+        language,
+        "fits_profile",
+        getComparisonOrdinal(language, 0)
+      ),
       properties.length >= 2
-        ? `${ordinalForIndex(1)} é uma alternativa sólida.`
+        ? getHeuristicComparisonLine(
+            language,
+            "solid_alternative",
+            getComparisonOrdinal(language, 1)
+          )
         : ""
     );
   }

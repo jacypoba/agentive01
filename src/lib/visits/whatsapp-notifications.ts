@@ -1,35 +1,46 @@
 import { createConversation } from "@/lib/data/conversations";
 import { sendWhatsAppText } from "@/lib/evolution/client";
 import { normalizePhoneDigits } from "@/lib/phone/normalize";
+import {
+  VISIT_CANCELLED,
+  VISIT_CONFIRMED,
+  VISIT_CONFLICT,
+} from "@/lib/i18n/messages";
+import { getLeadLanguage } from "@/lib/i18n/sync-language";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, Lead, VisitRequestStatus } from "@/types/database";
 
 type Client = SupabaseClient<Database>;
 
 export function buildVisitConfirmedMessage(
+  lead: Pick<Lead, "preferred_language">,
   requestedDatetimeText: string | null,
   naturalWhen?: string | null
 ): string {
+  const language = getLeadLanguage(lead);
   const when = naturalWhen?.trim() || requestedDatetimeText?.trim();
   if (when) {
-    return `Perfeito 👌 Ficou marcado para ${when}.`;
+    return VISIT_CONFIRMED[language].withWhen(when);
   }
-  return "Perfeito 👌 Visita confirmada.";
+  return VISIT_CONFIRMED[language].generic;
 }
 
 export function buildVisitCancelledMessage(
-  _clientName: string,
+  lead: Pick<Lead, "preferred_language">,
   requestedDatetimeText: string | null
 ): string {
+  const language = getLeadLanguage(lead);
   const slotClause = requestedDatetimeText
-    ? ` para ${requestedDatetimeText}`
+    ? ` ${requestedDatetimeText}`
     : "";
-
-  return `Esse horário${slotClause} já não dá infelizmente 🙏 Tens outra data que te dê jeito?`;
+  return VISIT_CANCELLED[language](slotClause);
 }
 
-export function buildVisitConflictMessage(suggestedText: string): string {
-  return `Esse horário já não dá 🙏 Consegues ${suggestedText}?`;
+export function buildVisitConflictMessage(
+  lead: Pick<Lead, "preferred_language">,
+  suggestedText: string
+): string {
+  return VISIT_CONFLICT[getLeadLanguage(lead)](suggestedText);
 }
 
 export function resolveLeadPhoneDigits(
@@ -67,8 +78,8 @@ export async function sendVisitStatusWhatsApp(
 
   const text =
     status === "confirmed"
-      ? buildVisitConfirmedMessage(requestedDatetimeText, naturalWhen)
-      : buildVisitCancelledMessage(lead.client_name, requestedDatetimeText);
+      ? buildVisitConfirmedMessage(lead, requestedDatetimeText, naturalWhen)
+      : buildVisitCancelledMessage(lead, requestedDatetimeText);
 
   try {
     await sendWhatsAppText(phoneDigits, text);
@@ -111,7 +122,7 @@ export async function sendVisitConflictWhatsApp(
     };
   }
 
-  const text = buildVisitConflictMessage(suggestedText);
+  const text = buildVisitConflictMessage(lead, suggestedText);
 
   try {
     await sendWhatsAppText(phoneDigits, text);

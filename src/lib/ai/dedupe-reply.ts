@@ -20,7 +20,7 @@ export function isPropertyPayloadMessage(message: string): boolean {
   return (
     message.startsWith("🏡") ||
     message.includes("[property:") ||
-    message.startsWith("🔗 Ver detalhes")
+    message.startsWith("🔗 ")
   );
 }
 
@@ -145,9 +145,3 @@ export function dedupeAiReply(text: string, history: Conversation[]): string {
 
   return alternatives[0] ?? "";
 }
-
-export const EXHAUSTED_MATCH_LINES = [
-  "Por agora estas são as melhores dentro do perfil. Se entrar algo novo, aviso.",
-  "Neste perfil já partilhei o que tenho de melhor — aviso se surgir novidade.",
-  "Foi isto que encontrei para o que pediu. Se aparecer algo novo, digo-lhe.",
-];

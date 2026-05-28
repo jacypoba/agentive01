@@ -4,6 +4,12 @@ import { MEMORY_MESSAGE_LIMIT } from "@/lib/ai/conversation-memory";
 import type { MessageIntent } from "@/lib/ai/intent-classifier";
 import { buildQualificationDirective } from "@/lib/ai/qualification";
 import { REAL_ESTATE_ASSISTANT_PROMPT } from "@/lib/ai/prompts";
+import {
+  AI_LANGUAGE_INSTRUCTION,
+  LEAD_CONTEXT_LABELS,
+} from "@/lib/i18n/messages";
+import { getLeadLanguage } from "@/lib/i18n/sync-language";
+import type { SupportedLanguage } from "@/lib/i18n/types";
 import { buildPropertyRecommendationDirective } from "@/lib/properties/recommendations";
 import type { PropertyAvailability } from "@/lib/properties/property-availability";
 import { buildAvailabilityDirective } from "@/lib/properties/property-availability";
@@ -26,48 +32,53 @@ function getModel() {
 
 function formatKnown(value: string | null | undefined): string {
   const trimmed = value?.trim();
-  return trimmed ? trimmed : "desconhecido";
+  return trimmed ? trimmed : "—";
 }
 
-function buildLeadContext(lead: Lead): string {
-  const parts = [`Nome do cliente: ${lead.client_name}`];
+function buildLeadContext(lead: Lead, language: SupportedLanguage): string {
+  const labels = LEAD_CONTEXT_LABELS[language];
+  const parts = [`${labels.name}: ${lead.client_name}`];
 
   if (lead.interest && lead.interest !== "WhatsApp inquiry") {
-    parts.push(`Interesse inicial: ${lead.interest}`);
+    parts.push(`${labels.interest}: ${lead.interest}`);
   }
   if (lead.phone) {
-    parts.push(`Telefone: ${lead.phone}`);
+    parts.push(`${labels.phone}: ${lead.phone}`);
   }
 
   parts.push(
-    `Estado do lead: ${lead.status}`,
-    `Orçamento: ${formatKnown(lead.budget)}`,
-    `Zona preferida: ${formatKnown(lead.preferred_area)}`,
-    `Tipo de imóvel: ${formatKnown(lead.property_type)}`,
-    `Prazo: ${formatKnown(lead.timeline)}`,
+    `${labels.status}: ${lead.status}`,
+    `${labels.budget}: ${formatKnown(lead.budget)}`,
+    `${labels.area}: ${formatKnown(lead.preferred_area)}`,
+    `${labels.type}: ${formatKnown(lead.property_type)}`,
+    `${labels.timeline}: ${formatKnown(lead.timeline)}`,
     `Intent status: ${getIntentStatusLabel(lead.intent_status ?? "unknown")}`,
-    `Pedido de visita (histórico CRM): ${lead.visit_requested ? "sim" : "não"}`,
-    `Data/hora visita (histórico): ${formatKnown(lead.visit_datetime_text)}`,
+    `${labels.visitHistory}: ${lead.visit_requested ? "yes" : "no"}`,
+    `${labels.visitWhen}: ${formatKnown(lead.visit_datetime_text)}`,
     "",
-    "Memória persistente: contexto de apoio apenas. Responda sobretudo à última mensagem do cliente.",
-    "Não assuma que pedidos antigos (ex. visitas) continuam ativos. Não invente horários ou confirmações passadas.",
-    "Use o nome do cliente no máximo 1 vez a cada 3–4 mensagens — só quando soar natural."
+    labels.memoryNote,
+    "Do not assume old requests are still active. Do not invent schedules or confirmations.",
+    "Use the client's name at most once every 3–4 messages when natural."
   );
 
   return parts.join("\n");
 }
 
-function buildConversationSummary(history: Conversation[]): string {
-  if (history.length === 0) return "Nenhuma mensagem anterior.";
+function buildConversationSummary(
+  history: Conversation[],
+  language: SupportedLanguage
+): string {
+  const labels = LEAD_CONTEXT_LABELS[language];
+  if (history.length === 0) return labels.noHistory;
 
   return history
     .map((item) => {
       const role =
         item.sender === "client"
-          ? "Cliente"
+          ? labels.client
           : item.sender === "ai"
-            ? "Assistente"
-            : "Consultor";
+            ? labels.assistant
+            : labels.agent;
       return `${role}: ${item.message}`;
     })
     .join("\n");
@@ -80,7 +91,8 @@ function toOpenAIMessages(
   availability: PropertyAvailability,
   clientAskedForMore: boolean,
   clientAskedToReshow = false,
-  messageIntent: MessageIntent = "unknown"
+  messageIntent: MessageIntent = "unknown",
+  language: SupportedLanguage = "pt"
 ): OpenAI.Chat.ChatCompletionMessageParam[] {
   const recentHistory = history.slice(-MEMORY_MESSAGE_LIMIT);
   const qualificationDirective = buildQualificationDirective(
@@ -108,12 +120,15 @@ function toOpenAIMessages(
     REAL_ESTATE_ASSISTANT_PROMPT,
     "",
     "---",
-    "Perfil do lead (CRM — memória persistente):",
-    buildLeadContext(lead),
+    AI_LANGUAGE_INSTRUCTION[language],
     "",
     "---",
-    `Histórico recente (últimas ${recentHistory.length} mensagens):`,
-    buildConversationSummary(recentHistory),
+    `${LEAD_CONTEXT_LABELS[language].name.split(" ")[0]} profile (CRM):`,
+    buildLeadContext(lead, language),
+    "",
+    "---",
+    `Recent history (last ${recentHistory.length} messages):`,
+    buildConversationSummary(recentHistory, language),
     "",
     qualificationDirective,
     "",
@@ -146,6 +161,7 @@ export async function generateAIReply(
   clientAskedToReshow = false,
   messageIntent: MessageIntent = "unknown"
 ): Promise<string> {
+  const language = getLeadLanguage(lead);
   const openai = getOpenAIClient();
   const messages = toOpenAIMessages(
     history,
@@ -154,7 +170,8 @@ export async function generateAIReply(
     availability,
     clientAskedForMore,
     clientAskedToReshow,
-    messageIntent
+    messageIntent,
+    language
   );
 
   const completion = await openai.chat.completions.create({

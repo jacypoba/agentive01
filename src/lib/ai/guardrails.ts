@@ -2,51 +2,36 @@ import type { Conversation, Lead } from "@/types/database";
 import {
   getRecentAiTexts,
   isNearDuplicateReply,
-  normalizeForDedupe,
   pickUnusedVariant,
 } from "@/lib/ai/dedupe-reply";
 import type { ClassifiedIntent, MessageIntent } from "@/lib/ai/intent-classifier";
+import {
+  BANNED_ON_THANKS,
+  BANNED_WITHOUT_FRESH_QUERY,
+  getClosingMarkers,
+  getClosingReplies,
+} from "@/lib/i18n/messages";
+import { getLeadLanguage } from "@/lib/i18n/sync-language";
+import type { SupportedLanguage } from "@/lib/i18n/types";
 
-const CLOSING_REPLY_MARKERS = [
-  "fico por aqui",
-  "é só chamar",
-  "se precisar de mais alguma coisa",
-];
-
-export const CLOSING_REPLY_VARIANTS = [
-  "Perfeito 👌 Fico por aqui então. Se precisar de mais alguma coisa, é só chamar.",
-  "Combinado 👌 Qualquer coisa, estou por aqui.",
-  "Ótimo — fico à disposição se precisar.",
-];
-
-export const BANNED_WITHOUT_FRESH_QUERY = [
-  /por agora estas são as melhores/i,
-  /se entrar algo novo, aviso/i,
-  /não tenho mais opções/i,
-  /não há mais imóveis/i,
-];
-
-export const BANNED_ON_THANKS = [
-  /se entrar algo novo/i,
-  /por agora estas são as melhores/i,
-  /tenho mais opções/i,
-  /visita/i,
-];
-
-export function alreadySentClosingRecently(history: Conversation[]): boolean {
+export function alreadySentClosingRecently(
+  history: Conversation[],
+  language: SupportedLanguage
+): boolean {
   const recent = getRecentAiTexts(history, 4);
-  return recent.some((text) =>
-    CLOSING_REPLY_MARKERS.some((marker) => text.includes(marker))
-  );
+  const markers = getClosingMarkers(language);
+  return recent.some((text) => markers.some((marker) => text.includes(marker)));
 }
 
 export function buildClosingReply(lead: Lead, history: Conversation[]): string | null {
-  if (alreadySentClosingRecently(history)) {
+  const language = getLeadLanguage(lead);
+
+  if (alreadySentClosingRecently(history, language)) {
     return null;
   }
 
   const reply = pickUnusedVariant(
-    CLOSING_REPLY_VARIANTS,
+    getClosingReplies(language),
     history,
     `${lead.id}:closing`
   );
@@ -62,6 +47,7 @@ export type ReplyGuardContext = {
   intent: MessageIntent;
   freshQueryMade: boolean;
   propertiesSent: boolean;
+  language: SupportedLanguage;
 };
 
 export function violatesReplyGuardrails(
@@ -74,11 +60,17 @@ export function violatesReplyGuardrails(
   }
 
   if (context.intent === "thanks_or_closing") {
-    return BANNED_ON_THANKS.some((pattern) => pattern.test(trimmed));
+    return BANNED_ON_THANKS[context.language].some((pattern) =>
+      pattern.test(trimmed)
+    );
   }
 
   if (!context.freshQueryMade && !context.propertiesSent) {
-    if (BANNED_WITHOUT_FRESH_QUERY.some((pattern) => pattern.test(trimmed))) {
+    if (
+      BANNED_WITHOUT_FRESH_QUERY[context.language].some((pattern) =>
+        pattern.test(trimmed)
+      )
+    ) {
       return true;
     }
   }
@@ -107,17 +99,15 @@ export function sanitizeGuardedReply(
   return trimmed;
 }
 
-export function intentLabel(intent: ClassifiedIntent): string {
-  return intent.intent;
-}
-
 export function logIntentDecision(
   leadId: string,
-  classified: ClassifiedIntent
+  classified: ClassifiedIntent,
+  language: SupportedLanguage
 ): void {
   console.log("[WhatsApp guardrails] Intent classified", {
     leadId,
     intent: classified.intent,
+    language,
     wantsReshow: classified.wantsReshow,
     wantsMore: classified.wantsMore,
     preview: classified.latestMessage.slice(0, 80),

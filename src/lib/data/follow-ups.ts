@@ -140,7 +140,8 @@ export async function getPendingFollowUps(
         preferred_area,
         property_type,
         budget,
-        user_id
+        user_id,
+        preferred_language
       )
     `
     )
@@ -181,7 +182,8 @@ export async function getFollowUpsForUser(
         preferred_area,
         property_type,
         budget,
-        user_id
+        user_id,
+        preferred_language
       )
     `
     )
@@ -216,7 +218,8 @@ export async function getFollowUpById(
         preferred_area,
         property_type,
         budget,
-        user_id
+        user_id,
+        preferred_language
       )
     `
     )

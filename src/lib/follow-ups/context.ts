@@ -42,5 +42,6 @@ export async function buildFollowUpContext(
     property_title: options?.visit?.property_title ?? shownTitles.at(-1) ?? null,
     new_property_title: options?.newProperty?.title ?? null,
     client_name: lead.client_name,
+    preferred_language: lead.preferred_language,
   };
 }

@@ -11,6 +11,7 @@ import { buildFollowUpContext } from "@/lib/follow-ups/context";
 import { generateFollowUpMessage } from "@/lib/follow-ups/messages";
 import { sendFollowUpImmediately } from "@/lib/follow-ups/processor";
 import { scheduleFollowUp } from "@/lib/follow-ups/scheduler";
+import { getLeadLanguage } from "@/lib/i18n/sync-language";
 import { createClient } from "@/lib/supabase/server";
 import type { FollowUpType } from "@/types/database";
 
@@ -140,7 +141,8 @@ export async function triggerFollowUpNowAction(
   try {
     const history = await getConversationsByLead(supabase, leadId);
     const context = await buildFollowUpContext(supabase, lead, history);
-    const message = generateFollowUpMessage(type, context, `${leadId}:manual`);
+    context.preferred_language = getLeadLanguage(lead);
+    const message = generateFollowUpMessage(type, context, `${leadId}:manual`, getLeadLanguage(lead));
 
     const followUp = await scheduleFollowUp(supabase, {
       lead,

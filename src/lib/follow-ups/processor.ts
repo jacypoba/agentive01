@@ -7,6 +7,7 @@ import {
 import { sendWhatsAppText } from "@/lib/evolution/client";
 import { FOLLOW_UP_CONFIG } from "@/lib/follow-ups/config";
 import { generateFollowUpMessage } from "@/lib/follow-ups/messages";
+import { normalizeLanguage } from "@/lib/i18n/types";
 import { resolveLeadPhoneDigits } from "@/lib/visits/whatsapp-notifications";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, FollowUpContextSnapshot } from "@/types/database";
@@ -63,7 +64,8 @@ export async function sendFollowUpImmediately(
         preferred_area,
         property_type,
         budget,
-        user_id
+        user_id,
+        preferred_language
       )
     `
     )
@@ -90,9 +92,12 @@ export async function sendFollowUpImmediately(
   }
 
   const context = (item.context_snapshot ?? {}) as FollowUpContextSnapshot;
+  const language = normalizeLanguage(
+    item.context_snapshot?.preferred_language ?? lead.preferred_language
+  );
   const message =
     item.message?.trim() ||
-    generateFollowUpMessage(item.type, context, item.id);
+    generateFollowUpMessage(item.type, context, item.id, language);
 
   try {
     await sendWhatsAppText(phoneDigits, message);
@@ -168,9 +173,12 @@ export async function processPendingFollowUps(
     }
 
     const context = (item.context_snapshot ?? {}) as FollowUpContextSnapshot;
+    const language = normalizeLanguage(
+      item.context_snapshot?.preferred_language ?? lead.preferred_language
+    );
     const message =
       item.message?.trim() ||
-      generateFollowUpMessage(item.type, context, item.id);
+      generateFollowUpMessage(item.type, context, item.id, language);
 
     try {
       await sendWhatsAppText(phoneDigits, message);

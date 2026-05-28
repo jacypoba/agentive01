@@ -7,6 +7,7 @@ import {
   markFollowUpSentAction,
   sendFollowUpByIdAction,
 } from "@/app/actions/follow-ups";
+import { LanguageBadge } from "@/components/leads/language-badge";
 import {
   formatFollowUpDateTime,
   getFollowUpStatusColor,
@@ -106,6 +107,7 @@ function FollowUpCard({
             >
               {item.leads.client_name}
             </Link>
+            <LanguageBadge language={item.leads.preferred_language} />
             <span
               className={`rounded-full border px-2.5 py-0.5 text-[10px] font-medium capitalize ${getFollowUpStatusColor(item.status)}`}
             >

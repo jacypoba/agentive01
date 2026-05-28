@@ -1,4 +1,5 @@
 import { getLastClientMessageText } from "@/lib/ai/qualification";
+import { getLanguageLocale, normalizeLanguage, type SupportedLanguage } from "@/lib/i18n/types";
 import type { Conversation, Lead, PropertySearchCriteria } from "@/types/database";
 
 const CITY_PATTERN =
@@ -192,7 +193,15 @@ export function derivePropertySearchCriteria(
 }
 
 export function formatPropertyPrice(price: number): string {
-  return new Intl.NumberFormat("pt-PT", {
+  return formatPropertyPriceForLanguage(price, "pt");
+}
+
+export function formatPropertyPriceForLanguage(
+  price: number,
+  language: SupportedLanguage = "pt"
+): string {
+  const locale = getLanguageLocale(normalizeLanguage(language));
+  return new Intl.NumberFormat(locale, {
     style: "currency",
     currency: "EUR",
     maximumFractionDigits: 0,

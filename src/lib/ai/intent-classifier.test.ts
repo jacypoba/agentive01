@@ -90,6 +90,7 @@ describe("reply guardrails", () => {
         intent: "unknown",
         freshQueryMade: false,
         propertiesSent: false,
+        language: "pt",
       }
     );
     assert.equal(blocked, true);
@@ -102,6 +103,7 @@ describe("reply guardrails", () => {
         intent: "thanks_or_closing",
         freshQueryMade: false,
         propertiesSent: false,
+        language: "pt",
       }
     );
     assert.equal(blocked, true);
@@ -114,6 +116,7 @@ describe("reply guardrails", () => {
         intent: "ask_more_options",
         freshQueryMade: true,
         propertiesSent: false,
+        language: "pt",
       }
     );
     assert.equal(blocked, false);

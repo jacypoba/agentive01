@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { CreateTestLeadButton } from "@/components/dashboard/create-test-lead-button";
+import { LanguageBadge } from "@/components/leads/language-badge";
 import { LeadQualificationSummary } from "@/components/leads/lead-qualification-summary";
 import { formatLeadDate, getStatusBadgeColor } from "@/lib/leads/status";
 import { getIntentStatusColor, getIntentStatusLabel } from "@/lib/leads/qualification-display";
@@ -252,6 +253,8 @@ export function LeadsList({ leads, dbError, initialStatus }: LeadsListProps) {
                 </div>
 
                 <div className="relative mt-5 space-y-3 border-t border-white/5 pt-4">
+                  <LanguageBadge language={lead.preferred_language} />
+
                   {lead.intent_status && lead.intent_status !== "unknown" && (
                     <span
                       className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-medium ${getIntentStatusColor(lead.intent_status)}`}

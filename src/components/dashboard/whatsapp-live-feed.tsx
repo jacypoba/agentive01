@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { LanguageBadge } from "@/components/leads/language-badge";
 import { createClient } from "@/lib/supabase/client";
 import {
   formatRelativeTime,
@@ -17,7 +18,7 @@ type WhatsAppLiveFeedProps = {
 
 function toActivityFromConversation(
   conversation: Conversation,
-  lead: Pick<Lead, "client_name" | "interest" | "status">
+  lead: Pick<Lead, "client_name" | "interest" | "status" | "preferred_language">
 ): RecentActivity {
   return {
     id: conversation.id,
@@ -28,6 +29,7 @@ function toActivityFromConversation(
     client_name: lead.client_name,
     interest: lead.interest,
     status: lead.status,
+    preferred_language: lead.preferred_language,
     kind: "conversation",
   };
 }
@@ -42,6 +44,7 @@ function toActivityFromLead(lead: Lead): RecentActivity {
     client_name: lead.client_name,
     interest: lead.interest,
     status: lead.status,
+    preferred_language: lead.preferred_language,
     kind: "lead",
   };
 }
@@ -70,7 +73,7 @@ export function WhatsAppLiveFeed({
 
           const { data: lead } = await supabase
             .from("leads")
-            .select("id, client_name, interest, status, user_id")
+            .select("id, client_name, interest, status, user_id, preferred_language")
             .eq("id", conversation.lead_id)
             .maybeSingle();
 
@@ -165,6 +168,7 @@ export function WhatsAppLiveFeed({
                     <p className="text-sm font-medium text-white">
                       {item.client_name}
                     </p>
+                    <LanguageBadge language={item.preferred_language} />
                   </div>
                   <p className="mt-1 truncate text-xs text-white/40">
                     {getActivityLabel(item)} · {item.message}
