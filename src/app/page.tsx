@@ -305,6 +305,9 @@ export default function Home() {
       </header>
 
       <main>
+        <div className="bg-amber-400 px-6 py-3 text-center text-sm font-bold tracking-wide text-black">
+          DEPLOY CHECK CALENDAR ROUTES
+        </div>
         {/* Hero */}
         <section className="relative px-6 pb-24 pt-32 lg:px-8 lg:pb-32 lg:pt-40">
           <div className="mx-auto grid max-w-6xl items-center gap-16 lg:grid-cols-2 lg:gap-12">

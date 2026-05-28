@@ -13,7 +13,7 @@ import {
 } from "@/lib/data/dashboard";
 
 export const metadata: Metadata = {
-  title: "Dashboard — Agentive01",
+  title: "DEPLOY CHECK CALENDAR ROUTES — Dashboard",
   description: "Your Agentive01 command center.",
 };
 
@@ -102,6 +102,9 @@ export default async function DashboardPage() {
   return (
     <main className="px-6 pb-16 lg:px-8">
       <div className="mx-auto max-w-6xl">
+        <div className="mb-6 rounded-2xl border border-amber-400/50 bg-amber-400 px-5 py-3 text-center text-sm font-bold tracking-wide text-black">
+          DEPLOY CHECK CALENDAR ROUTES
+        </div>
         <section className="animate-fade-up">
           <p className="mb-4 inline-flex items-center gap-2 rounded-full border border-[#0066FF]/30 bg-[#0066FF]/10 px-4 py-1.5 text-xs font-medium tracking-wide text-[#00D4FF]">
             <span className="relative flex h-2 w-2">

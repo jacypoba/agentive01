@@ -5,7 +5,7 @@ export const metadata: Metadata = {
   robots: "noindex, nofollow",
 };
 
-const DEPLOY_LABEL = "e2f5f61-calendar-check";
+const DEPLOY_LABEL = "DEPLOY CHECK CALENDAR ROUTES";
 
 const ROUTES = [
   "/",
