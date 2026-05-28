@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { citiesMatch, propertyTypesMatch } from "@/lib/properties/normalize-search";
+import { resolveWorkspaceIdForInsert } from "@/lib/workspaces/resolve-workspace-id-for-insert";
 import type {
   Database,
   Property,
@@ -78,9 +79,17 @@ export async function createProperty(
   supabase: Client,
   property: PropertyInsert
 ): Promise<Property> {
+  const workspaceId = await resolveWorkspaceIdForInsert(supabase, {
+    userId: property.user_id,
+    workspaceId: property.workspace_id,
+  });
+
   const { data, error } = await supabase
     .from("properties")
-    .insert(property)
+    .insert({
+      ...property,
+      workspace_id: workspaceId,
+    })
     .select("*")
     .single();
 

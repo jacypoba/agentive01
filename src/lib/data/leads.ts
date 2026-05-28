@@ -3,6 +3,7 @@ import {
   formatPhoneDisplay,
   normalizePhoneDigits,
 } from "@/lib/phone/normalize";
+import { resolveWorkspaceIdForInsert } from "@/lib/workspaces/resolve-workspace-id-for-insert";
 import type { Database, Lead, LeadInsert, LeadStatus, LeadUpdate } from "@/types/database";
 
 type Client = SupabaseClient<Database>;
@@ -70,10 +71,16 @@ export async function createLead(
     ? normalizePhoneDigits(lead.phone)
     : lead.phone_normalized ?? null;
 
+  const workspaceId = await resolveWorkspaceIdForInsert(supabase, {
+    userId: lead.user_id,
+    workspaceId: lead.workspace_id,
+  });
+
   const { data, error } = await supabase
     .from("leads")
     .insert({
       ...lead,
+      workspace_id: workspaceId,
       phone: lead.phone
         ? formatPhoneDisplay(normalizePhoneDigits(lead.phone))
         : lead.phone,

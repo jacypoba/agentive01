@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { resolveWorkspaceIdForInsert } from "@/lib/workspaces/resolve-workspace-id-for-insert";
 import type {
   Database,
   FollowUp,
@@ -16,9 +17,18 @@ export async function createFollowUp(
   supabase: Client,
   followUp: FollowUpInsert
 ): Promise<FollowUp> {
+  const workspaceId = await resolveWorkspaceIdForInsert(supabase, {
+    userId: followUp.user_id,
+    workspaceId: followUp.workspace_id,
+    leadId: followUp.lead_id,
+  });
+
   const { data, error } = await supabase
     .from("follow_ups")
-    .insert(followUp)
+    .insert({
+      ...followUp,
+      workspace_id: workspaceId,
+    })
     .select("*")
     .single();
 

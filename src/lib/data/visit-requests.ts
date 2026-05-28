@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { resolveWorkspaceIdForInsert } from "@/lib/workspaces/resolve-workspace-id-for-insert";
 import type {
   Database,
   VisitRequest,
@@ -153,10 +154,17 @@ export async function createVisitRequest(
   supabase: Client,
   request: VisitRequestInsert
 ): Promise<VisitRequest> {
+  const workspaceId = await resolveWorkspaceIdForInsert(supabase, {
+    userId: request.user_id,
+    workspaceId: request.workspace_id,
+    leadId: request.lead_id,
+  });
+
   const { data, error } = await supabase
     .from("visit_requests")
     .insert({
       ...request,
+      workspace_id: workspaceId,
       status: request.status ?? "pending",
     })
     .select("*")
