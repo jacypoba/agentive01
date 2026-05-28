@@ -3,6 +3,7 @@ import { LogoutButton } from "@/components/auth/logout-button";
 import { AppNav, AppNavMobile } from "@/components/layout/app-nav";
 import { GridBackground } from "@/components/ui/grid-background";
 import { Logo } from "@/components/ui/logo";
+import { WorkspaceSwitcher } from "@/components/workspaces/workspace-switcher";
 import { getProfile } from "@/lib/data/profiles";
 import { createClient } from "@/lib/supabase/server";
 
@@ -38,6 +39,7 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
           <Logo href="/dashboard" />
           <AppNav />
           <div className="flex items-center gap-3 sm:gap-4">
+            <WorkspaceSwitcher userId={user.id} />
             <span className="hidden text-sm text-white/50 lg:inline">
               {displayName}
             </span>
