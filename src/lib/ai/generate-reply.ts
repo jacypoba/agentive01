@@ -1,6 +1,7 @@
 import OpenAI from "openai";
 import { dedupeAiReply } from "@/lib/ai/dedupe-reply";
 import { MEMORY_MESSAGE_LIMIT } from "@/lib/ai/conversation-memory";
+import type { MessageIntent } from "@/lib/ai/intent-classifier";
 import { buildQualificationDirective } from "@/lib/ai/qualification";
 import { REAL_ESTATE_ASSISTANT_PROMPT } from "@/lib/ai/prompts";
 import { buildPropertyRecommendationDirective } from "@/lib/properties/recommendations";
@@ -78,7 +79,8 @@ function toOpenAIMessages(
   propertiesToRecommend: Property[],
   availability: PropertyAvailability,
   clientAskedForMore: boolean,
-  clientAskedToReshow = false
+  clientAskedToReshow = false,
+  messageIntent: MessageIntent = "unknown"
 ): OpenAI.Chat.ChatCompletionMessageParam[] {
   const recentHistory = history.slice(-MEMORY_MESSAGE_LIMIT);
   const qualificationDirective = buildQualificationDirective(
@@ -90,6 +92,7 @@ function toOpenAIMessages(
       availability,
       clientAskedForMore,
       clientAskedToReshow,
+      messageIntent,
     }
   );
   const propertyDirective = buildPropertyRecommendationDirective(
@@ -140,7 +143,8 @@ export async function generateAIReply(
   propertiesToRecommend: Property[] = [],
   availability: PropertyAvailability,
   clientAskedForMore = false,
-  clientAskedToReshow = false
+  clientAskedToReshow = false,
+  messageIntent: MessageIntent = "unknown"
 ): Promise<string> {
   const openai = getOpenAIClient();
   const messages = toOpenAIMessages(
@@ -149,7 +153,8 @@ export async function generateAIReply(
     propertiesToRecommend,
     availability,
     clientAskedForMore,
-    clientAskedToReshow
+    clientAskedToReshow,
+    messageIntent
   );
 
   const completion = await openai.chat.completions.create({

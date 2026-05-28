@@ -149,13 +149,6 @@ export async function scheduleAfterPropertyRecommendations(
     context,
     replacePending: true,
   });
-
-  await scheduleFollowUp(supabase, {
-    lead,
-    type: "silent_lead",
-    context,
-    replacePending: true,
-  });
 }
 
 export async function scheduleForPendingVisit(

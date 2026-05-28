@@ -130,6 +130,24 @@ function resolveBudgetText(lead: Lead, history: Conversation[]): string | null {
   return clientMessagesText(history) || null;
 }
 
+function extractCityFromLatest(history: Conversation[]): string | null {
+  const latest = getLastClientMessageText(history);
+  if (!latest) return null;
+  return extractCityFromText(latest);
+}
+
+function extractTypeFromLatest(history: Conversation[]): string | null {
+  const latest = getLastClientMessageText(history);
+  if (!latest) return null;
+  return extractPropertyTypeFromText(latest);
+}
+
+function resolveLatestBudgetText(history: Conversation[]): string | null {
+  const latest = getLastClientMessageText(history);
+  if (!latest) return null;
+  return parseBudgetMax(latest) ? latest : null;
+}
+
 /**
  * Returns search criteria when city and property type are available.
  * Strict mode (default) also requires a parseable budget.
@@ -137,11 +155,18 @@ function resolveBudgetText(lead: Lead, history: Conversation[]): string | null {
 export function derivePropertySearchCriteria(
   lead: Lead,
   history: Conversation[],
-  options?: { relaxed?: boolean }
+  options?: { relaxed?: boolean; preferLatestMessage?: boolean }
 ): PropertySearchCriteria | null {
-  const city = resolveCity(lead, history);
-  const propertyType = resolvePropertyType(lead, history);
-  const budgetText = resolveBudgetText(lead, history);
+  const preferLatest = options?.preferLatestMessage ?? false;
+  const city = preferLatest
+    ? extractCityFromLatest(history) ?? lead.preferred_area?.trim() ?? null
+    : resolveCity(lead, history);
+  const propertyType = preferLatest
+    ? extractTypeFromLatest(history) ?? lead.property_type?.trim() ?? null
+    : resolvePropertyType(lead, history);
+  const budgetText = preferLatest
+    ? resolveLatestBudgetText(history) ?? lead.budget?.trim() ?? null
+    : resolveBudgetText(lead, history);
   const maxBudget = parseBudgetMax(budgetText);
 
   if (options?.relaxed) {

@@ -42,9 +42,11 @@ export async function findPropertyRecommendations(
   supabase: Client,
   lead: Lead,
   history: Conversation[],
-  limit = 20
+  limit = 20,
+  options?: { preferLatestMessage?: boolean }
 ): Promise<FindPropertyRecommendationsResult> {
-  const strictCriteria = derivePropertySearchCriteria(lead, history);
+  const searchOptions = { preferLatestMessage: options?.preferLatestMessage };
+  const strictCriteria = derivePropertySearchCriteria(lead, history, searchOptions);
   let criteria = strictCriteria;
   let properties: Property[] = [];
 
@@ -60,6 +62,7 @@ export async function findPropertyRecommendations(
   if (!strictCriteria || properties.length === 0) {
     const relaxedCriteria = derivePropertySearchCriteria(lead, history, {
       relaxed: true,
+      preferLatestMessage: options?.preferLatestMessage,
     });
     if (relaxedCriteria) {
       const relaxedResults = await searchWithCriteria(

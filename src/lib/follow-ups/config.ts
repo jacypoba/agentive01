@@ -6,7 +6,7 @@ export const FOLLOW_UP_CONFIG = {
   batchSize: 20,
   delaysHours: {
     property_recommended: 48,
-    silent_lead: 24,
+    silent_lead: 48,
     visit_pending: 12,
     visit_completed: 24,
     new_match: 6,

@@ -6,29 +6,33 @@ import {
   normalizeForDedupe,
   pickUnusedVariant,
 } from "@/lib/ai/dedupe-reply";
+import {
+  buildClosingReply,
+  logIntentDecision,
+  sanitizeGuardedReply,
+} from "@/lib/ai/guardrails";
 import { generateAIReply } from "@/lib/ai/generate-reply";
 import { generateCatalogComparison } from "@/lib/ai/generate-catalog-comparison";
 import {
-  clientAskedForMoreOptions,
-  clientAskedToReshowOptions,
-  clientAskedToSeeOptions,
-} from "@/lib/ai/qualification";
+  classifyMessageIntent,
+  shouldQueryProperties,
+  shouldRunFreshPropertyQuery,
+  shouldUseReshowBatch,
+} from "@/lib/ai/intent-classifier";
+import { clientAskedForMoreOptions } from "@/lib/ai/qualification";
 import {
   createConversation,
   getConversationsByLead,
 } from "@/lib/data/conversations";
 import { getPropertiesByIds } from "@/lib/data/properties";
-import {
-  cancelFollowUpsOnClientReply,
-  scheduleAfterPropertyRecommendations,
-} from "@/lib/follow-ups/scheduler";
+import { cancelFollowUpsOnClientReply } from "@/lib/follow-ups/scheduler";
 import { findPropertyRecommendations } from "@/lib/properties/find-recommendations";
 import {
   analyzePropertyAvailability,
   buildReshowAvailability,
+  type PropertyAvailability,
 } from "@/lib/properties/property-availability";
 import {
-  buildPropertyFollowUpText,
   buildReshowIntroText,
   formatPropertyCard,
   formatPropertyListingRecord,
@@ -62,6 +66,18 @@ export type SendWithAIResult = {
   recommendedProperty?: Property;
   recommendedProperties?: Property[];
   lead: Lead;
+};
+
+const EMPTY_AVAILABILITY: PropertyAvailability = {
+  matchingTotal: 0,
+  shownCount: 0,
+  remainingCount: 0,
+  toSend: [],
+  remainingAfterSend: 0,
+  allShown: false,
+  noMatchesInDatabase: false,
+  criteriaMissing: true,
+  isReshow: false,
 };
 
 async function saveAiMessage(
@@ -124,10 +140,31 @@ async function appendUniqueTextReply(
   seenThisTurn: Set<string>,
   text: string,
   aiMessages: Conversation[],
-  outboundMessages: OutboundWhatsAppMessage[]
+  outboundMessages: OutboundWhatsAppMessage[],
+  guard?: {
+    intent: ReturnType<typeof classifyMessageIntent>["intent"];
+    freshQueryMade: boolean;
+    propertiesSent: boolean;
+  }
 ): Promise<void> {
-  const unique = prepareUniqueAiText(text, history, seenThisTurn);
+  let candidate = text;
+
+  if (guard) {
+    const sanitized = sanitizeGuardedReply(candidate, history, guard);
+    if (!sanitized) {
+      console.log("[WhatsApp guardrails] Blocked reply", {
+        leadId,
+        intent: guard.intent,
+        preview: candidate.slice(0, 80),
+      });
+      return;
+    }
+    candidate = sanitized;
+  }
+
+  const unique = prepareUniqueAiText(candidate, history, seenThisTurn);
   if (!unique) {
+    console.log("[WhatsApp guardrails] Skipped duplicate reply", { leadId });
     return;
   }
 
@@ -140,13 +177,17 @@ async function resolvePropertiesToRecommend(
   supabase: Client,
   memoryLead: Lead,
   history: Conversation[],
-  clientAskedToReshow: boolean,
-  clientAskedForMore: boolean
+  classified: ReturnType<typeof classifyMessageIntent>
 ) {
-  const { properties: matchingProperties, criteria } =
-    await findPropertyRecommendations(supabase, memoryLead, history, 20);
+  const freshQuery = shouldRunFreshPropertyQuery(classified);
+  const useReshow = shouldUseReshowBatch(classified);
 
-  if (clientAskedToReshow && !clientAskedForMore) {
+  const { properties: matchingProperties, criteria } =
+    await findPropertyRecommendations(supabase, memoryLead, history, 20, {
+      preferLatestMessage: freshQuery,
+    });
+
+  if (useReshow) {
     const lastBatchIds = getLastShownPropertyBatchIds(history);
     if (lastBatchIds.length > 0) {
       const reshown = await getPropertiesByIds(
@@ -166,6 +207,7 @@ async function resolvePropertiesToRecommend(
           ),
           criteria,
           isReshow: true,
+          freshQueryMade: false,
         };
       }
     }
@@ -182,6 +224,7 @@ async function resolvePropertiesToRecommend(
     availability,
     criteria,
     isReshow: false,
+    freshQueryMade: freshQuery && criteria != null,
   };
 }
 
@@ -189,11 +232,10 @@ async function buildIntroReply(
   memoryLead: Lead,
   history: Conversation[],
   propertiesToRecommend: Property[],
-  availability: Awaited<
-    ReturnType<typeof resolvePropertiesToRecommend>
-  >["availability"],
-  clientAskedForMore: boolean,
-  isReshow: boolean
+  availability: PropertyAvailability,
+  classified: ReturnType<typeof classifyMessageIntent>,
+  isReshow: boolean,
+  freshQueryMade: boolean
 ): Promise<string> {
   if (isReshow && propertiesToRecommend.length > 0) {
     return buildReshowIntroText(
@@ -205,7 +247,8 @@ async function buildIntroReply(
   if (
     propertiesToRecommend.length === 0 &&
     availability.allShown &&
-    (clientAskedForMore || clientAskedToSeeOptions(history))
+    classified.intent === "ask_more_options" &&
+    freshQueryMade
   ) {
     return pickUnusedVariant(
       EXHAUSTED_MATCH_LINES,
@@ -219,12 +262,22 @@ async function buildIntroReply(
     history,
     propertiesToRecommend,
     availability,
-    clientAskedForMore,
-    isReshow
+    clientAskedForMoreOptions(history),
+    isReshow,
+    classified.intent
   );
 }
 
-/** Core flow: save client message → generate AI reply → save AI message → extract qualification. */
+async function finalizeLead(
+  supabase: Client,
+  lead: Lead,
+  history: Conversation[]
+): Promise<Lead> {
+  const fullHistory = await getConversationsByLead(supabase, lead.id);
+  return extractAndApplyLeadQualification(supabase, lead, fullHistory);
+}
+
+/** Core flow: save client message → classify intent → guarded reply → qualification. */
 export async function processClientMessageWithAI(
   supabase: Client,
   lead: Lead,
@@ -243,48 +296,106 @@ export async function processClientMessageWithAI(
     lead
   );
 
-  const clientAskedToReshow = clientAskedToReshowOptions(history);
-  const clientAskedForMore = clientAskedForMoreOptions(history);
-  const clientAskedForOptions = clientAskedToSeeOptions(history);
+  const classified = classifyMessageIntent(history, memoryLead);
+  logIntentDecision(lead.id, classified);
 
-  const { propertiesToRecommend, availability, criteria, isReshow } =
-    await resolvePropertiesToRecommend(
+  const aiMessages: Conversation[] = [];
+  const outboundMessages: OutboundWhatsAppMessage[] = [];
+  const seenThisTurn = new Set<string>();
+
+  if (classified.intent === "thanks_or_closing") {
+    const closing = buildClosingReply(memoryLead, history);
+    if (closing) {
+      await appendUniqueTextReply(
+        supabase,
+        lead.id,
+        history,
+        seenThisTurn,
+        closing,
+        aiMessages,
+        outboundMessages,
+        {
+          intent: classified.intent,
+          freshQueryMade: false,
+          propertiesSent: false,
+        }
+      );
+    } else {
+      console.log("[WhatsApp guardrails] Thanks/closing — no second closing sent", {
+        leadId: lead.id,
+      });
+    }
+
+    const updatedLead = await finalizeLead(supabase, lead, history);
+
+    return {
+      userMessage,
+      aiMessage: aiMessages[0],
+      aiMessages,
+      outboundMessages,
+      lead: updatedLead,
+    };
+  }
+
+  let propertiesToRecommend: Property[] = [];
+  let availability = EMPTY_AVAILABILITY;
+  let criteria = null;
+  let isReshow = false;
+  let freshQueryMade = false;
+
+  if (shouldQueryProperties(classified)) {
+    const resolved = await resolvePropertiesToRecommend(
       supabase,
       memoryLead,
       history,
-      clientAskedToReshow,
-      clientAskedForMore
+      classified
     );
+    propertiesToRecommend = resolved.propertiesToRecommend;
+    availability = resolved.availability;
+    criteria = resolved.criteria;
+    isReshow = resolved.isReshow;
+    freshQueryMade = resolved.freshQueryMade;
 
-  console.log("[WhatsApp debug] Search criteria:", criteria);
-  console.log("[WhatsApp debug] Matching properties count:", availability.matchingTotal);
-  console.log("[WhatsApp debug] Shown property IDs:", [...getShownPropertyIds(history)]);
-  console.log("[WhatsApp debug] Remaining unsent:", availability.remainingCount);
-  console.log("[WhatsApp debug] Re-show:", isReshow);
-  console.log("[WhatsApp debug] Sending this turn:", propertiesToRecommend.map((p) => p.title));
+    console.log("[WhatsApp debug] Search criteria:", criteria);
+    console.log("[WhatsApp debug] Matching properties count:", availability.matchingTotal);
+    console.log("[WhatsApp debug] Shown property IDs:", [...getShownPropertyIds(history)]);
+    console.log("[WhatsApp debug] Remaining unsent:", availability.remainingCount);
+    console.log("[WhatsApp debug] Re-show:", isReshow);
+    console.log("[WhatsApp debug] Fresh query:", freshQueryMade);
+    console.log(
+      "[WhatsApp debug] Sending this turn:",
+      propertiesToRecommend.map((p) => p.title)
+    );
+  }
+
+  const guardContext = {
+    intent: classified.intent,
+    freshQueryMade,
+    propertiesSent: propertiesToRecommend.length > 0,
+  };
 
   const aiReply = await buildIntroReply(
     memoryLead,
     history,
     propertiesToRecommend,
     availability,
-    clientAskedForMore,
-    isReshow
+    classified,
+    isReshow,
+    freshQueryMade
   );
 
-  const aiMessages: Conversation[] = [];
-  const outboundMessages: OutboundWhatsAppMessage[] = [];
-  const seenThisTurn = new Set<string>();
-
-  await appendUniqueTextReply(
-    supabase,
-    lead.id,
-    history,
-    seenThisTurn,
-    aiReply,
-    aiMessages,
-    outboundMessages
-  );
+  if (aiReply) {
+    await appendUniqueTextReply(
+      supabase,
+      lead.id,
+      history,
+      seenThisTurn,
+      aiReply,
+      aiMessages,
+      outboundMessages,
+      guardContext
+    );
+  }
 
   if (isCatalogBatch(propertiesToRecommend)) {
     const detailsTexts = propertiesToRecommend.map((property) =>
@@ -320,7 +431,8 @@ export async function processClientMessageWithAI(
           seenThisTurn,
           closingText,
           aiMessages,
-          outboundMessages
+          outboundMessages,
+          guardContext
         );
       }
     }
@@ -340,47 +452,14 @@ export async function processClientMessageWithAI(
     outboundMessages.push(
       ...buildPropertyOutboundMessages(property, detailsText)
     );
-
-    if (!isReshow) {
-      const followUpText = buildPropertyFollowUpText({
-        hasMoreMatches: availability.remainingAfterSend > 0,
-        clientAskedForOptions,
-      });
-
-      if (followUpText) {
-        await appendUniqueTextReply(
-          supabase,
-          lead.id,
-          history,
-          seenThisTurn,
-          followUpText,
-          aiMessages,
-          outboundMessages
-        );
-      }
-    }
   }
 
   console.log(
     "[WhatsApp debug] Outbound message kinds:",
-    outboundMessages.map((message) => message.kind)
+    outboundMessages.map((item) => item.kind)
   );
 
-  const fullHistory = await getConversationsByLead(supabase, lead.id);
-  const updatedLead = await extractAndApplyLeadQualification(
-    supabase,
-    lead,
-    fullHistory
-  );
-
-  if (propertiesToRecommend.length > 0 && !isReshow) {
-    await scheduleAfterPropertyRecommendations(
-      supabase,
-      updatedLead,
-      fullHistory,
-      propertiesToRecommend
-    );
-  }
+  const updatedLead = await finalizeLead(supabase, lead, history);
 
   return {
     userMessage,

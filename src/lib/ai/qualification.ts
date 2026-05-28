@@ -1,5 +1,6 @@
 import type { Conversation, Lead, Property } from "@/types/database";
 import type { PropertyAvailability } from "@/lib/properties/property-availability";
+import type { MessageIntent } from "@/lib/ai/intent-classifier";
 
 type QualificationField =
   | "budget"
@@ -297,6 +298,7 @@ export type QualificationDirectiveOptions = {
   availability?: PropertyAvailability;
   clientAskedForMore?: boolean;
   clientAskedToReshow?: boolean;
+  messageIntent?: MessageIntent;
 };
 
 /**
@@ -308,7 +310,7 @@ export function buildQualificationDirective(
   lead: Lead,
   options: QualificationDirectiveOptions = {}
 ): string {
-  const { propertiesBeingSent = [], matchingPropertyCount = 0, availability, clientAskedForMore = false, clientAskedToReshow = false } = options;
+  const { propertiesBeingSent = [], matchingPropertyCount = 0, availability, clientAskedForMore = false, clientAskedToReshow = false, messageIntent = "unknown" } = options;
   const catalogCount = propertiesBeingSent.length;
   const nextField = getNextField(history, lead);
   const firstReply = isFirstAiReply(history);
@@ -321,6 +323,7 @@ export function buildQualificationDirective(
   const lines = [
     "---",
     "Directive for this reply:",
+    `- Classified intent: ${messageIntent}`,
     `- Conversation messages in context: ${messageCount} (last ${messageCount} from Supabase)`,
     `- First AI reply: ${firstReply ? "yes — you may greet briefly" : "no — do NOT greet or re-introduce yourself"}`,
     `- Latest client message: ${latestClient ? `"${latestClient.slice(0, 120)}${latestClient.length > 120 ? "…" : ""}"` : "none"}`,
@@ -328,9 +331,24 @@ export function buildQualificationDirective(
     "- Do NOT repeat criteria the client already gave (budget, zone, type, timeline).",
     "- Do NOT end with a question unless one key field is genuinely missing.",
     "- Do NOT mention visits unless the latest client message asks about or references one.",
+    "- NEVER use exhausted-catalog lines ('Por agora estas são as melhores…', 'se entrar algo novo aviso') unless the availability block confirms all matches were already shared after a fresh query.",
     ...buildSavedLeadMemoryLines(lead),
     ...buildSafetyLines(history, lead),
   ];
+
+  if (messageIntent === "visit_request") {
+    lines.push(
+      "- Client wants a visit: acknowledge briefly — do NOT confirm scheduling.",
+      "- Do NOT mention old property catalog unless the client referenced it now."
+    );
+  }
+
+  if (messageIntent === "general_question" || messageIntent === "unknown") {
+    lines.push(
+      "- Answer the question directly. Do NOT send property listings unless the client asked.",
+      "- Do NOT reference old visits or old property batches unless clearly relevant."
+    );
+  }
 
   if (catalogCount >= 2) {
     lines.push(
