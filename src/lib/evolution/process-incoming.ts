@@ -1,5 +1,8 @@
 import { processClientMessageWithAI } from "@/lib/ai/conversation-service";
-import { sendOutboundWhatsAppMessages } from "@/lib/properties/send-whatsapp";
+import {
+  sendOutboundWhatsAppMessages,
+  type OutboundSendReport,
+} from "@/lib/properties/send-whatsapp";
 import type { ParsedIncomingMessage } from "@/lib/evolution/types";
 import { createLead, getLeadByPhone } from "@/lib/data/leads";
 import { formatPhoneDisplay } from "@/lib/phone/normalize";
@@ -12,6 +15,7 @@ export type ProcessIncomingResult = {
   aiMessage?: Conversation;
   aiMessages?: Conversation[];
   whatsappSent: boolean;
+  whatsappReport: OutboundSendReport | null;
   isNewLead: boolean;
 };
 
@@ -52,15 +56,46 @@ export async function processIncomingWhatsAppMessage(
     lead: updatedLead,
   } = await processClientMessageWithAI(supabase, lead, incoming.text);
 
+  let whatsappReport: OutboundSendReport | null = null;
   let whatsappSent = false;
 
   if (outboundMessages.length > 0) {
-    await sendOutboundWhatsAppMessages(
-      incoming.phoneDigits,
-      outboundMessages,
-      incoming.instance
-    );
-    whatsappSent = true;
+    try {
+      whatsappReport = await sendOutboundWhatsAppMessages(
+        incoming.phoneDigits,
+        outboundMessages,
+        incoming.instance
+      );
+      whatsappSent = whatsappReport.sent > 0;
+
+      if (whatsappReport.failed > 0) {
+        console.warn("[Evolution webhook] Outbound completed with failures", {
+          leadId: updatedLead.id,
+          messageId: incoming.messageId,
+          report: whatsappReport,
+        });
+      }
+    } catch (error) {
+      console.error("[Evolution webhook] Unexpected outbound error", {
+        leadId: updatedLead.id,
+        messageId: incoming.messageId,
+        error: error instanceof Error ? error.message : error,
+      });
+      whatsappReport = {
+        attempted: outboundMessages.length,
+        sent: 0,
+        failed: outboundMessages.length,
+        failures: [
+          {
+            kind: "text",
+            error:
+              error instanceof Error
+                ? error.message
+                : "Unexpected outbound delivery error.",
+          },
+        ],
+      };
+    }
   }
 
   return {
@@ -69,6 +104,7 @@ export async function processIncomingWhatsAppMessage(
     aiMessage,
     aiMessages,
     whatsappSent,
+    whatsappReport,
     isNewLead,
   };
 }

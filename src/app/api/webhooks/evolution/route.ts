@@ -65,6 +65,7 @@ export async function POST(request: Request) {
       leadId: result.lead.id,
       isNewLead: result.isNewLead,
       whatsappSent: result.whatsappSent,
+      whatsappReport: result.whatsappReport,
       clientMessageId: result.clientMessage.id,
       aiMessageId: result.aiMessage?.id ?? null,
     });

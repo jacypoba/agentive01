@@ -1,6 +1,6 @@
 import {
-  sendWhatsAppMedia,
-  sendWhatsAppText,
+  sendWhatsAppMediaSafe,
+  sendWhatsAppTextSafe,
 } from "@/lib/evolution/client";
 import {
   formatCatalogSpacer,
@@ -34,67 +34,220 @@ export type OutboundWhatsAppMessage =
       kind: "catalog_spacer";
     };
 
+export type OutboundSendFailure = {
+  kind: OutboundWhatsAppMessage["kind"] | "property_package";
+  propertyId?: string;
+  error: string;
+};
+
+export type OutboundSendReport = {
+  attempted: number;
+  sent: number;
+  failed: number;
+  failures: OutboundSendFailure[];
+};
+
 export async function sendOutboundWhatsAppMessages(
   phoneDigits: string,
   messages: OutboundWhatsAppMessage[],
   instance?: string
-): Promise<void> {
-  const textFallbackPropertyIds = new Set<string>();
+): Promise<OutboundSendReport> {
+  const report: OutboundSendReport = {
+    attempted: 0,
+    sent: 0,
+    failed: 0,
+    failures: [],
+  };
+
+  const deliveredPropertyText = new Set<string>();
 
   for (const message of messages) {
     if (message.kind === "catalog_spacer") {
-      await sendWhatsAppText(phoneDigits, formatCatalogSpacer(), instance);
+      await deliverText(phoneDigits, formatCatalogSpacer(), instance, report, "catalog_spacer");
       continue;
     }
 
     if (message.kind === "property_image") {
-      const imageUrl = message.property.image_url?.trim();
-      if (!imageUrl) {
-        continue;
-      }
-
-      const caption = formatPropertyImageCaption(message.property);
-
-      try {
-        await sendWhatsAppMedia(
-          phoneDigits,
-          {
-            mediatype: "image",
-            media: imageUrl,
-            ...(caption ? { caption } : {}),
-            mimetype: guessImageMimeType(imageUrl),
-            fileName: buildImageFileName(message.property),
-          },
-          instance
-        );
-      } catch (error) {
-        console.warn("[Property WhatsApp] Media send failed, using text fallback", {
-          propertyId: message.property.id,
-          imageUrl,
-          error: error instanceof Error ? error.message : error,
-        });
-        await sendWhatsAppText(phoneDigits, message.fallbackText, instance);
-        textFallbackPropertyIds.add(message.property.id);
+      const delivered = await deliverPropertyPackage(
+        phoneDigits,
+        message.property,
+        message.fallbackText,
+        instance,
+        report
+      );
+      if (delivered) {
+        deliveredPropertyText.add(message.property.id);
       }
       continue;
     }
 
     if (message.kind === "property_details") {
-      if (textFallbackPropertyIds.has(message.property.id)) {
+      if (deliveredPropertyText.has(message.property.id)) {
         continue;
       }
-      await sendWhatsAppText(phoneDigits, message.text, instance);
+      const delivered = await deliverText(
+        phoneDigits,
+        message.text,
+        instance,
+        report,
+        "property_details",
+        message.property.id
+      );
+      if (delivered) {
+        deliveredPropertyText.add(message.property.id);
+      }
       continue;
     }
 
     if (message.kind === "property_listing") {
-      // URL-only message — WhatsApp renders a link preview instead of raw text.
-      await sendWhatsAppText(phoneDigits, message.url, instance);
+      if (deliveredPropertyText.has(message.property.id)) {
+        continue;
+      }
+      await deliverLink(phoneDigits, message.url, instance, report, message.property.id);
       continue;
     }
 
-    await sendWhatsAppText(phoneDigits, message.text, instance);
+    await deliverText(phoneDigits, message.text, instance, report, "text");
   }
+
+  if (report.failed > 0) {
+    console.warn("[WHATSAPP OUTBOUND] Completed with failures", report);
+  }
+
+  return report;
+}
+
+async function deliverPropertyPackage(
+  phoneDigits: string,
+  property: Property,
+  fallbackText: string,
+  instance: string | undefined,
+  report: OutboundSendReport
+): Promise<boolean> {
+  const imageUrl = property.image_url?.trim() ?? "";
+  const listingUrl = property.listing_url?.trim() ?? "";
+  const textCard = buildPropertyTextFallback(fallbackText, listingUrl);
+  const plainSummary = buildPlainPropertySummary(property);
+
+  if (imageUrl && isValidOutboundUrl(imageUrl)) {
+    report.attempted += 1;
+    const caption = formatPropertyImageCaption(property);
+    const mediaResult = await sendWhatsAppMediaSafe(
+      phoneDigits,
+      {
+        mediatype: "image",
+        media: imageUrl,
+        ...(caption ? { caption } : {}),
+        mimetype: guessImageMimeType(imageUrl),
+        fileName: buildImageFileName(property),
+      },
+      instance
+    );
+
+    if (mediaResult.success) {
+      report.sent += 1;
+
+      if (listingUrl && isValidOutboundUrl(listingUrl)) {
+        await deliverLink(phoneDigits, listingUrl, instance, report, property.id);
+      }
+
+      return true;
+    }
+
+    report.failed += 1;
+    report.failures.push({
+      kind: "property_image",
+      propertyId: property.id,
+      error: mediaResult.error ?? "Image send failed.",
+    });
+  } else if (imageUrl) {
+    console.warn("[WHATSAPP OUTBOUND] Invalid property image URL, skipping media", {
+      propertyId: property.id,
+      imageUrl,
+    });
+  }
+
+  if (await deliverText(phoneDigits, textCard, instance, report, "property_details", property.id)) {
+    return true;
+  }
+
+  return deliverText(phoneDigits, plainSummary, instance, report, "property_package", property.id);
+}
+
+async function deliverText(
+  phoneDigits: string,
+  text: string,
+  instance: string | undefined,
+  report: OutboundSendReport,
+  kind: OutboundSendFailure["kind"],
+  propertyId?: string
+): Promise<boolean> {
+  const trimmed = text.trim();
+  if (!trimmed) {
+    return false;
+  }
+
+  report.attempted += 1;
+  const result = await sendWhatsAppTextSafe(phoneDigits, trimmed, instance);
+
+  if (result.success) {
+    report.sent += 1;
+    return true;
+  }
+
+  report.failed += 1;
+  report.failures.push({
+    kind,
+    propertyId,
+    error: result.error ?? "Text send failed.",
+  });
+  return false;
+}
+
+async function deliverLink(
+  phoneDigits: string,
+  url: string,
+  instance: string | undefined,
+  report: OutboundSendReport,
+  propertyId?: string
+): Promise<boolean> {
+  const trimmed = url.trim();
+  if (!trimmed || !isValidOutboundUrl(trimmed)) {
+    report.failed += 1;
+    report.failures.push({
+      kind: "property_listing",
+      propertyId,
+      error: "Invalid listing URL.",
+    });
+    return false;
+  }
+
+  console.log("[WHATSAPP OUTBOUND LINK]", {
+    propertyId,
+    url: trimmed,
+  });
+
+  report.attempted += 1;
+  const result = await sendWhatsAppTextSafe(phoneDigits, trimmed, instance);
+
+  if (result.success) {
+    report.sent += 1;
+    console.log("[WHATSAPP OUTBOUND SUCCESS]", { kind: "link", propertyId });
+    return true;
+  }
+
+  report.failed += 1;
+  report.failures.push({
+    kind: "property_listing",
+    propertyId,
+    error: result.error ?? "Link send failed.",
+  });
+  console.error("[WHATSAPP OUTBOUND FAILURE]", {
+    kind: "link",
+    propertyId,
+    reason: result.error,
+  });
+  return false;
 }
 
 export function buildPropertyOutboundMessages(
@@ -103,22 +256,30 @@ export function buildPropertyOutboundMessages(
 ): OutboundWhatsAppMessage[] {
   const messages: OutboundWhatsAppMessage[] = [];
 
-  if (hasPropertyImage(property)) {
+  if (hasPropertyImage(property) && isValidOutboundUrl(property.image_url?.trim() ?? "")) {
     messages.push({
       kind: "property_image",
       property,
       fallbackText: detailsText,
     });
+  } else {
+    messages.push({
+      kind: "property_details",
+      text: buildPropertyTextFallback(
+        detailsText,
+        property.listing_url?.trim() ?? ""
+      ),
+      property,
+    });
   }
 
-  messages.push({
-    kind: "property_details",
-    text: detailsText,
-    property,
-  });
-
   const listingUrl = property.listing_url?.trim();
-  if (hasPropertyListing(property) && listingUrl) {
+  if (
+    hasPropertyListing(property) &&
+    listingUrl &&
+    isValidOutboundUrl(listingUrl) &&
+    hasPropertyImage(property)
+  ) {
     messages.push({
       kind: "property_listing",
       property,
@@ -146,6 +307,41 @@ export function buildCatalogOutboundMessages(
   });
 
   return messages;
+}
+
+function buildPropertyTextFallback(detailsText: string, listingUrl: string): string {
+  const parts = [detailsText.trim()];
+  const url = listingUrl.trim();
+
+  if (url && isValidOutboundUrl(url) && !detailsText.includes(url)) {
+    parts.push("", url);
+  }
+
+  return parts.filter(Boolean).join("\n");
+}
+
+function buildPlainPropertySummary(property: Property): string {
+  const location = property.neighborhood
+    ? `${property.neighborhood}, ${property.city}`
+    : property.city;
+  const listing = property.listing_url?.trim();
+
+  const lines = [`${property.title}`, location ? `📍 ${location}` : null];
+
+  if (listing && isValidOutboundUrl(listing)) {
+    lines.push(listing);
+  }
+
+  return lines.filter(Boolean).join("\n");
+}
+
+export function isValidOutboundUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === "https:" || parsed.protocol === "http:";
+  } catch {
+    return false;
+  }
 }
 
 function guessImageMimeType(url: string): string {
