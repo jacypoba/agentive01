@@ -10,6 +10,10 @@ import {
   createConversation,
   getConversationsByLead,
 } from "@/lib/data/conversations";
+import {
+  cancelFollowUpsOnClientReply,
+  scheduleAfterPropertyRecommendations,
+} from "@/lib/follow-ups/scheduler";
 import { findPropertyRecommendations } from "@/lib/properties/find-recommendations";
 import { analyzePropertyAvailability } from "@/lib/properties/property-availability";
 import {
@@ -92,6 +96,8 @@ export async function processClientMessageWithAI(
     message,
     sender: "client",
   });
+
+  await cancelFollowUpsOnClientReply(supabase, lead.id);
 
   const { lead: memoryLead, history } = await loadConversationMemory(
     supabase,
@@ -206,6 +212,15 @@ export async function processClientMessageWithAI(
     lead,
     fullHistory
   );
+
+  if (propertiesToRecommend.length > 0) {
+    await scheduleAfterPropertyRecommendations(
+      supabase,
+      updatedLead,
+      fullHistory,
+      propertiesToRecommend
+    );
+  }
 
   return {
     userMessage,

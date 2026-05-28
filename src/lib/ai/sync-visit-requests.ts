@@ -5,6 +5,7 @@ import {
   createVisitRequest,
   getPendingVisitRequestForLead,
 } from "@/lib/data/visit-requests";
+import { scheduleForPendingVisit } from "@/lib/follow-ups/scheduler";
 import { getLastShownPropertyId } from "@/lib/properties/property-cards";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Conversation, Database, Lead, VisitRequest } from "@/types/database";
@@ -71,6 +72,8 @@ export async function syncVisitRequestFromQualification(
       visitRequestId: visitRequest.id,
       requestedDatetimeText,
     });
+
+    await scheduleForPendingVisit(supabase, lead, history, visitRequest);
 
     return visitRequest;
   } catch (error) {

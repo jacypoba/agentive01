@@ -8,6 +8,76 @@ export type LeadStatus =
 
 export type ConversationSender = "client" | "ai" | "agent";
 
+export type FollowUpType =
+  | "property_recommended"
+  | "silent_lead"
+  | "visit_pending"
+  | "visit_completed"
+  | "new_match";
+
+export type FollowUpStatus = "pending" | "sent" | "failed" | "cancelled";
+
+export type FollowUpContextSnapshot = {
+  city?: string | null;
+  budget?: string | null;
+  property_type?: string | null;
+  lead_status?: string | null;
+  intent_status?: string | null;
+  shown_property_titles?: string[];
+  visit_status?: string | null;
+  property_title?: string | null;
+  new_property_title?: string | null;
+  client_name?: string | null;
+};
+
+export type FollowUp = {
+  id: string;
+  lead_id: string;
+  user_id: string;
+  type: FollowUpType;
+  status: FollowUpStatus;
+  scheduled_for: string;
+  sent_at: string | null;
+  message: string | null;
+  context_snapshot: FollowUpContextSnapshot | null;
+  created_at: string;
+};
+
+export type FollowUpInsert = {
+  id?: string;
+  lead_id: string;
+  user_id: string;
+  type: FollowUpType;
+  status?: FollowUpStatus;
+  scheduled_for: string;
+  sent_at?: string | null;
+  message?: string | null;
+  context_snapshot?: FollowUpContextSnapshot | null;
+  created_at?: string;
+};
+
+export type FollowUpWithLead = FollowUp & {
+  leads: Pick<
+    Lead,
+    | "id"
+    | "client_name"
+    | "phone"
+    | "phone_normalized"
+    | "status"
+    | "intent_status"
+    | "preferred_area"
+    | "property_type"
+    | "budget"
+    | "user_id"
+  >;
+};
+
+export type FollowUpBuckets = {
+  pending: FollowUpWithLead[];
+  sent: FollowUpWithLead[];
+  failed: FollowUpWithLead[];
+};
+
 export type Profile = {
   id: string;
   user_id: string;
@@ -317,6 +387,12 @@ export type Database = {
         Row: Property;
         Insert: PropertyInsert;
         Update: PropertyUpdate;
+        Relationships: [];
+      };
+      follow_ups: {
+        Row: FollowUp;
+        Insert: FollowUpInsert;
+        Update: Partial<FollowUpInsert> & { status?: FollowUpStatus };
         Relationships: [];
       };
     };

@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createProperty, deleteProperty, updateProperty } from "@/lib/data/properties";
+import { triggerFollowUpsForNewProperty } from "@/lib/follow-ups/triggers";
 import { createClient } from "@/lib/supabase/server";
 import type { PropertyUpdate } from "@/types/database";
 
@@ -98,10 +99,12 @@ export async function createPropertyAction(
   }
 
   try {
-    await createProperty(supabase, {
+    const property = await createProperty(supabase, {
       user_id: user.id,
       ...parsed.payload,
     });
+
+    await triggerFollowUpsForNewProperty(supabase, user.id, property);
   } catch (error) {
     return {
       error:

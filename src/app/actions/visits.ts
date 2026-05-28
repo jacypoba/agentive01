@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { getConversationsByLead } from "@/lib/data/conversations";
 import { getLeadById, updateLeadStatus } from "@/lib/data/leads";
 import {
   getCalendarSettingsFromProfile,
@@ -26,6 +27,7 @@ import {
   sendVisitConflictWhatsApp,
   sendVisitStatusWhatsApp,
 } from "@/lib/visits/whatsapp-notifications";
+import { scheduleForConfirmedVisit } from "@/lib/follow-ups/scheduler";
 import { createClient } from "@/lib/supabase/server";
 import type { VisitRequestStatus } from "@/types/database";
 
@@ -184,6 +186,17 @@ export async function updateVisitStatus(
       updated.requested_datetime_text,
       naturalWhen
     );
+
+    if (status === "confirmed") {
+      const history = await getConversationsByLead(supabase, lead.id);
+      await scheduleForConfirmedVisit(
+        supabase,
+        lead,
+        history,
+        updated,
+        parsedSlot?.start.toISOString() ?? null
+      );
+    }
 
     revalidatePath("/visits");
     revalidatePath("/dashboard");

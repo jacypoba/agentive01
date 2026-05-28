@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ConversationPanel } from "@/components/leads/conversation-panel";
+import { LeadFollowUpsPanel } from "@/components/leads/lead-follow-ups-panel";
 import { LeadQualificationSummary } from "@/components/leads/lead-qualification-summary";
 import { formatLeadDate, getStatusBadgeColor } from "@/lib/leads/status";
 import type { Conversation, Lead } from "@/types/database";
@@ -150,6 +151,10 @@ export function LeadDetailView({ lead, conversations }: LeadDetailViewProps) {
                   Qualificação AI
                 </h2>
                 <LeadQualificationSummary lead={lead} />
+              </div>
+
+              <div className="mt-6 border-t border-white/5 pt-6">
+                <LeadFollowUpsPanel leadId={lead.id} />
               </div>
             </div>
           </div>

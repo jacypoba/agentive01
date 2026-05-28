@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { CalendarVisitsPanel } from "@/components/dashboard/calendar-visits-panel";
 import { CreateTestLeadButton } from "@/components/dashboard/create-test-lead-button";
+import { FollowUpsPanel } from "@/components/dashboard/follow-ups-panel";
 import { WhatsAppLiveFeed } from "@/components/dashboard/whatsapp-live-feed";
 import { VisitRequestsPanel } from "@/components/visits/visit-requests-panel";
 import { createClient } from "@/lib/supabase/server";
@@ -245,6 +246,10 @@ export default async function DashboardPage() {
 
             {user && (
               <VisitRequestsPanel visits={dashboardData.recentVisitRequests} />
+            )}
+
+            {user && (
+              <FollowUpsPanel buckets={dashboardData.followUpBuckets} />
             )}
 
             {user && (

@@ -32,7 +32,9 @@ export function buildVisitConflictMessage(suggestedText: string): string {
   return `Esse horário já não dá 🙏 Consegues ${suggestedText}?`;
 }
 
-export function resolveLeadPhoneDigits(lead: Lead): string | null {
+export function resolveLeadPhoneDigits(
+  lead: Pick<Lead, "phone" | "phone_normalized">
+): string | null {
   if (lead.phone_normalized) {
     return lead.phone_normalized;
   }

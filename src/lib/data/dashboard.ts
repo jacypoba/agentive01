@@ -10,11 +10,13 @@ import {
   getCalendarVisitBuckets,
   getRecentVisitRequests,
 } from "@/lib/data/visit-requests";
+import { getFollowUpBuckets } from "@/lib/data/follow-ups";
 import { getStatusBadgeColor } from "@/lib/leads/status";
 import type {
   CalendarVisitBuckets,
   DashboardStats,
   Database,
+  FollowUpBuckets,
   Lead,
   Profile,
   RecentActivity,
@@ -29,6 +31,7 @@ export type DashboardData = {
   recentActivity: RecentActivity[];
   recentVisitRequests: VisitRequestWithLead[];
   calendarBuckets: CalendarVisitBuckets;
+  followUpBuckets: FollowUpBuckets;
 };
 
 function formatActivityDescription(
@@ -117,6 +120,7 @@ export async function getDashboardData(
     leads,
     recentVisitRequests,
     calendarBuckets,
+    followUpBuckets,
   ] = await Promise.all([
     getProfile(supabase, userId),
     countLeads(supabase, userId),
@@ -128,6 +132,7 @@ export async function getDashboardData(
     getRecentLeads(supabase, userId, 5),
     getRecentVisitRequests(supabase, userId, 5),
     getCalendarVisitBuckets(supabase, userId),
+    getFollowUpBuckets(supabase, userId),
   ]);
 
   return {
@@ -145,6 +150,7 @@ export async function getDashboardData(
     ),
     recentVisitRequests,
     calendarBuckets,
+    followUpBuckets,
   };
 }
 
