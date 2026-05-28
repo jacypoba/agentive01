@@ -1,6 +1,6 @@
 import type Stripe from "stripe";
 import { upsertSubscriptionFromStripe } from "@/lib/billing/subscriptions";
-import { getPlanByPriceId } from "@/lib/stripe/plans";
+import { getPlanByPriceId } from "@/lib/stripe/plan-prices.server";
 import type { PlanName, SubscriptionStatus } from "@/types/database";
 
 function mapStripeStatus(status: Stripe.Subscription.Status): SubscriptionStatus {

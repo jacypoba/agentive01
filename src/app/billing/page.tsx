@@ -2,7 +2,8 @@ import type { Metadata } from "next";
 import { BillingPlans } from "@/components/billing/billing-plans";
 import { BillingStatus } from "@/components/billing/billing-status";
 import { getCurrentSubscription } from "@/lib/billing/get-current-subscription";
-import { isStripeTestMode, PLAN_LIST } from "@/lib/stripe";
+import { isStripeTestMode } from "@/lib/stripe";
+import { areAllStripePricesConfigured } from "@/lib/stripe/plan-prices.server";
 import { getCurrentWorkspaceId } from "@/lib/workspaces/get-current-workspace";
 import { createClient } from "@/lib/supabase/server";
 
@@ -45,8 +46,9 @@ export default async function BillingPage({ searchParams }: BillingPageProps) {
     }
   }
 
-  const stripeConfigured = Boolean(process.env.STRIPE_SECRET_KEY);
-  const pricesConfigured = PLAN_LIST.every((plan) => Boolean(plan.stripePriceId));
+  const stripeConfigured = Boolean(process.env.STRIPE_SECRET_KEY?.trim());
+  const pricesConfigured = areAllStripePricesConfigured();
+  const checkoutEnabled = stripeConfigured && pricesConfigured;
 
   return (
     <main className="px-6 pb-16 lg:px-8">
@@ -128,7 +130,7 @@ export default async function BillingPage({ searchParams }: BillingPageProps) {
           </h2>
           <BillingPlans
             currentPlanId={subscription?.plan_name ?? "starter"}
-            stripeConfigured={stripeConfigured && pricesConfigured}
+            checkoutEnabled={checkoutEnabled}
           />
         </section>
       </div>

@@ -1,12 +1,12 @@
 export type PlanId = "starter" | "pro" | "enterprise";
 
+/** Client-safe plan metadata (no Stripe secrets or server env vars). */
 export type PlanDefinition = {
   id: PlanId;
   name: string;
   description: string;
   priceMonthly: number;
   currency: "eur" | "usd";
-  stripePriceId: string | null;
   features: string[];
   highlighted?: boolean;
 };
@@ -15,7 +15,6 @@ const DEFAULT_TRIAL_DAYS = 14;
 
 export const TRIAL_DAYS = DEFAULT_TRIAL_DAYS;
 
-/** Plan catalog — map STRIPE_PRICE_* env vars to Stripe test-mode price IDs. */
 export const PLANS: Record<PlanId, PlanDefinition> = {
   starter: {
     id: "starter",
@@ -23,7 +22,6 @@ export const PLANS: Record<PlanId, PlanDefinition> = {
     description: "For solo agents getting started with AI lead qualification.",
     priceMonthly: 49,
     currency: "eur",
-    stripePriceId: process.env.STRIPE_PRICE_STARTER ?? null,
     features: [
       "1 workspace",
       "WhatsApp AI assistant",
@@ -37,7 +35,6 @@ export const PLANS: Record<PlanId, PlanDefinition> = {
     description: "For growing agencies that need automation at scale.",
     priceMonthly: 99,
     currency: "eur",
-    stripePriceId: process.env.STRIPE_PRICE_PRO ?? null,
     highlighted: true,
     features: [
       "Everything in Starter",
@@ -53,7 +50,6 @@ export const PLANS: Record<PlanId, PlanDefinition> = {
     description: "For teams with advanced workflows and custom needs.",
     priceMonthly: 249,
     currency: "eur",
-    stripePriceId: process.env.STRIPE_PRICE_ENTERPRISE ?? null,
     features: [
       "Everything in Pro",
       "Multi-workspace ready",
@@ -72,16 +68,6 @@ export function getPlanById(planId: string | null | undefined): PlanDefinition {
   }
 
   return PLANS.starter;
-}
-
-export function getPlanByPriceId(
-  priceId: string | null | undefined
-): PlanDefinition | null {
-  if (!priceId) {
-    return null;
-  }
-
-  return PLAN_LIST.find((plan) => plan.stripePriceId === priceId) ?? null;
 }
 
 export function formatPlanPrice(plan: PlanDefinition): string {

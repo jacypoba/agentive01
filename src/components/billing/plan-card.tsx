@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import type { PlanDefinition } from "@/lib/stripe/plans";
 
 type PlanCardProps = {
@@ -8,6 +7,7 @@ type PlanCardProps = {
   priceLabel: string;
   isCurrent: boolean;
   isUpgrade: boolean;
+  loading?: boolean;
   disabled?: boolean;
   onSelect: (planId: PlanDefinition["id"]) => Promise<void>;
 };
@@ -17,22 +17,16 @@ export function PlanCard({
   priceLabel,
   isCurrent,
   isUpgrade,
+  loading = false,
   disabled,
   onSelect,
 }: PlanCardProps) {
-  const [loading, setLoading] = useState(false);
-
   async function handleClick() {
     if (isCurrent || disabled || loading) {
       return;
     }
 
-    setLoading(true);
-    try {
-      await onSelect(plan.id);
-    } finally {
-      setLoading(false);
-    }
+    await onSelect(plan.id);
   }
 
   return (

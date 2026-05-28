@@ -2,11 +2,17 @@ import { NextResponse } from "next/server";
 import { getOrCreateStripeCustomer } from "@/lib/stripe/get-or-create-customer";
 import { getAppUrl } from "@/lib/stripe/app-url";
 import { getStripe } from "@/lib/stripe/client";
+import {
+  getStripeEnvDiagnostics,
+  getStripePriceId,
+} from "@/lib/stripe/plan-prices.server";
 import { getPlanById, type PlanId } from "@/lib/stripe/plans";
 import { getCurrentWorkspaceId } from "@/lib/workspaces/get-current-workspace";
 import { createClient } from "@/lib/supabase/server";
 
 export async function POST(request: Request) {
+  let planId: PlanId = "starter";
+
   try {
     const supabase = await createClient();
     const {
@@ -14,17 +20,29 @@ export async function POST(request: Request) {
     } = await supabase.auth.getUser();
 
     if (!user) {
+      console.log("[Stripe checkout] unauthorized");
       return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
     }
 
     const body = (await request.json()) as { planId?: PlanId };
-    const planId = body.planId ?? "starter";
+    planId = body.planId ?? "starter";
     const plan = getPlanById(planId);
+    const stripePriceId = getStripePriceId(planId);
+    const envDiagnostics = getStripeEnvDiagnostics();
 
-    if (!plan.stripePriceId) {
+    console.log("[Stripe checkout]", {
+      userId: user.id,
+      selectedPlan: planId,
+      priceIdExists: Boolean(stripePriceId),
+      workspaceId: null as string | null,
+      sessionUrlExists: false,
+      env: envDiagnostics,
+    });
+
+    if (!stripePriceId) {
       return NextResponse.json(
         {
-          error: `Stripe price not configured for ${plan.name}. Set STRIPE_PRICE_${planId.toUpperCase()}.`,
+          error: `Stripe price not configured for ${plan.name}. Set ${PRICE_ENV_LABEL[planId]}.`,
         },
         { status: 503 }
       );
@@ -32,6 +50,7 @@ export async function POST(request: Request) {
 
     const workspaceId = await getCurrentWorkspaceId(supabase, user.id);
     if (!workspaceId) {
+      console.log("[Stripe checkout] no workspace", { userId: user.id, planId });
       return NextResponse.json(
         { error: "No workspace found for this account." },
         { status: 400 }
@@ -51,7 +70,7 @@ export async function POST(request: Request) {
     const session = await stripe.checkout.sessions.create({
       mode: "subscription",
       customer: customerId,
-      line_items: [{ price: plan.stripePriceId, quantity: 1 }],
+      line_items: [{ price: stripePriceId, quantity: 1 }],
       success_url: `${appUrl}/billing?success=1`,
       cancel_url: `${appUrl}/billing?canceled=1`,
       allow_promotion_codes: true,
@@ -69,6 +88,15 @@ export async function POST(request: Request) {
       },
     });
 
+    console.log("[Stripe checkout]", {
+      userId: user.id,
+      selectedPlan: planId,
+      priceIdExists: true,
+      workspaceId,
+      sessionUrlExists: Boolean(session.url),
+      sessionId: session.id,
+    });
+
     if (!session.url) {
       return NextResponse.json(
         { error: "Stripe did not return a checkout URL." },
@@ -78,7 +106,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ url: session.url });
   } catch (error) {
-    console.error("[Stripe checkout]", error);
+    console.error("[Stripe checkout] failed", { planId, error });
     return NextResponse.json(
       {
         error:
@@ -90,3 +118,9 @@ export async function POST(request: Request) {
     );
   }
 }
+
+const PRICE_ENV_LABEL: Record<PlanId, string> = {
+  starter: "STRIPE_PRICE_STARTER",
+  pro: "STRIPE_PRICE_PRO",
+  enterprise: "STRIPE_PRICE_ENTERPRISE",
+};

@@ -3,7 +3,6 @@ export { getStripe, isStripeTestMode } from "@/lib/stripe/client";
 export {
   formatPlanPrice,
   getPlanById,
-  getPlanByPriceId,
   PLAN_LIST,
   PLANS,
   TRIAL_DAYS,

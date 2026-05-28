@@ -12,16 +12,17 @@ import {
 
 type BillingPlansProps = {
   currentPlanId: PlanId;
-  stripeConfigured: boolean;
+  checkoutEnabled: boolean;
 };
 
 export function BillingPlans({
   currentPlanId,
-  stripeConfigured,
+  checkoutEnabled,
 }: BillingPlansProps) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [portalLoading, setPortalLoading] = useState(false);
+  const [loadingPlanId, setLoadingPlanId] = useState<PlanId | null>(null);
 
   const planRank: Record<PlanId, number> = {
     starter: 1,
@@ -30,38 +31,87 @@ export function BillingPlans({
   };
 
   async function startCheckout(planId: PlanId) {
-    setError(null);
-
-    const response = await fetch("/api/stripe/checkout", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ planId }),
-    });
-
-    const payload = (await response.json()) as { url?: string; error?: string };
-
-    if (!response.ok || !payload.url) {
-      setError(payload.error ?? "Could not start checkout.");
+    if (!checkoutEnabled) {
+      setError(
+        "Checkout is not configured. Add Stripe keys and price IDs in your environment."
+      );
       return;
     }
 
-    window.location.href = payload.url;
+    setError(null);
+    setLoadingPlanId(planId);
+
+    try {
+      const response = await fetch("/api/stripe/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ planId }),
+      });
+
+      let payload: { url?: string; error?: string } = {};
+      try {
+        payload = (await response.json()) as { url?: string; error?: string };
+      } catch {
+        payload = {};
+      }
+
+      if (!response.ok) {
+        setError(
+          payload.error ??
+            `Checkout failed (${response.status}). Check server logs for details.`
+        );
+        return;
+      }
+
+      if (!payload.url) {
+        setError("Stripe did not return a checkout URL.");
+        return;
+      }
+
+      window.location.assign(payload.url);
+    } catch (fetchError) {
+      setError(
+        fetchError instanceof Error
+          ? fetchError.message
+          : "Network error while starting checkout."
+      );
+    } finally {
+      setLoadingPlanId(null);
+    }
   }
 
   async function openPortal() {
+    if (!checkoutEnabled) {
+      setError(
+        "Billing portal is not configured. Add Stripe keys in your environment."
+      );
+      return;
+    }
+
     setError(null);
     setPortalLoading(true);
 
     try {
       const response = await fetch("/api/stripe/portal", { method: "POST" });
-      const payload = (await response.json()) as { url?: string; error?: string };
+      let payload: { url?: string; error?: string } = {};
+      try {
+        payload = (await response.json()) as { url?: string; error?: string };
+      } catch {
+        payload = {};
+      }
 
       if (!response.ok || !payload.url) {
         setError(payload.error ?? "Could not open billing portal.");
         return;
       }
 
-      window.location.href = payload.url;
+      window.location.assign(payload.url);
+    } catch (fetchError) {
+      setError(
+        fetchError instanceof Error
+          ? fetchError.message
+          : "Network error while opening billing portal."
+      );
     } finally {
       setPortalLoading(false);
     }
@@ -77,8 +127,8 @@ export function BillingPlans({
         <button
           type="button"
           onClick={openPortal}
-          disabled={portalLoading || !stripeConfigured}
-          className="shrink-0 rounded-full border border-white/15 bg-white/5 px-4 py-2 text-sm font-medium text-white transition-all hover:border-white/25 hover:bg-white/10 disabled:opacity-50"
+          disabled={portalLoading || !checkoutEnabled}
+          className="shrink-0 rounded-full border border-white/15 bg-white/5 px-4 py-2 text-sm font-medium text-white transition-all hover:border-white/25 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {portalLoading ? "Opening…" : "Manage billing"}
         </button>
@@ -105,7 +155,8 @@ export function BillingPlans({
               priceLabel={formatPlanPrice(plan)}
               isCurrent={isCurrent}
               isUpgrade={isUpgrade}
-              disabled={!stripeConfigured || !plan.stripePriceId}
+              loading={loadingPlanId === plan.id}
+              disabled={!checkoutEnabled}
               onSelect={startCheckout}
             />
           );
