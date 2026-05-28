@@ -1,7 +1,7 @@
 import type { Conversation } from "@/types/database";
+import { resolveConversationLanguage } from "@/lib/i18n/resolve-language";
 import {
   DEFAULT_LANGUAGE,
-  isSupportedLanguage,
   type SupportedLanguage,
 } from "@/lib/i18n/types";
 
@@ -9,17 +9,17 @@ type LanguageScore = Record<SupportedLanguage, number>;
 
 const STRONG_LANGUAGE_PATTERNS: Record<SupportedLanguage, RegExp[]> = {
   pt: [
-    /\b(obrigad[oa]|obg|olá|ola|procuro|procurar|quais|está bem|tudo bem|imóvel|imoveis|orçamento|orcamento|amanhã|manhã|mostra opções|mostra novamente)\b/i,
+    /\b(obrigad[oa]|obg|olá|ola|procuro|procurar|quais|está bem|tudo bem|imóvel|imoveis|orçamento|orcamento|amanhã|manhã|mostra opções|mostra novamente|perfeito|perfeita|ficou|marcado|marcada|segunda-feira|segunda feira)\b/i,
     /[ãõç]/i,
   ],
   en: [
     /\b(thank|thanks|hello|hi\b|hey\b|looking for|please|viewing|schedule|bedroom|property|tomorrow|which|show me|show options|what you have|any options)\b/i,
   ],
   it: [
-    /\b(grazie|ciao|buongiorno|buonasera|cerco|cercare|voglio|domani|quale|mattina|pomeriggio|fino a|mostrami|fammi vedere|fami vedere)\b/i,
+    /\b(grazie|ciao|buongiorno|buonasera|cerco|cercare|voglio|domani|quale|mattina|pomeriggio|fino a|mostrami|fammi vedere|fami vedere|perfetto)\b/i,
   ],
   es: [
-    /\b(gracias|hola|buenos días|buenas tardes|busco|buscar|quiero|mañana|manana|cuál|cual|presupuesto|hasta|habitacion|habitación|qué opciones|que opciones|muéstrame|muestrame)\b/i,
+    /\b(gracias|hola|buenos días|buenas tardes|busco|buscar|quiero|mañana|manana|cuál|cual|presupuesto|hasta|habitacion|habitación|qué opciones|que opciones|muéstrame|muestrame|perfecto|agendada|quedó|quedo)\b/i,
     /[ñ¿¡]/i,
   ],
 };
@@ -77,25 +77,53 @@ function pickHighestScore(scores: LanguageScore): SupportedLanguage {
   return bestScore > 0 ? best : DEFAULT_LANGUAGE;
 }
 
+export type LanguageDetectionResult = {
+  language: SupportedLanguage;
+  confident: boolean;
+  scores: LanguageScore;
+};
+
+export function detectLanguageWithConfidence(
+  text: string,
+  fallback: SupportedLanguage = DEFAULT_LANGUAGE
+): LanguageDetectionResult {
+  const trimmed = text.trim();
+  if (!trimmed) {
+    return {
+      language: fallback,
+      confident: false,
+      scores: emptyScores(),
+    };
+  }
+
+  const scores = scoreText(trimmed);
+  const ranked = (["pt", "en", "it", "es"] as SupportedLanguage[])
+    .map((language) => ({ language, score: scores[language] }))
+    .sort((a, b) => b.score - a.score);
+
+  const top = ranked[0]!;
+  const second = ranked[1]!;
+
+  if (top.score === 0) {
+    return { language: fallback, confident: false, scores };
+  }
+
+  const confident =
+    top.score >= 3 || (top.score >= 2 && top.score - second.score >= 2);
+
+  return {
+    language: top.score > 0 ? top.language : fallback,
+    confident,
+    scores,
+  };
+}
+
 /** Detect language from a single message using deterministic heuristics. */
 export function detectLanguageFromText(
   text: string,
   fallback: SupportedLanguage = DEFAULT_LANGUAGE
 ): SupportedLanguage {
-  const trimmed = text.trim();
-  if (!trimmed) {
-    return fallback;
-  }
-
-  const scores = scoreText(trimmed);
-  const detected = pickHighestScore(scores);
-  return detected === DEFAULT_LANGUAGE && bestScoreFrom(scores) === 0
-    ? fallback
-    : detected;
-}
-
-function bestScoreFrom(scores: LanguageScore): number {
-  return Math.max(scores.pt, scores.en, scores.it, scores.es);
+  return detectLanguageWithConfidence(text, fallback).language;
 }
 
 /** Prefer the latest client message only — do not blend older history. */
@@ -122,20 +150,10 @@ export function detectLanguageFromHistory(
 export function resolveLeadLanguage(
   leadPreferred: string | null | undefined,
   latestMessage: string,
-  history: Conversation[]
+  _history: Conversation[]
 ): SupportedLanguage {
-  const stored = isSupportedLanguage(leadPreferred)
-    ? leadPreferred
-    : DEFAULT_LANGUAGE;
-
-  const detected = detectLanguageFromHistory(history, latestMessage, stored);
-
-  if (detected !== stored && latestMessage.trim().length >= 3) {
-    const latestOnly = detectLanguageFromText(latestMessage, stored);
-    if (latestOnly !== stored) {
-      return latestOnly;
-    }
-  }
-
-  return detected;
+  return resolveConversationLanguage({
+    latestMessage,
+    leadPreferred,
+  });
 }

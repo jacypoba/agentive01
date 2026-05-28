@@ -247,6 +247,13 @@ export const VISIT_CANCELLED: Record<
     `Ese horario${slot} ya no funciona 🙏 ¿Tienes otra fecha que te venga bien?`,
 };
 
+export const VISIT_CONFLICT_FALLBACK_SLOT: Record<SupportedLanguage, string> = {
+  pt: "outro horário na mesma semana",
+  en: "another time the same week",
+  it: "un altro orario nella stessa settimana",
+  es: "otro horario en la misma semana",
+};
+
 export const VISIT_CONFLICT: Record<SupportedLanguage, (suggested: string) => string> = {
   pt: (suggested) => `Esse horário já não dá 🙏 Consegues ${suggested}?`,
   en: (suggested) => `That slot is taken 🙏 Could you do ${suggested}?`,
@@ -513,10 +520,10 @@ export function getNoMatchLine(
 }
 
 export const AI_LANGUAGE_INSTRUCTION: Record<SupportedLanguage, string> = {
-  pt: "Responda SEMPRE em português de Portugal. Tom natural de consultor imobiliário premium. Nunca misture idiomas na mesma mensagem.",
-  en: "ALWAYS reply in English. Natural premium real estate consultant tone. Never mix languages in the same message.",
-  it: "Rispondi SEMPRE in italiano. Tono naturale da consulente immobiliare premium. Non mescolare mai le lingue nello stesso messaggio.",
-  es: "Responde SIEMPRE en español. Tono natural de consultor inmobiliario premium. Nunca mezcles idiomas en el mismo mensaje.",
+  pt: "Responda SEMPRE em português de Portugal — 100% da mensagem, sem exceções. Tom natural de consultor imobiliário premium. PROIBIDO misturar espanhol, italiano ou inglês. Nunca use palavras como perfecto, gracias, thanks, ciao ou grazie.",
+  en: "ALWAYS reply in English — the entire message, no exceptions. Natural premium real estate consultant tone. NEVER mix Portuguese, Spanish, or Italian. Do not use words like perfeito, gracias, ciao, or obrigado.",
+  it: "Rispondi SEMPRE in italiano — l'intero messaggio, senza eccezioni. Tono naturale da consulente immobiliare premium. VIETATO mescolare portoghese, spagnolo o inglese. Non usare parole come perfecto, gracias, thanks o obrigado.",
+  es: "Responde SIEMPRE en español — todo el mensaje, sin excepciones. Tono natural de consultor inmobiliario premium. PROHIBIDO mezclar portugués, italiano o inglés. No uses palabras como perfeito, obrigado, thanks o ciao.",
 };
 
 export const LEAD_CONTEXT_LABELS: Record<

@@ -12,6 +12,7 @@ import {
   getClosingMarkers,
   getClosingReplies,
 } from "@/lib/i18n/messages";
+import { enforceReplyLanguage } from "@/lib/i18n/language-purity";
 import { getLeadLanguage } from "@/lib/i18n/sync-language";
 import type { SupportedLanguage } from "@/lib/i18n/types";
 
@@ -24,9 +25,11 @@ export function alreadySentClosingRecently(
   return recent.some((text) => markers.some((marker) => text.includes(marker)));
 }
 
-export function buildClosingReply(lead: Lead, history: Conversation[]): string | null {
-  const language = getLeadLanguage(lead);
-
+export function buildClosingReply(
+  lead: Lead,
+  history: Conversation[],
+  language: SupportedLanguage = getLeadLanguage(lead)
+): string | null {
   if (alreadySentClosingRecently(history, language)) {
     return null;
   }
@@ -109,7 +112,15 @@ export function sanitizeGuardedReply(
     return null;
   }
 
-  return trimmed;
+  const { text: pureText, adjusted } = enforceReplyLanguage(trimmed, context.language);
+  if (adjusted) {
+    console.log("[WhatsApp guardrails] Replaced mixed-language reply", {
+      language: context.language,
+      preview: trimmed.slice(0, 80),
+    });
+  }
+
+  return pureText;
 }
 
 export function logIntentDecision(

@@ -7,7 +7,9 @@ import {
   getRecentClientContextHeader,
   getRecentClientContextLabel,
 } from "@/lib/i18n/messages";
+import { enforceReplyLanguage } from "@/lib/i18n/language-purity";
 import { getLeadLanguage } from "@/lib/i18n/sync-language";
+import type { SupportedLanguage } from "@/lib/i18n/types";
 import {
   buildCatalogComparisonContext,
   buildHeuristicCatalogComparison,
@@ -56,13 +58,14 @@ function buildRecentClientContext(
 export async function generateCatalogComparison(
   lead: Lead,
   history: Conversation[],
-  properties: Property[]
+  properties: Property[],
+  languageOverride?: SupportedLanguage
 ): Promise<string | null> {
   if (properties.length < CATALOG_MIN) {
     return null;
   }
 
-  const language = getLeadLanguage(lead);
+  const language = languageOverride ?? getLeadLanguage(lead);
   const preferences = extractClientPreferences(lead, history);
   const listingContext = buildCatalogComparisonContext(
     properties,
@@ -104,7 +107,9 @@ export async function generateCatalogComparison(
 
     const reply = completion.choices[0]?.message?.content?.trim();
     if (reply && reply.length > 10) {
-      return sanitizeComparison(dedupeAiReply(reply, history));
+      const sanitized = sanitizeComparison(dedupeAiReply(reply, history));
+      const { text } = enforceReplyLanguage(sanitized, language);
+      return text;
     }
   } catch (error) {
     console.warn("[Catalog comparison] AI generation failed, using heuristic", {
@@ -118,7 +123,11 @@ export async function generateCatalogComparison(
     language
   );
   const sanitized = fallback.trim() ? sanitizeComparison(fallback) : null;
-  return sanitized ? dedupeAiReply(sanitized, history) : null;
+  if (!sanitized) {
+    return null;
+  }
+  const deduped = dedupeAiReply(sanitized, history);
+  return enforceReplyLanguage(deduped, language).text;
 }
 
 function sanitizeComparison(text: string): string {

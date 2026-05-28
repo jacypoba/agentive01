@@ -6,6 +6,8 @@ import {
   isWithinWorkingHours,
   type ParsedVisitSlot,
 } from "@/lib/visits/parse-datetime";
+import { VISIT_CONFLICT_FALLBACK_SLOT } from "@/lib/i18n/messages";
+import { normalizeLanguage, type SupportedLanguage } from "@/lib/i18n/types";
 import type { Lead, Profile, VisitRequestWithLead } from "@/types/database";
 
 export type CalendarConflictResult =
@@ -46,7 +48,8 @@ export async function isCalendarSlotAvailable(
 export async function findNextAvailableSlot(
   profile: Profile,
   fromSlot: ParsedVisitSlot,
-  maxDays = 14
+  maxDays = 14,
+  language: SupportedLanguage = "pt"
 ): Promise<ParsedVisitSlot | null> {
   const duration = getDurationMinutes(profile);
   const workStart = profile.calendar_work_start ?? "09:00";
@@ -60,11 +63,14 @@ export async function findNextAvailableSlot(
     const candidate: ParsedVisitSlot = {
       start: candidateStart,
       end: candidateEnd,
-      displayText: formatSuggestedSlot({
-        start: candidateStart,
-        end: candidateEnd,
-        displayText: "",
-      }),
+      displayText: formatSuggestedSlot(
+        {
+          start: candidateStart,
+          end: candidateEnd,
+          displayText: "",
+        },
+        language
+      ),
     };
 
     if (
@@ -82,26 +88,27 @@ export async function findNextAvailableSlot(
 
 export async function checkVisitSlotConflict(
   profile: Profile,
-  slot: ParsedVisitSlot
+  slot: ParsedVisitSlot,
+  language: SupportedLanguage = "pt"
 ): Promise<CalendarConflictResult> {
   const available = await isCalendarSlotAvailable(profile, slot);
   if (available) {
     return { available: true };
   }
 
-  const suggestedSlot = await findNextAvailableSlot(profile, slot);
+  const suggestedSlot = await findNextAvailableSlot(profile, slot, 14, language);
   if (!suggestedSlot) {
     return {
       available: false,
       suggestedSlot: slot,
-      suggestedText: "outro horário na mesma semana",
+      suggestedText: VISIT_CONFLICT_FALLBACK_SLOT[language],
     };
   }
 
   return {
     available: false,
     suggestedSlot,
-    suggestedText: formatSuggestedSlot(suggestedSlot),
+    suggestedText: formatSuggestedSlot(suggestedSlot, language),
   };
 }
 

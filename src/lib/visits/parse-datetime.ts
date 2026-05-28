@@ -1,3 +1,5 @@
+import { getLanguageLocale, type SupportedLanguage } from "@/lib/i18n/types";
+
 const WEEKDAYS_PT: Record<string, number> = {
   domingo: 0,
   segunda: 1,
@@ -47,21 +49,30 @@ function applyTime(date: Date, hours: number, minutes: number): Date {
   return result;
 }
 
-function formatDisplayText(date: Date): string {
-  const weekday = date.toLocaleDateString("pt-PT", { weekday: "long" });
+const TIME_CONNECTORS: Record<SupportedLanguage, string> = {
+  pt: "às",
+  en: "at",
+  it: "alle",
+  es: "a las",
+};
+
+function formatDisplayText(date: Date, language: SupportedLanguage = "pt"): string {
+  const locale = getLanguageLocale(language);
+  const weekday = date.toLocaleDateString(locale, { weekday: "long" });
   const hours = date.getHours();
   const minutes = date.getMinutes();
   const time =
     minutes === 0
       ? `${hours}h`
       : `${hours}:${String(minutes).padStart(2, "0")}`;
-  return `${weekday} às ${time}`;
+  return `${weekday} ${TIME_CONNECTORS[language]} ${time}`;
 }
 
 export function parseRequestedVisitDatetime(
   text: string | null | undefined,
   durationMinutes: number,
-  referenceDate = new Date()
+  referenceDate = new Date(),
+  language: SupportedLanguage = "pt"
 ): ParsedVisitSlot | null {
   if (!text?.trim()) return null;
 
@@ -75,7 +86,7 @@ export function parseRequestedVisitDatetime(
     const start = new Date(isoMatch[0].replace(" ", "T"));
     if (!Number.isNaN(start.getTime())) {
       const end = new Date(start.getTime() + durationMinutes * 60_000);
-      return { start, end, displayText: formatDisplayText(start) };
+      return { start, end, displayText: formatDisplayText(start, language) };
     }
   }
 
@@ -139,12 +150,22 @@ export function parseRequestedVisitDatetime(
   return {
     start,
     end,
-    displayText: formatDisplayText(start),
+    displayText: formatDisplayText(start, language),
   };
 }
 
-export function formatSlotForWhatsApp(slot: ParsedVisitSlot): string {
-  return slot.displayText;
+export function formatSlotForWhatsApp(
+  slot: ParsedVisitSlot,
+  language: SupportedLanguage = "pt"
+): string {
+  return formatDisplayText(slot.start, language);
+}
+
+export function formatSuggestedSlot(
+  slot: ParsedVisitSlot,
+  language: SupportedLanguage = "pt"
+): string {
+  return formatDisplayText(slot.start, language);
 }
 
 function parseTimeToMinutes(value: string): number {
@@ -166,8 +187,4 @@ export function isWithinWorkingHours(
 
 export function addMinutes(date: Date, minutes: number): Date {
   return new Date(date.getTime() + minutes * 60_000);
-}
-
-export function formatSuggestedSlot(slot: ParsedVisitSlot): string {
-  return formatDisplayText(slot.start);
 }

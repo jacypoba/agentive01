@@ -28,6 +28,7 @@ import {
   sendVisitStatusWhatsApp,
 } from "@/lib/visits/whatsapp-notifications";
 import { scheduleForConfirmedVisit } from "@/lib/follow-ups/scheduler";
+import { normalizeLanguage } from "@/lib/i18n/types";
 import { createClient } from "@/lib/supabase/server";
 import type { VisitRequestStatus } from "@/types/database";
 
@@ -77,9 +78,14 @@ export async function updateVisitStatus(
     const googleConnected =
       isGoogleCalendarConfigured() && isGoogleCalendarConnected(profile);
 
+    const lead = await getLeadById(supabase, user.id, existing.lead_id);
+    const leadLanguage = normalizeLanguage(lead?.preferred_language);
+
     const parsedSlot = parseRequestedVisitDatetime(
       existing.requested_datetime_text,
-      calendarSettings.visitDurationMinutes
+      calendarSettings.visitDurationMinutes,
+      new Date(),
+      leadLanguage
     );
     const naturalWhen = parsedSlot?.displayText ?? null;
 
@@ -103,9 +109,12 @@ export async function updateVisitStatus(
         };
       }
 
-      const conflict = await checkVisitSlotConflict(profile, parsedSlot);
+      const conflict = await checkVisitSlotConflict(
+        profile,
+        parsedSlot,
+        leadLanguage
+      );
       if (!conflict.available) {
-        const lead = await getLeadById(supabase, user.id, existing.lead_id);
         if (lead) {
           await sendVisitConflictWhatsApp(
             supabase,
@@ -125,7 +134,6 @@ export async function updateVisitStatus(
     let googleEventId: string | null = null;
 
     if (status === "confirmed" && googleConnected && profile && parsedSlot) {
-      const lead = await getLeadById(supabase, user.id, existing.lead_id);
       if (!lead) {
         return { error: "Lead not found for calendar event." };
       }
@@ -166,8 +174,9 @@ export async function updateVisitStatus(
       );
     }
 
-    const lead = await getLeadById(supabase, user.id, updated.lead_id);
-    if (!lead) {
+    const leadForWhatsApp =
+      (await getLeadById(supabase, user.id, updated.lead_id)) ?? lead;
+    if (!leadForWhatsApp) {
       revalidatePath("/visits");
       revalidatePath("/dashboard");
       revalidatePath("/settings/calendar");
@@ -181,17 +190,17 @@ export async function updateVisitStatus(
 
     const whatsapp = await sendVisitStatusWhatsApp(
       supabase,
-      lead,
+      leadForWhatsApp,
       status,
       updated.requested_datetime_text,
       naturalWhen
     );
 
     if (status === "confirmed") {
-      const history = await getConversationsByLead(supabase, lead.id);
+      const history = await getConversationsByLead(supabase, leadForWhatsApp.id);
       await scheduleForConfirmedVisit(
         supabase,
-        lead,
+        leadForWhatsApp,
         history,
         updated,
         parsedSlot?.start.toISOString() ?? null

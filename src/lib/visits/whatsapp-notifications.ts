@@ -7,40 +7,51 @@ import {
   VISIT_CONFLICT,
 } from "@/lib/i18n/messages";
 import { getLeadLanguage } from "@/lib/i18n/sync-language";
+import type { SupportedLanguage } from "@/lib/i18n/types";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, Lead, VisitRequestStatus } from "@/types/database";
 
 type Client = SupabaseClient<Database>;
 
+function resolveOutboundLanguage(
+  lead: Pick<Lead, "preferred_language">,
+  language?: SupportedLanguage
+): SupportedLanguage {
+  return language ?? getLeadLanguage(lead);
+}
+
 export function buildVisitConfirmedMessage(
   lead: Pick<Lead, "preferred_language">,
   requestedDatetimeText: string | null,
-  naturalWhen?: string | null
+  naturalWhen?: string | null,
+  language?: SupportedLanguage
 ): string {
-  const language = getLeadLanguage(lead);
+  const resolvedLanguage = resolveOutboundLanguage(lead, language);
   const when = naturalWhen?.trim() || requestedDatetimeText?.trim();
   if (when) {
-    return VISIT_CONFIRMED[language].withWhen(when);
+    return VISIT_CONFIRMED[resolvedLanguage].withWhen(when);
   }
-  return VISIT_CONFIRMED[language].generic;
+  return VISIT_CONFIRMED[resolvedLanguage].generic;
 }
 
 export function buildVisitCancelledMessage(
   lead: Pick<Lead, "preferred_language">,
-  requestedDatetimeText: string | null
+  requestedDatetimeText: string | null,
+  language?: SupportedLanguage
 ): string {
-  const language = getLeadLanguage(lead);
+  const resolvedLanguage = resolveOutboundLanguage(lead, language);
   const slotClause = requestedDatetimeText
     ? ` ${requestedDatetimeText}`
     : "";
-  return VISIT_CANCELLED[language](slotClause);
+  return VISIT_CANCELLED[resolvedLanguage](slotClause);
 }
 
 export function buildVisitConflictMessage(
   lead: Pick<Lead, "preferred_language">,
-  suggestedText: string
+  suggestedText: string,
+  language?: SupportedLanguage
 ): string {
-  return VISIT_CONFLICT[getLeadLanguage(lead)](suggestedText);
+  return VISIT_CONFLICT[resolveOutboundLanguage(lead, language)](suggestedText);
 }
 
 export function resolveLeadPhoneDigits(

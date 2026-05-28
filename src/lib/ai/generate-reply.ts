@@ -8,6 +8,7 @@ import {
   AI_LANGUAGE_INSTRUCTION,
   LEAD_CONTEXT_LABELS,
 } from "@/lib/i18n/messages";
+import { enforceReplyLanguage } from "@/lib/i18n/language-purity";
 import { getLeadLanguage } from "@/lib/i18n/sync-language";
 import type { SupportedLanguage } from "@/lib/i18n/types";
 import { buildPropertyRecommendationDirective } from "@/lib/properties/recommendations";
@@ -190,5 +191,6 @@ export async function generateAIReply(
     throw new Error("OpenAI returned an empty response.");
   }
 
-  return dedupeAiReply(reply, history);
+  const deduped = dedupeAiReply(reply, history);
+  return enforceReplyLanguage(deduped, language).text;
 }

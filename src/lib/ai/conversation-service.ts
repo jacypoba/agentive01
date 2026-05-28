@@ -342,7 +342,7 @@ export async function processClientMessageWithAI(
   const seenThisTurn = new Set<string>();
 
   if (classified.intent === "thanks_or_closing") {
-    const closing = buildClosingReply(memoryLead, history);
+    const closing = buildClosingReply(memoryLead, history, language);
     if (closing) {
       await appendUniqueTextReply(
         supabase,
@@ -474,7 +474,8 @@ export async function processClientMessageWithAI(
       const closingText = await generateCatalogComparison(
         languageLead,
         history,
-        propertiesToRecommend
+        propertiesToRecommend,
+        language
       );
       if (closingText) {
         await appendUniqueTextReply(
