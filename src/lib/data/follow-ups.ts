@@ -169,7 +169,7 @@ export async function getPendingFollowUps(
     throw new Error(`Failed to fetch pending follow-ups: ${error.message}`);
   }
 
-  return (data ?? []) as FollowUpWithLead[];
+  return (data ?? []) as unknown as FollowUpWithLead[];
 }
 
 export async function getFollowUpsForUser(
@@ -205,7 +205,7 @@ export async function getFollowUpsForUser(
     throw new Error(`Failed to fetch follow-ups: ${error.message}`);
   }
 
-  return (data ?? []) as FollowUpWithLead[];
+  return (data ?? []) as unknown as FollowUpWithLead[];
 }
 
 export async function getFollowUpById(
@@ -241,7 +241,7 @@ export async function getFollowUpById(
     throw new Error(`Failed to fetch follow-up: ${error.message}`);
   }
 
-  return (data as FollowUpWithLead | null) ?? null;
+  return (data as unknown as FollowUpWithLead | null) ?? null;
 }
 
 export async function countPendingFollowUps(

@@ -77,7 +77,7 @@ export async function sendFollowUpImmediately(
     return { sent: false, error: error?.message ?? "Follow-up not found." };
   }
 
-  const item = data as import("@/types/database").FollowUpWithLead;
+  const item = data as unknown as import("@/types/database").FollowUpWithLead;
   const lead = item.leads;
 
   if (!isEligibleLead(lead.status, lead.intent_status)) {

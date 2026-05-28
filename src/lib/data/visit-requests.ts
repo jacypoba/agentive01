@@ -38,7 +38,7 @@ export async function getVisitRequests(
     throw new Error(`Failed to fetch visit requests: ${error.message}`);
   }
 
-  return (data ?? []) as VisitRequestWithLead[];
+  return (data ?? []) as unknown as VisitRequestWithLead[];
 }
 
 export async function getVisitRequestById(
@@ -70,7 +70,7 @@ export async function getVisitRequestById(
     throw new Error(`Failed to fetch visit request: ${error.message}`);
   }
 
-  return data as VisitRequestWithLead | null;
+  return data as unknown as VisitRequestWithLead | null;
 }
 
 export async function getRecentVisitRequests(
@@ -102,7 +102,7 @@ export async function getRecentVisitRequests(
     throw new Error(`Failed to fetch recent visit requests: ${error.message}`);
   }
 
-  return (data ?? []) as VisitRequestWithLead[];
+  return (data ?? []) as unknown as VisitRequestWithLead[];
 }
 
 export async function countVisitRequestsByStatus(

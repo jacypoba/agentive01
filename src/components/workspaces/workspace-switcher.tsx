@@ -1,8 +1,6 @@
 import { WorkspaceSwitcherClient } from "@/components/workspaces/workspace-switcher-client";
-import {
-  getCurrentWorkspace,
-  listUserWorkspaces,
-} from "@/lib/workspaces/get-current-workspace";
+import { getProfile } from "@/lib/data/profiles";
+import { resolveWorkspaceSwitcherState } from "@/lib/workspaces/resolve-workspace-switcher-state";
 import { createClient } from "@/lib/supabase/server";
 
 type WorkspaceSwitcherProps = {
@@ -12,30 +10,37 @@ type WorkspaceSwitcherProps = {
 export async function WorkspaceSwitcher({ userId }: WorkspaceSwitcherProps) {
   const supabase = await createClient();
 
+  let profileName: string | undefined;
   try {
-    const [workspaces, currentWorkspace] = await Promise.all([
-      listUserWorkspaces(supabase, userId),
-      getCurrentWorkspace(supabase, userId),
-    ]);
+    const profile = await getProfile(supabase, userId);
+    profileName = profile?.full_name ?? profile?.email?.split("@")[0] ?? undefined;
+  } catch {
+    // Profile may be unavailable; provisioning still uses a default name.
+  }
 
-    if (workspaces.length === 0) {
-      return null;
-    }
-
-    const currentWorkspaceId =
-      currentWorkspace?.id ?? workspaces[0]?.id ?? null;
-
-    if (!currentWorkspaceId) {
-      return null;
-    }
+  try {
+    const state = await resolveWorkspaceSwitcherState(
+      supabase,
+      userId,
+      profileName
+    );
 
     return (
       <WorkspaceSwitcherClient
-        workspaces={workspaces}
-        currentWorkspaceId={currentWorkspaceId}
+        workspaces={state.workspaces}
+        currentWorkspaceId={state.currentWorkspaceId}
+        isUnset={state.isUnset}
       />
     );
-  } catch {
-    return null;
+  } catch (error) {
+    console.error("[WorkspaceSwitcher] failed to load workspaces:", error);
+
+    return (
+      <WorkspaceSwitcherClient
+        workspaces={[]}
+        currentWorkspaceId={null}
+        isUnset
+      />
+    );
   }
 }

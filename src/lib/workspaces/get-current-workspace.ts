@@ -28,6 +28,23 @@ async function getProfileDefaultWorkspaceId(
   return firstRow(data)?.default_workspace_id ?? null;
 }
 
+async function fetchWorkspaceById(
+  supabase: Client,
+  workspaceId: string
+): Promise<Workspace | null> {
+  const { data, error } = await supabase
+    .from("workspaces")
+    .select("*")
+    .eq("id", workspaceId)
+    .limit(1);
+
+  if (error) {
+    throw new Error(`Failed to fetch workspace: ${error.message}`);
+  }
+
+  return firstRow(data);
+}
+
 async function getMembershipForWorkspace(
   supabase: Client,
   userId: string,
@@ -35,7 +52,7 @@ async function getMembershipForWorkspace(
 ): Promise<(WorkspaceMember & { workspaces: Workspace }) | null> {
   const { data, error } = await supabase
     .from("workspace_members")
-    .select("*, workspaces(*)")
+    .select("*")
     .eq("user_id", userId)
     .eq("workspace_id", workspaceId)
     .limit(1);
@@ -44,7 +61,17 @@ async function getMembershipForWorkspace(
     throw new Error(`Failed to fetch workspace membership: ${error.message}`);
   }
 
-  return firstRow(data as (WorkspaceMember & { workspaces: Workspace })[] | null);
+  const membership = firstRow(data);
+  if (!membership) {
+    return null;
+  }
+
+  const workspace = await fetchWorkspaceById(supabase, workspaceId);
+  if (!workspace) {
+    return null;
+  }
+
+  return { ...membership, workspaces: workspace };
 }
 
 async function getFirstMembership(
@@ -53,7 +80,7 @@ async function getFirstMembership(
 ): Promise<(WorkspaceMember & { workspaces: Workspace }) | null> {
   const { data, error } = await supabase
     .from("workspace_members")
-    .select("*, workspaces(*)")
+    .select("*")
     .eq("user_id", userId)
     .order("created_at", { ascending: true })
     .limit(1);
@@ -62,7 +89,17 @@ async function getFirstMembership(
     throw new Error(`Failed to fetch workspace memberships: ${error.message}`);
   }
 
-  return firstRow(data as (WorkspaceMember & { workspaces: Workspace })[] | null);
+  const membership = firstRow(data);
+  if (!membership) {
+    return null;
+  }
+
+  const workspace = await fetchWorkspaceById(supabase, membership.workspace_id);
+  if (!workspace) {
+    return null;
+  }
+
+  return { ...membership, workspaces: workspace };
 }
 
 function toCurrentWorkspace(
@@ -129,17 +166,40 @@ export async function listUserWorkspaces(
   supabase: Client,
   userId: string
 ): Promise<CurrentWorkspace[]> {
-  const { data, error } = await supabase
+  const { data: members, error } = await supabase
     .from("workspace_members")
-    .select("*, workspaces(*)")
+    .select("*")
     .eq("user_id", userId)
     .order("created_at", { ascending: true });
 
   if (error) {
-    throw new Error(`Failed to list workspaces: ${error.message}`);
+    throw new Error(`Failed to list workspace memberships: ${error.message}`);
   }
 
-  return (data ?? []).map((row) =>
-    toCurrentWorkspace(row as WorkspaceMember & { workspaces: Workspace })
+  if (!members?.length) {
+    return [];
+  }
+
+  const workspaceIds = members.map((member) => member.workspace_id);
+  const { data: workspaces, error: workspacesError } = await supabase
+    .from("workspaces")
+    .select("*")
+    .in("id", workspaceIds);
+
+  if (workspacesError) {
+    throw new Error(`Failed to list workspaces: ${workspacesError.message}`);
+  }
+
+  const workspaceById = new Map(
+    (workspaces ?? []).map((workspace) => [workspace.id, workspace])
   );
+
+  return members.flatMap((member) => {
+    const workspace = workspaceById.get(member.workspace_id);
+    if (!workspace) {
+      return [];
+    }
+
+    return [toCurrentWorkspace({ ...member, workspaces: workspace })];
+  });
 }

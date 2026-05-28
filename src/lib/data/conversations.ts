@@ -110,7 +110,7 @@ export async function getRecentConversationsForUser(
     throw new Error(`Failed to fetch recent conversations: ${error.message}`);
   }
 
-  return (data ?? []) as ConversationWithLead[];
+  return (data ?? []) as unknown as ConversationWithLead[];
 }
 
 export async function countRecentConversations(

@@ -5,18 +5,23 @@ import { useEffect, useRef, useState, useTransition } from "react";
 import { switchDefaultWorkspaceAction } from "@/app/actions/workspaces";
 import type { CurrentWorkspace } from "@/lib/workspaces/get-current-workspace";
 
+const pillClassName =
+  "inline-flex max-w-[180px] truncate rounded-full border border-white/10 bg-white/[0.03] px-2.5 py-1 text-[10px] font-medium uppercase tracking-wider text-white/45";
+
 type WorkspaceSwitcherClientProps = {
   workspaces: CurrentWorkspace[];
-  currentWorkspaceId: string;
+  currentWorkspaceId: string | null;
+  isUnset?: boolean;
 };
 
 export function WorkspaceSwitcherClient({
   workspaces,
   currentWorkspaceId,
+  isUnset = false,
 }: WorkspaceSwitcherClientProps) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
-  const [activeId, setActiveId] = useState(currentWorkspaceId);
+  const [activeId, setActiveId] = useState(currentWorkspaceId ?? "");
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const containerRef = useRef<HTMLDivElement>(null);
@@ -25,7 +30,7 @@ export function WorkspaceSwitcherClient({
     workspaces.find((workspace) => workspace.id === activeId) ?? workspaces[0];
 
   useEffect(() => {
-    setActiveId(currentWorkspaceId);
+    setActiveId(currentWorkspaceId ?? "");
   }, [currentWorkspaceId]);
 
   useEffect(() => {
@@ -46,16 +51,20 @@ export function WorkspaceSwitcherClient({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [open]);
 
-  if (!current) {
-    return null;
+  if (isUnset || !current) {
+    return (
+      <span
+        className={`${pillClassName} border-amber-500/20 bg-amber-500/10 text-amber-200/70`}
+        title="No workspace is configured for this account yet"
+      >
+        Workspace not set
+      </span>
+    );
   }
 
   if (workspaces.length === 1) {
     return (
-      <span
-        className="hidden max-w-[160px] truncate rounded-full border border-white/10 bg-white/[0.03] px-2.5 py-1 text-[10px] font-medium uppercase tracking-wider text-white/45 sm:inline"
-        title={current.name}
-      >
+      <span className={pillClassName} title={current.name}>
         {current.name}
       </span>
     );
@@ -83,7 +92,7 @@ export function WorkspaceSwitcherClient({
   }
 
   return (
-    <div ref={containerRef} className="relative hidden sm:block">
+    <div ref={containerRef} className="relative">
       <button
         type="button"
         aria-haspopup="listbox"
