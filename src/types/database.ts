@@ -13,6 +13,14 @@ export type Profile = {
   full_name: string | null;
   email: string | null;
   created_at: string;
+  google_refresh_token: string | null;
+  google_access_token: string | null;
+  google_token_expires_at: string | null;
+  google_calendar_id: string | null;
+  google_calendar_connected_at: string | null;
+  calendar_work_start: string | null;
+  calendar_work_end: string | null;
+  calendar_visit_duration_minutes: number | null;
 };
 
 export type IntentStatus =
@@ -69,6 +77,14 @@ export type ProfileInsert = {
 export type ProfileUpdate = {
   full_name?: string | null;
   email?: string | null;
+  google_refresh_token?: string | null;
+  google_access_token?: string | null;
+  google_token_expires_at?: string | null;
+  google_calendar_id?: string | null;
+  google_calendar_connected_at?: string | null;
+  calendar_work_start?: string | null;
+  calendar_work_end?: string | null;
+  calendar_visit_duration_minutes?: number | null;
 };
 
 export type LeadInsert = {
@@ -133,6 +149,10 @@ export type VisitRequest = {
   requested_datetime_text: string | null;
   status: VisitRequestStatus;
   notes: string | null;
+  property_title: string | null;
+  scheduled_start: string | null;
+  scheduled_end: string | null;
+  google_calendar_event_id: string | null;
   created_at: string;
 };
 
@@ -143,6 +163,10 @@ export type VisitRequestInsert = {
   requested_datetime_text?: string | null;
   status?: VisitRequestStatus;
   notes?: string | null;
+  property_title?: string | null;
+  scheduled_start?: string | null;
+  scheduled_end?: string | null;
+  google_calendar_event_id?: string | null;
   created_at?: string;
 };
 
@@ -150,6 +174,10 @@ export type VisitRequestUpdate = {
   requested_datetime_text?: string | null;
   status?: VisitRequestStatus;
   notes?: string | null;
+  property_title?: string | null;
+  scheduled_start?: string | null;
+  scheduled_end?: string | null;
+  google_calendar_event_id?: string | null;
 };
 
 export type VisitRequestWithLead = VisitRequest & {
@@ -214,6 +242,12 @@ export type PropertySearchCriteria = {
   city: string;
   propertyType: string;
   maxBudget?: number | null;
+};
+
+export type CalendarVisitBuckets = {
+  today: VisitRequestWithLead[];
+  upcoming: VisitRequestWithLead[];
+  pending: VisitRequestWithLead[];
 };
 
 export type DashboardStats = {

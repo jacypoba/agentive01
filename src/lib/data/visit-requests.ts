@@ -190,7 +190,43 @@ export async function updateVisitRequestStatus(
   return data;
 }
 
-export async function updateVisitRequest(
+export async function getCalendarVisitBuckets(
+  supabase: Client,
+  userId: string
+): Promise<import("@/types/database").CalendarVisitBuckets> {
+  const visits = await getVisitRequests(supabase, userId);
+  const now = new Date();
+  const startOfToday = new Date(now);
+  startOfToday.setHours(0, 0, 0, 0);
+  const endOfToday = new Date(now);
+  endOfToday.setHours(23, 59, 59, 999);
+
+  const pending = visits.filter((visit) => visit.status === "pending");
+
+  const confirmed = visits.filter((visit) => visit.status === "confirmed");
+
+  const today = confirmed.filter((visit) => {
+    if (!visit.scheduled_start) return false;
+    const start = new Date(visit.scheduled_start);
+    return start >= startOfToday && start <= endOfToday;
+  });
+
+  const upcoming = confirmed
+    .filter((visit) => {
+      if (!visit.scheduled_start) return false;
+      return new Date(visit.scheduled_start) > endOfToday;
+    })
+    .sort(
+      (a, b) =>
+        new Date(a.scheduled_start!).getTime() -
+        new Date(b.scheduled_start!).getTime()
+    )
+    .slice(0, 8);
+
+  return { today, upcoming, pending: pending.slice(0, 8) };
+}
+
+export async function updateVisitRequestCalendarFields(
   supabase: Client,
   userId: string,
   visitId: string,

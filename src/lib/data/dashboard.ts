@@ -7,10 +7,12 @@ import {
 } from "@/lib/data/conversations";
 import {
   countVisitRequestsByStatus,
+  getCalendarVisitBuckets,
   getRecentVisitRequests,
 } from "@/lib/data/visit-requests";
 import { getStatusBadgeColor } from "@/lib/leads/status";
 import type {
+  CalendarVisitBuckets,
   DashboardStats,
   Database,
   Lead,
@@ -26,6 +28,7 @@ export type DashboardData = {
   stats: DashboardStats;
   recentActivity: RecentActivity[];
   recentVisitRequests: VisitRequestWithLead[];
+  calendarBuckets: CalendarVisitBuckets;
 };
 
 function formatActivityDescription(
@@ -113,6 +116,7 @@ export async function getDashboardData(
     conversations,
     leads,
     recentVisitRequests,
+    calendarBuckets,
   ] = await Promise.all([
     getProfile(supabase, userId),
     countLeads(supabase, userId),
@@ -123,6 +127,7 @@ export async function getDashboardData(
     getRecentConversationsForUser(supabase, userId, 5),
     getRecentLeads(supabase, userId, 5),
     getRecentVisitRequests(supabase, userId, 5),
+    getCalendarVisitBuckets(supabase, userId),
   ]);
 
   return {
@@ -139,6 +144,7 @@ export async function getDashboardData(
       leads
     ),
     recentVisitRequests,
+    calendarBuckets,
   };
 }
 

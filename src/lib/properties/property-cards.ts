@@ -127,6 +127,20 @@ export function getShownPropertyIds(history: Conversation[]): Set<string> {
   return ids;
 }
 
+/** Most recently recommended property in conversation (for visit context). */
+export function getLastShownPropertyId(history: Conversation[]): string | null {
+  let lastId: string | null = null;
+  for (const item of history) {
+    if (item.sender !== "ai" && item.sender !== "agent") {
+      continue;
+    }
+    const matches = [...item.message.matchAll(/\[property:([a-f0-9-]+)\]/gi)];
+    const final = matches.at(-1)?.[1];
+    if (final) lastId = final;
+  }
+  return lastId;
+}
+
 export function selectNextPropertyToRecommend(
   properties: Property[],
   history: Conversation[]

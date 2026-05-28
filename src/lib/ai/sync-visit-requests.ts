@@ -1,9 +1,11 @@
 import type { ExtractedQualification } from "@/lib/ai/extract-qualification";
 import { lastClientMessageMentionsVisit } from "@/lib/ai/qualification";
+import { getPropertyById } from "@/lib/data/properties";
 import {
   createVisitRequest,
   getPendingVisitRequestForLead,
 } from "@/lib/data/visit-requests";
+import { getLastShownPropertyId } from "@/lib/properties/property-cards";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Conversation, Database, Lead, VisitRequest } from "@/types/database";
 
@@ -44,12 +46,24 @@ export async function syncVisitRequestFromQualification(
       return existing;
     }
 
+    let propertyTitle: string | null = null;
+    const lastPropertyId = getLastShownPropertyId(history);
+    if (lastPropertyId) {
+      const property = await getPropertyById(
+        supabase,
+        lead.user_id,
+        lastPropertyId
+      );
+      propertyTitle = property?.title?.trim() ?? null;
+    }
+
     const visitRequest = await createVisitRequest(supabase, {
       lead_id: lead.id,
       user_id: lead.user_id,
       requested_datetime_text: requestedDatetimeText,
       status: "pending",
       notes: "Detected via WhatsApp AI — awaiting team confirmation",
+      property_title: propertyTitle,
     });
 
     console.log("[Visit requests] Created pending visit request", {

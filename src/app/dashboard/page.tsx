@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { CalendarVisitsPanel } from "@/components/dashboard/calendar-visits-panel";
 import { CreateTestLeadButton } from "@/components/dashboard/create-test-lead-button";
 import { WhatsAppLiveFeed } from "@/components/dashboard/whatsapp-live-feed";
 import { VisitRequestsPanel } from "@/components/visits/visit-requests-panel";
@@ -18,10 +19,10 @@ export const metadata: Metadata = {
 
 const quickActions = [
   {
-    title: "Connect WhatsApp",
-    description: "Configure Evolution API webhook for live message sync.",
-    href: "#whatsapp",
-    badge: "Setup",
+    title: "Calendar settings",
+    description: "Connect Google Calendar and set visit hours.",
+    href: "/settings/calendar",
+    badge: "Calendar",
   },
   {
     title: "Train your AI",
@@ -230,6 +231,10 @@ export default async function DashboardPage() {
                 </div>
               </div>
             </section>
+
+            {user && (
+              <CalendarVisitsPanel buckets={dashboardData.calendarBuckets} />
+            )}
 
             {user && (
               <VisitRequestsPanel visits={dashboardData.recentVisitRequests} />

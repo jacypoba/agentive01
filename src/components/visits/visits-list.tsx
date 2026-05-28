@@ -50,6 +50,9 @@ export function VisitsList({ visits, dbError }: VisitsListProps) {
       const result = await updateVisitStatus(visitId, status);
       if (result.error) {
         setError(result.error);
+        if (result.suggestedSlot) {
+          setWarningMessage(`Suggested slot: ${result.suggestedSlot}`);
+        }
       } else if (result.warning) {
         setWarningMessage(result.warning);
       } else if (result.message) {

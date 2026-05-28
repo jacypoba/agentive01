@@ -7,14 +7,14 @@ import type { Database, Lead, VisitRequestStatus } from "@/types/database";
 type Client = SupabaseClient<Database>;
 
 export function buildVisitConfirmedMessage(
-  _clientName: string,
-  requestedDatetimeText: string | null
+  requestedDatetimeText: string | null,
+  naturalWhen?: string | null
 ): string {
-  const whenClause = requestedDatetimeText
-    ? ` para ${requestedDatetimeText}`
-    : "";
-
-  return `Visita confirmada${whenClause} 👌 Trato já dos detalhes e falo contigo em breve.`;
+  const when = naturalWhen?.trim() || requestedDatetimeText?.trim();
+  if (when) {
+    return `Perfeito 👌 Ficou marcado para ${when}.`;
+  }
+  return "Perfeito 👌 Visita confirmada.";
 }
 
 export function buildVisitCancelledMessage(
@@ -26,6 +26,10 @@ export function buildVisitCancelledMessage(
     : "";
 
   return `Esse horário${slotClause} já não dá infelizmente 🙏 Tens outra data que te dê jeito?`;
+}
+
+export function buildVisitConflictMessage(suggestedText: string): string {
+  return `Esse horário já não dá 🙏 Consegues ${suggestedText}?`;
 }
 
 export function resolveLeadPhoneDigits(lead: Lead): string | null {
@@ -48,7 +52,8 @@ export async function sendVisitStatusWhatsApp(
   supabase: Client,
   lead: Lead,
   status: Extract<VisitRequestStatus, "confirmed" | "cancelled">,
-  requestedDatetimeText: string | null
+  requestedDatetimeText: string | null,
+  naturalWhen?: string | null
 ): Promise<SendVisitStatusWhatsAppResult> {
   const phoneDigits = resolveLeadPhoneDigits(lead);
   if (!phoneDigits) {
@@ -60,7 +65,7 @@ export async function sendVisitStatusWhatsApp(
 
   const text =
     status === "confirmed"
-      ? buildVisitConfirmedMessage(lead.client_name, requestedDatetimeText)
+      ? buildVisitConfirmedMessage(requestedDatetimeText, naturalWhen)
       : buildVisitCancelledMessage(lead.client_name, requestedDatetimeText);
 
   try {
@@ -83,6 +88,49 @@ export async function sendVisitStatusWhatsApp(
     });
   } catch (error) {
     console.error("[Visit requests] WhatsApp sent but failed to log conversation", {
+      leadId: lead.id,
+      error: error instanceof Error ? error.message : error,
+    });
+  }
+
+  return { sent: true };
+}
+
+export async function sendVisitConflictWhatsApp(
+  supabase: Client,
+  lead: Lead,
+  suggestedText: string
+): Promise<SendVisitStatusWhatsAppResult> {
+  const phoneDigits = resolveLeadPhoneDigits(lead);
+  if (!phoneDigits) {
+    return {
+      sent: false,
+      error: "This lead has no phone number — WhatsApp was not sent.",
+    };
+  }
+
+  const text = buildVisitConflictMessage(suggestedText);
+
+  try {
+    await sendWhatsAppText(phoneDigits, text);
+  } catch (error) {
+    return {
+      sent: false,
+      error:
+        error instanceof Error
+          ? error.message
+          : "Failed to send WhatsApp notification.",
+    };
+  }
+
+  try {
+    await createConversation(supabase, {
+      lead_id: lead.id,
+      message: text,
+      sender: "agent",
+    });
+  } catch (error) {
+    console.error("[Visit requests] Conflict WhatsApp failed to log", {
       leadId: lead.id,
       error: error instanceof Error ? error.message : error,
     });

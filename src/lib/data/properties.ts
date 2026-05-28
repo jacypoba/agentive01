@@ -26,6 +26,25 @@ export async function getProperties(
   return (data ?? []).map(normalizeProperty);
 }
 
+export async function getPropertyById(
+  supabase: Client,
+  userId: string,
+  propertyId: string
+): Promise<Property | null> {
+  const { data, error } = await supabase
+    .from("properties")
+    .select("*")
+    .eq("id", propertyId)
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(`Failed to fetch property: ${error.message}`);
+  }
+
+  return data ? normalizeProperty(data) : null;
+}
+
 export async function createProperty(
   supabase: Client,
   property: PropertyInsert
