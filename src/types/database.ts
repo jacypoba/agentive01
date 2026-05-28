@@ -459,6 +459,28 @@ export type CurrentSubscription = Subscription & {
   daysLeftInTrial: number | null;
 };
 
+export type WhatsAppWebhookHeartbeat = {
+  id: string;
+  last_webhook_received_at: string | null;
+  last_message_id: string | null;
+  last_phone: string | null;
+  last_event: string | null;
+  last_error: string | null;
+  last_http_status: number | null;
+  updated_at: string;
+};
+
+export type WhatsAppWebhookHeartbeatInsert = {
+  id: string;
+  last_webhook_received_at?: string | null;
+  last_message_id?: string | null;
+  last_phone?: string | null;
+  last_event?: string | null;
+  last_error?: string | null;
+  last_http_status?: number | null;
+  updated_at?: string;
+};
+
 export type Database = {
   public: {
     Tables: {
@@ -520,6 +542,12 @@ export type Database = {
         Row: Subscription;
         Insert: SubscriptionInsert;
         Update: SubscriptionUpdate;
+        Relationships: [];
+      };
+      whatsapp_webhook_heartbeat: {
+        Row: WhatsAppWebhookHeartbeat;
+        Insert: WhatsAppWebhookHeartbeatInsert;
+        Update: Partial<WhatsAppWebhookHeartbeatInsert>;
         Relationships: [];
       };
     };
