@@ -4,6 +4,7 @@ export {
 } from "@/lib/billing/get-current-subscription";
 export {
   ensureTrialSubscription,
+  getSubscriptionByStripeCustomerId,
   getSubscriptionByStripeSubscriptionId,
   getSubscriptionByWorkspaceId,
   markSubscriptionCanceled,

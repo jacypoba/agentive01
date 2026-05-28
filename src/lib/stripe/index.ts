@@ -9,4 +9,10 @@ export {
   type PlanDefinition,
   type PlanId,
 } from "@/lib/stripe/plans";
-export { syncStripeSubscriptionToSupabase } from "@/lib/stripe/sync-subscription";
+export {
+  reconcileWorkspaceSubscriptionFromStripe,
+  resolveWorkspaceFromStripeCustomer,
+  retrieveStripeSubscription,
+  syncStripeSubscriptionToSupabase,
+  type SyncSubscriptionResult,
+} from "@/lib/stripe/sync-subscription";

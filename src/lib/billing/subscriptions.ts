@@ -48,6 +48,26 @@ export async function getSubscriptionByStripeSubscriptionId(
   return firstRow(data);
 }
 
+export async function getSubscriptionByStripeCustomerId(
+  stripeCustomerId: string
+): Promise<Subscription | null> {
+  const admin = createAdminClient();
+  const { data, error } = await admin
+    .from("subscriptions")
+    .select("*")
+    .eq("stripe_customer_id", stripeCustomerId)
+    .order("updated_at", { ascending: false })
+    .limit(1);
+
+  if (error) {
+    throw new Error(
+      `Failed to fetch subscription by Stripe customer id: ${error.message}`
+    );
+  }
+
+  return firstRow(data);
+}
+
 export type UpsertSubscriptionFromStripeInput = {
   workspace_id: string;
   user_id: string;

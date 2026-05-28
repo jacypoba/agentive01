@@ -4,6 +4,7 @@ import { BillingStatus } from "@/components/billing/billing-status";
 import { getCurrentSubscription } from "@/lib/billing/get-current-subscription";
 import { isStripeTestMode } from "@/lib/stripe";
 import { areAllStripePricesConfigured } from "@/lib/stripe/plan-prices.server";
+import { reconcileWorkspaceSubscriptionFromStripe } from "@/lib/stripe/sync-subscription";
 import { getCurrentWorkspaceId } from "@/lib/workspaces/get-current-workspace";
 import { createClient } from "@/lib/supabase/server";
 
@@ -25,11 +26,24 @@ export default async function BillingPage({ searchParams }: BillingPageProps) {
 
   let subscription = null;
   let loadError: string | null = null;
+  let reconciledAfterCheckout = false;
 
   if (user) {
     try {
       const workspaceId = await getCurrentWorkspaceId(supabase, user.id);
       if (workspaceId) {
+        if (params.success === "1") {
+          try {
+            const reconciled = await reconcileWorkspaceSubscriptionFromStripe(
+              workspaceId,
+              user.id
+            );
+            reconciledAfterCheckout = Boolean(reconciled);
+          } catch (reconcileError) {
+            console.error("[Billing] post-checkout reconcile failed", reconcileError);
+          }
+        }
+
         subscription = await getCurrentSubscription(
           supabase,
           workspaceId,
@@ -76,7 +90,9 @@ export default async function BillingPage({ searchParams }: BillingPageProps) {
             role="status"
             className="mt-8 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200"
           >
-            Payment successful. Your subscription will update shortly.
+            {reconciledAfterCheckout
+              ? "Payment successful. Your subscription is now active."
+              : "Payment successful. Your subscription will update shortly."}
           </div>
         )}
 
