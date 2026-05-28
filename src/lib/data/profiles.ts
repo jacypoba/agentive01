@@ -6,6 +6,10 @@ type Client = SupabaseClient<Database>;
 
 export type ProfileSeed = Pick<ProfileInsert, "full_name" | "email">;
 
+function firstRow<T>(rows: T[] | null | undefined): T | null {
+  return rows?.[0] ?? null;
+}
+
 export function profileSeedFromAuthUser(user: {
   email?: string | null;
   user_metadata?: Record<string, unknown>;
@@ -27,7 +31,7 @@ export async function getProfile(
     .from("profiles")
     .select("*")
     .eq("id", userId)
-    .maybeSingle();
+    .limit(1);
 
   if (error) {
     console.error("[Profiles] Profile lookup failed", {
@@ -37,13 +41,15 @@ export async function getProfile(
     throw new Error(`Failed to fetch profile: ${error.message}`);
   }
 
+  const profile = firstRow(data as Profile[] | null);
   console.log("[Profiles] Profile lookup", {
     userId,
-    found: Boolean(data),
-    profileId: data?.id ?? null,
+    found: Boolean(profile),
+    profileId: profile?.id ?? null,
+    rowCount: data?.length ?? 0,
   });
 
-  return data as Profile | null;
+  return profile;
 }
 
 export async function ensureProfile(
@@ -68,8 +74,7 @@ export async function ensureProfile(
       full_name: seed?.full_name ?? null,
       email: seed?.email ?? null,
     })
-    .select("*")
-    .maybeSingle();
+    .select("*");
 
   if (error) {
     if (error.code === "23505") {
@@ -90,12 +95,64 @@ export async function ensureProfile(
     throw new Error(`Failed to create profile: ${error.message}`);
   }
 
-  if (!data) {
+  const created = firstRow(data as Profile[] | null);
+  if (!created) {
     throw new Error("Failed to create profile: insert returned no row.");
   }
 
-  console.log("[Profiles] Profile created", { userId, profileId: data.id });
-  return data as Profile;
+  console.log("[Profiles] Profile created", { userId, profileId: created.id });
+  return created;
+}
+
+export async function upsertProfile(
+  supabase: Client,
+  userId: string,
+  fields: ProfileUpdate,
+  seed?: ProfileSeed
+): Promise<Profile> {
+  const payload: ProfileInsert = {
+    id: userId,
+    ...fields,
+  };
+
+  if (seed?.full_name != null) {
+    payload.full_name = seed.full_name;
+  }
+  if (seed?.email != null) {
+    payload.email = seed.email;
+  }
+
+  console.log("[Profiles] Upserting profile", {
+    userId,
+    fields: Object.keys(fields),
+  });
+
+  const { data, error } = await supabase
+    .from("profiles")
+    .upsert(payload, { onConflict: "id" })
+    .select("*");
+
+  if (error) {
+    console.error("[Profiles] Profile upsert failed", {
+      userId,
+      error: error.message,
+      code: error.code,
+    });
+    throw new Error(`Failed to save profile: ${error.message}`);
+  }
+
+  const saved = firstRow(data as Profile[] | null);
+  if (saved) {
+    console.log("[Profiles] Profile upserted", { userId, profileId: saved.id });
+    return saved;
+  }
+
+  console.warn("[Profiles] Upsert returned no row — falling back to ensure+update", {
+    userId,
+  });
+
+  await ensureProfile(supabase, userId, seed);
+  return updateProfile(supabase, userId, fields, seed);
 }
 
 export async function updateProfile(
@@ -113,8 +170,7 @@ export async function updateProfile(
     .from("profiles")
     .update(updates)
     .eq("id", userId)
-    .select("*")
-    .maybeSingle();
+    .select("*");
 
   if (error) {
     console.error("[Profiles] Profile update failed", {
@@ -124,9 +180,10 @@ export async function updateProfile(
     throw new Error(`Failed to update profile: ${error.message}`);
   }
 
-  if (data) {
-    console.log("[Profiles] Profile updated", { userId, profileId: data.id });
-    return data as Profile;
+  const updated = firstRow(data as Profile[] | null);
+  if (updated) {
+    console.log("[Profiles] Profile updated", { userId, profileId: updated.id });
+    return updated;
   }
 
   console.warn("[Profiles] Profile update matched no rows — ensuring profile", {
@@ -139,8 +196,7 @@ export async function updateProfile(
     .from("profiles")
     .update(updates)
     .eq("id", userId)
-    .select("*")
-    .maybeSingle();
+    .select("*");
 
   if (retryError) {
     console.error("[Profiles] Profile update retry failed", {
@@ -150,16 +206,17 @@ export async function updateProfile(
     throw new Error(`Failed to update profile: ${retryError.message}`);
   }
 
-  if (!retryData) {
+  const retryRow = firstRow(retryData as Profile[] | null);
+  if (!retryRow) {
     throw new Error("Failed to update profile: profile row still missing.");
   }
 
   console.log("[Profiles] Profile updated after ensure", {
     userId,
-    profileId: retryData.id,
+    profileId: retryRow.id,
   });
 
-  return retryData as Profile;
+  return retryRow;
 }
 
 export function isGoogleCalendarConnected(profile: Profile | null): boolean {
@@ -211,7 +268,7 @@ export async function saveGoogleTokens(
     hasAccessToken: Boolean(tokens.access_token),
   });
 
-  return updateProfile(supabase, userId, updates, seed);
+  return upsertProfile(supabase, userId, updates, seed);
 }
 
 export async function disconnectGoogleCalendar(
@@ -219,7 +276,7 @@ export async function disconnectGoogleCalendar(
   userId: string,
   seed?: ProfileSeed
 ): Promise<Profile> {
-  return updateProfile(
+  return upsertProfile(
     supabase,
     userId,
     {
@@ -243,7 +300,7 @@ export async function updateCalendarSettings(
   },
   seed?: ProfileSeed
 ): Promise<Profile> {
-  return updateProfile(
+  return upsertProfile(
     supabase,
     userId,
     {

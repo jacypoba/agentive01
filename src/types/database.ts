@@ -72,6 +72,14 @@ export type ProfileInsert = {
   full_name?: string | null;
   email?: string | null;
   created_at?: string;
+  google_refresh_token?: string | null;
+  google_access_token?: string | null;
+  google_token_expires_at?: string | null;
+  google_calendar_id?: string | null;
+  google_calendar_connected_at?: string | null;
+  calendar_work_start?: string | null;
+  calendar_work_end?: string | null;
+  calendar_visit_duration_minutes?: number | null;
 };
 
 export type ProfileUpdate = {
