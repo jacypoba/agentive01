@@ -1,5 +1,9 @@
 import { searchMatchingProperties } from "@/lib/data/properties";
-import { derivePropertySearchCriteria } from "@/lib/properties/search-criteria";
+import {
+  derivePropertySearchCriteria,
+  derivePropertySearchDebug,
+} from "@/lib/properties/search-criteria";
+import { normalizeSearchCriteria } from "@/lib/properties/normalize-search";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type {
   Conversation,
@@ -22,12 +26,14 @@ async function searchWithCriteria(
   criteria: PropertySearchCriteria,
   limit: number
 ): Promise<Property[]> {
+  const normalized = normalizeSearchCriteria(criteria);
+
   try {
-    return await searchMatchingProperties(supabase, userId, criteria, limit);
+    return await searchMatchingProperties(supabase, userId, normalized, limit);
   } catch (error) {
-    console.error("[Property recommendations] Search failed", {
+    console.error("[Property search] Query failed", {
       userId,
-      criteria,
+      criteria: normalized,
       error: error instanceof Error ? error.message : error,
     });
     return [];
@@ -46,34 +52,64 @@ export async function findPropertyRecommendations(
   options?: { preferLatestMessage?: boolean }
 ): Promise<FindPropertyRecommendationsResult> {
   const searchOptions = { preferLatestMessage: options?.preferLatestMessage };
-  const strictCriteria = derivePropertySearchCriteria(lead, history, searchOptions);
-  let criteria = strictCriteria;
+
+  const strictDebug = derivePropertySearchDebug(lead, history, searchOptions);
+  let criteria = strictDebug.criteria;
   let properties: Property[] = [];
 
-  if (strictCriteria) {
+  console.log("[Property search] Normalized input", {
+    leadId: lead.id,
+    rawUserInput: strictDebug.rawUserInput,
+    normalizedPropertyType: strictDebug.normalizedPropertyType,
+    normalizedCity: strictDebug.normalizedCity,
+    normalizedBudget: strictDebug.normalizedBudget,
+    mode: "strict",
+  });
+
+  if (strictDebug.criteria) {
     properties = await searchWithCriteria(
       supabase,
       lead.user_id,
-      strictCriteria,
+      strictDebug.criteria,
       limit
     );
+    console.log("[Property search] Strict query result", {
+      leadId: lead.id,
+      matchedPropertiesCount: properties.length,
+    });
   }
 
-  if (!strictCriteria || properties.length === 0) {
-    const relaxedCriteria = derivePropertySearchCriteria(lead, history, {
+  if (!strictDebug.criteria || properties.length === 0) {
+    const relaxedDebug = derivePropertySearchDebug(lead, history, {
+      ...searchOptions,
       relaxed: true,
-      preferLatestMessage: options?.preferLatestMessage,
     });
-    if (relaxedCriteria) {
+
+    console.log("[Property search] Normalized input", {
+      leadId: lead.id,
+      rawUserInput: relaxedDebug.rawUserInput,
+      normalizedPropertyType: relaxedDebug.normalizedPropertyType,
+      normalizedCity: relaxedDebug.normalizedCity,
+      normalizedBudget: relaxedDebug.normalizedBudget,
+      mode: "relaxed",
+    });
+
+    if (relaxedDebug.criteria) {
       const relaxedResults = await searchWithCriteria(
         supabase,
         lead.user_id,
-        relaxedCriteria,
+        relaxedDebug.criteria,
         limit
       );
+
+      console.log("[Property search] Relaxed query result", {
+        leadId: lead.id,
+        matchedPropertiesCount: relaxedResults.length,
+      });
+
       if (relaxedResults.length > 0 || !criteria) {
         properties = relaxedResults;
-        criteria = relaxedCriteria;
+        criteria = relaxedDebug.criteria;
       }
     }
   }

@@ -266,6 +266,8 @@ async function buildIntroReply(
   if (
     propertiesToRecommend.length === 0 &&
     availability.noMatchesInDatabase &&
+    availability.matchingTotal === 0 &&
+    !availability.criteriaMissing &&
     (classified.intent === "property_search" ||
       classified.intent === "ask_more_options")
   ) {
@@ -390,6 +392,7 @@ export async function processClientMessageWithAI(
     console.log("[WhatsApp debug] Multilingual search", {
       leadId: lead.id,
       detectedLanguage: language,
+      rawUserInput: searchDebug.rawUserInput,
       normalizedCity: searchDebug.normalizedCity,
       normalizedPropertyType: searchDebug.normalizedPropertyType,
       normalizedBudget: searchDebug.normalizedBudget,

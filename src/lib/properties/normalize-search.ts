@@ -1,5 +1,7 @@
 /** Canonical internal values for language-independent property search. */
 
+import type { PropertySearchCriteria } from "@/types/database";
+
 const CITY_ALIASES: Record<string, string> = {
   milan: "Milano",
   milano: "Milano",
@@ -28,6 +30,8 @@ const PROPERTY_TYPE_ALIASES: Record<string, string> = {
   villa: "moradia",
   house: "moradia",
   home: "moradia",
+  townhouse: "moradia",
+  townhome: "moradia",
   casa: "moradia",
   moradia: "moradia",
   vivenda: "moradia",
@@ -38,6 +42,8 @@ const PROPERTY_TYPE_ALIASES: Record<string, string> = {
   appartamento: "apartamento",
   apartamento: "apartamento",
   flat: "apartamento",
+  condo: "apartamento",
+  condominium: "apartamento",
   loft: "apartamento",
   duplex: "apartamento",
   penthouse: "apartamento",
@@ -51,12 +57,38 @@ const PROPERTY_TYPE_ALIASES: Record<string, string> = {
   t4: "apartamento",
 };
 
+const CITY_ALIAS_KEYS = Object.keys(CITY_ALIASES).sort(
+  (a, b) => b.length - a.length
+);
+const TYPE_ALIAS_KEYS = Object.keys(PROPERTY_TYPE_ALIASES).sort(
+  (a, b) => b.length - a.length
+);
+
+export type NormalizedPropertySearch = {
+  rawUserInput: string;
+  normalizedCity: string | null;
+  normalizedPropertyType: string | null;
+  normalizedBudget: number | null;
+  criteria: PropertySearchCriteria | null;
+};
+
 function foldKey(value: string): string {
   return value
     .trim()
     .toLowerCase()
     .normalize("NFD")
     .replace(/\p{M}/gu, "");
+}
+
+function escapeRegex(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function isPropertyTypeToken(value: string): boolean {
+  const folded = foldKey(value);
+  return TYPE_ALIAS_KEYS.some(
+    (key) => folded === key || folded.includes(key) || key.includes(folded)
+  );
 }
 
 export function normalizeCity(value: string | null | undefined): string | null {
@@ -80,39 +112,44 @@ export function normalizePropertyType(
   return PROPERTY_TYPE_ALIASES[folded] ?? value.trim().toLowerCase();
 }
 
-export function citiesMatch(
-  searchCity: string | null | undefined,
-  propertyCity: string | null | undefined
-): boolean {
-  if (!searchCity?.trim() || !propertyCity?.trim()) return false;
+/** Extract city from free text — known aliases first, avoids "a villa" false positives. */
+export function extractCityFromMessage(text: string): string | null {
+  if (!text.trim()) return null;
 
-  const normalizedSearch = foldKey(normalizeCity(searchCity) ?? searchCity);
-  const normalizedProperty = foldKey(normalizeCity(propertyCity) ?? propertyCity);
+  const folded = foldKey(text);
+  for (const key of CITY_ALIAS_KEYS) {
+    const pattern = new RegExp(`\\b${escapeRegex(key)}\\b`, "i");
+    if (pattern.test(folded)) {
+      return CITY_ALIASES[key];
+    }
+  }
 
-  return (
-    normalizedSearch === normalizedProperty ||
-    normalizedSearch.includes(normalizedProperty) ||
-    normalizedProperty.includes(normalizedSearch)
+  const prepositionMatch = text.match(
+    /\b(?:em|in|en|near|around|at)\s+([a-zA-ZÀ-ú]+(?:\s+[a-zA-ZÀ-ú]+)?)/i
   );
+  if (prepositionMatch?.[1]) {
+    const candidate = prepositionMatch[1].trim();
+    if (!isPropertyTypeToken(candidate)) {
+      return normalizeCity(candidate);
+    }
+  }
+
+  return null;
 }
 
-export function propertyTypesMatch(
-  searchType: string | null | undefined,
-  propertyType: string | null | undefined
-): boolean {
-  if (!searchType?.trim() || !propertyType?.trim()) return false;
+/** Extract property type from free text using multilingual alias map. */
+export function extractPropertyTypeFromMessage(text: string): string | null {
+  if (!text.trim()) return null;
 
-  const normalizedSearch = normalizePropertyType(searchType);
-  const normalizedProperty = normalizePropertyType(propertyType);
-  if (!normalizedSearch || !normalizedProperty) return false;
+  const folded = foldKey(text);
+  for (const key of TYPE_ALIAS_KEYS) {
+    const pattern = new RegExp(`\\b${escapeRegex(key)}\\b`, "i");
+    if (pattern.test(folded)) {
+      return PROPERTY_TYPE_ALIASES[key];
+    }
+  }
 
-  if (normalizedSearch === normalizedProperty) return true;
-
-  const foldedProperty = foldKey(propertyType);
-  return (
-    foldedProperty.includes(normalizedSearch) ||
-    normalizedSearch.includes(foldedProperty)
-  );
+  return null;
 }
 
 export function parseNormalizedBudget(
@@ -130,21 +167,29 @@ export function parseNormalizedBudget(
     return value != null ? Math.round(value * 1_000_000) : null;
   }
 
+  const thousandMatch = text.match(
+    /(\d[\d.,]*)\s*(?:thousand|thousands)\b/i
+  );
+  if (thousandMatch) {
+    const value = parseLocalizedNumber(thousandMatch[1]);
+    return value != null ? Math.round(value * 1_000) : null;
+  }
+
   const milaMatch = text.match(/(\d[\d.,]*)\s*mila(?:\s*(?:euro|eur|€))?/i);
   if (milaMatch) {
     const value = parseLocalizedNumber(milaMatch[1]);
     return value != null ? Math.round(value * 1_000) : null;
   }
 
-  const milMatch = text.match(/(\d[\d.,]*)\s*(?:mil|k\b)/i);
+  const milMatch = text.match(/(\d[\d.,]*)\s*(?:mil)\b/i);
   if (milMatch) {
     const value = parseLocalizedNumber(milMatch[1]);
     return value != null ? Math.round(value * 1_000) : null;
   }
 
-  const bareKMatch = text.match(/(\d[\d.,]*)\s*k(?!\w)/i);
-  if (bareKMatch) {
-    const value = parseLocalizedNumber(bareKMatch[1]);
+  const kMatch = text.match(/(\d[\d.,]*)\s*k\b/i);
+  if (kMatch) {
+    const value = parseLocalizedNumber(kMatch[1]);
     return value != null ? Math.round(value * 1_000) : null;
   }
 
@@ -186,4 +231,104 @@ function parseLocalizedNumber(raw: string): number | null {
 
   const value = Number.parseFloat(cleaned.replace(/\./g, ""));
   return Number.isFinite(value) ? value : null;
+}
+
+export function normalizeSearchCriteria(
+  criteria: PropertySearchCriteria
+): PropertySearchCriteria {
+  return {
+    city: normalizeCity(criteria.city) ?? criteria.city,
+    propertyType:
+      normalizePropertyType(criteria.propertyType) ?? criteria.propertyType,
+    maxBudget: criteria.maxBudget,
+  };
+}
+
+export function buildNormalizedPropertySearch(input: {
+  rawUserInput: string;
+  city?: string | null;
+  propertyType?: string | null;
+  budgetText?: string | null;
+  relaxed?: boolean;
+}): NormalizedPropertySearch {
+  const rawUserInput = input.rawUserInput.trim();
+  const text = rawUserInput;
+
+  const normalizedCity =
+    normalizeCity(input.city) ??
+    extractCityFromMessage(text) ??
+    null;
+  const normalizedPropertyType =
+    normalizePropertyType(input.propertyType) ??
+    extractPropertyTypeFromMessage(text) ??
+    null;
+  const normalizedBudget =
+    parseNormalizedBudget(input.budgetText) ??
+    parseNormalizedBudget(text) ??
+    null;
+
+  let criteria: PropertySearchCriteria | null = null;
+
+  if (input.relaxed) {
+    if (normalizedCity && normalizedPropertyType) {
+      criteria = normalizeSearchCriteria({
+        city: normalizedCity,
+        propertyType: normalizedPropertyType,
+        maxBudget: normalizedBudget ?? undefined,
+      });
+    }
+  } else if (
+    normalizedCity &&
+    normalizedPropertyType &&
+    normalizedBudget != null
+  ) {
+    criteria = normalizeSearchCriteria({
+      city: normalizedCity,
+      propertyType: normalizedPropertyType,
+      maxBudget: normalizedBudget,
+    });
+  }
+
+  return {
+    rawUserInput,
+    normalizedCity,
+    normalizedPropertyType,
+    normalizedBudget,
+    criteria,
+  };
+}
+
+export function citiesMatch(
+  searchCity: string | null | undefined,
+  propertyCity: string | null | undefined
+): boolean {
+  if (!searchCity?.trim() || !propertyCity?.trim()) return false;
+
+  const normalizedSearch = foldKey(normalizeCity(searchCity) ?? searchCity);
+  const normalizedProperty = foldKey(normalizeCity(propertyCity) ?? propertyCity);
+
+  return (
+    normalizedSearch === normalizedProperty ||
+    normalizedSearch.includes(normalizedProperty) ||
+    normalizedProperty.includes(normalizedSearch)
+  );
+}
+
+export function propertyTypesMatch(
+  searchType: string | null | undefined,
+  propertyType: string | null | undefined
+): boolean {
+  if (!searchType?.trim() || !propertyType?.trim()) return false;
+
+  const normalizedSearch = normalizePropertyType(searchType);
+  const normalizedProperty = normalizePropertyType(propertyType);
+  if (!normalizedSearch || !normalizedProperty) return false;
+
+  if (normalizedSearch === normalizedProperty) return true;
+
+  const foldedProperty = foldKey(propertyType);
+  return (
+    foldedProperty.includes(normalizedSearch) ||
+    normalizedSearch.includes(foldedProperty)
+  );
 }
