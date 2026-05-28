@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { AnalyticsSection } from "@/components/analytics/analytics-section";
 import { CalendarVisitsPanel } from "@/components/dashboard/calendar-visits-panel";
 import { CreateTestLeadButton } from "@/components/dashboard/create-test-lead-button";
 import { FollowUpsPanel } from "@/components/dashboard/follow-ups-panel";
@@ -187,6 +188,8 @@ export default async function DashboardPage() {
                 </Link>
               ))}
             </section>
+
+            {user && <AnalyticsSection userId={user.id} />}
 
             <section className="mt-12 grid gap-6 lg:grid-cols-3">
               <div className="lg:col-span-2">
