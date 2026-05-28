@@ -35,6 +35,7 @@ export type FollowUp = {
   id: string;
   lead_id: string;
   user_id: string;
+  workspace_id: string | null;
   type: FollowUpType;
   status: FollowUpStatus;
   scheduled_for: string;
@@ -48,6 +49,7 @@ export type FollowUpInsert = {
   id?: string;
   lead_id: string;
   user_id: string;
+  workspace_id?: string | null;
   type: FollowUpType;
   status?: FollowUpStatus;
   scheduled_for: string;
@@ -85,6 +87,7 @@ export type Profile = {
   user_id: string;
   full_name: string | null;
   email: string | null;
+  default_workspace_id: string | null;
   created_at: string;
   google_refresh_token: string | null;
   google_access_token: string | null;
@@ -107,6 +110,7 @@ export type IntentStatus =
 export type Lead = {
   id: string;
   user_id: string;
+  workspace_id: string | null;
   client_name: string;
   phone: string | null;
   phone_normalized: string | null;
@@ -146,6 +150,7 @@ export type ProfileInsert = {
   user_id?: string;
   full_name?: string | null;
   email?: string | null;
+  default_workspace_id?: string | null;
   created_at?: string;
   google_refresh_token?: string | null;
   google_access_token?: string | null;
@@ -160,6 +165,7 @@ export type ProfileInsert = {
 export type ProfileUpdate = {
   full_name?: string | null;
   email?: string | null;
+  default_workspace_id?: string | null;
   google_refresh_token?: string | null;
   google_access_token?: string | null;
   google_token_expires_at?: string | null;
@@ -173,6 +179,7 @@ export type ProfileUpdate = {
 export type LeadInsert = {
   id?: string;
   user_id: string;
+  workspace_id?: string | null;
   client_name: string;
   phone?: string | null;
   phone_normalized?: string | null;
@@ -216,6 +223,7 @@ export type ProcessedWhatsAppMessage = {
   message_id: string;
   instance: string;
   remote_jid: string | null;
+  workspace_id: string | null;
   created_at: string;
 };
 
@@ -224,6 +232,41 @@ export type ProcessedWhatsAppMessageInsert = {
   message_id: string;
   instance: string;
   remote_jid?: string | null;
+  workspace_id?: string | null;
+  created_at?: string;
+};
+
+export type WorkspaceRole = "owner" | "admin" | "member";
+
+export type Workspace = {
+  id: string;
+  name: string;
+  slug: string;
+  created_by: string;
+  created_at: string;
+};
+
+export type WorkspaceInsert = {
+  id?: string;
+  name: string;
+  slug: string;
+  created_by: string;
+  created_at?: string;
+};
+
+export type WorkspaceMember = {
+  id: string;
+  workspace_id: string;
+  user_id: string;
+  role: WorkspaceRole;
+  created_at: string;
+};
+
+export type WorkspaceMemberInsert = {
+  id?: string;
+  workspace_id: string;
+  user_id: string;
+  role?: WorkspaceRole;
   created_at?: string;
 };
 
@@ -233,6 +276,7 @@ export type VisitRequest = {
   id: string;
   lead_id: string;
   user_id: string;
+  workspace_id: string | null;
   requested_datetime_text: string | null;
   status: VisitRequestStatus;
   notes: string | null;
@@ -247,6 +291,7 @@ export type VisitRequestInsert = {
   id?: string;
   lead_id: string;
   user_id: string;
+  workspace_id?: string | null;
   requested_datetime_text?: string | null;
   status?: VisitRequestStatus;
   notes?: string | null;
@@ -283,6 +328,7 @@ export type VisitRequestWithLead = VisitRequest & {
 export type Property = {
   id: string;
   user_id: string;
+  workspace_id: string | null;
   title: string;
   city: string;
   neighborhood: string | null;
@@ -299,6 +345,7 @@ export type Property = {
 export type PropertyInsert = {
   id?: string;
   user_id: string;
+  workspace_id?: string | null;
   title: string;
   city: string;
   neighborhood?: string | null;
@@ -403,6 +450,18 @@ export type Database = {
         Row: FollowUp;
         Insert: FollowUpInsert;
         Update: Partial<FollowUpInsert> & { status?: FollowUpStatus };
+        Relationships: [];
+      };
+      workspaces: {
+        Row: Workspace;
+        Insert: WorkspaceInsert;
+        Update: Partial<WorkspaceInsert>;
+        Relationships: [];
+      };
+      workspace_members: {
+        Row: WorkspaceMember;
+        Insert: WorkspaceMemberInsert;
+        Update: Partial<WorkspaceMemberInsert>;
         Relationships: [];
       };
     };
