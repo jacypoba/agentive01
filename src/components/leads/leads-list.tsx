@@ -6,12 +6,26 @@ import { CreateTestLeadButton } from "@/components/dashboard/create-test-lead-bu
 import { LeadQualificationSummary } from "@/components/leads/lead-qualification-summary";
 import { formatLeadDate, getStatusBadgeColor } from "@/lib/leads/status";
 import { getIntentStatusColor, getIntentStatusLabel } from "@/lib/leads/qualification-display";
-import type { Lead } from "@/types/database";
+import type { Lead, LeadStatus } from "@/types/database";
 
 type LeadsListProps = {
   leads: Lead[];
   dbError?: string | null;
+  initialStatus?: LeadStatus;
 };
+
+const LEAD_STATUSES: LeadStatus[] = [
+  "new",
+  "contacted",
+  "qualified",
+  "scheduled",
+  "closed",
+  "lost",
+];
+
+function isLeadStatus(value: string | undefined): value is LeadStatus {
+  return LEAD_STATUSES.includes(value as LeadStatus);
+}
 
 function SearchIcon() {
   return (
@@ -67,14 +81,23 @@ function CalendarIcon() {
   );
 }
 
-export function LeadsList({ leads, dbError }: LeadsListProps) {
+export function LeadsList({ leads, dbError, initialStatus }: LeadsListProps) {
   const [query, setQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<LeadStatus | "all">(
+    initialStatus ?? "all"
+  );
 
   const filteredLeads = useMemo(() => {
-    const normalized = query.trim().toLowerCase();
-    if (!normalized) return leads;
+    let result = leads;
 
-    return leads.filter((lead) => {
+    if (statusFilter !== "all") {
+      result = result.filter((lead) => lead.status === statusFilter);
+    }
+
+    const normalized = query.trim().toLowerCase();
+    if (!normalized) return result;
+
+    return result.filter((lead) => {
       const haystack = [
         lead.client_name,
         lead.phone ?? "",
@@ -92,7 +115,7 @@ export function LeadsList({ leads, dbError }: LeadsListProps) {
 
       return haystack.includes(normalized);
     });
-  }, [leads, query]);
+  }, [leads, query, statusFilter]);
 
   return (
     <div className="space-y-6">
@@ -110,6 +133,35 @@ export function LeadsList({ leads, dbError }: LeadsListProps) {
           />
         </div>
         <CreateTestLeadButton />
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        {(["all", ...LEAD_STATUSES] as const).map((status) => {
+          const count =
+            status === "all"
+              ? leads.length
+              : leads.filter((lead) => lead.status === status).length;
+          const isActive = statusFilter === status;
+
+          return (
+            <Link
+              key={status}
+              href={status === "all" ? "/leads" : `/leads?status=${status}`}
+              onClick={(event) => {
+                event.preventDefault();
+                setStatusFilter(status);
+              }}
+              className={`rounded-full border px-3 py-1.5 text-xs font-medium transition-all ${
+                isActive
+                  ? "border-[#0066FF]/40 bg-[#0066FF]/20 text-[#00D4FF]"
+                  : "border-white/10 text-white/50 hover:border-white/20 hover:text-white"
+              }`}
+            >
+              {status === "all" ? "All" : status}{" "}
+              <span className="text-white/35">({count})</span>
+            </Link>
+          );
+        })}
       </div>
 
       {dbError && (

@@ -13,7 +13,7 @@ import {
 } from "@/lib/data/dashboard";
 
 export const metadata: Metadata = {
-  title: "DEPLOY CHECK CALENDAR ROUTES — Dashboard",
+  title: "Dashboard — Agentive01",
   description: "Your Agentive01 command center.",
 };
 
@@ -77,24 +77,28 @@ export default async function DashboardPage() {
           value: String(dashboardData.stats.recentConversations),
           change: "Last 7 days",
           accent: "text-[#00D4FF]",
+          href: "/leads",
         },
         {
           label: "Leads qualified",
           value: String(dashboardData.stats.qualifiedLeads),
           change: `${dashboardData.stats.totalLeads} total leads`,
           accent: "text-white",
+          href: "/leads?status=qualified",
         },
         {
           label: "Pending visits",
           value: String(dashboardData.stats.pendingVisitRequests),
           change: `${dashboardData.stats.scheduledLeads} confirmed on calendar`,
           accent: "text-amber-300",
+          href: "/visits?status=pending",
         },
         {
           label: "Total pipeline",
           value: String(dashboardData.stats.totalLeads),
           change: "All captured leads",
           accent: "text-[#00D4FF]",
+          href: "/leads",
         },
       ]
     : [];
@@ -102,9 +106,6 @@ export default async function DashboardPage() {
   return (
     <main className="px-6 pb-16 lg:px-8">
       <div className="mx-auto max-w-6xl">
-        <div className="mb-6 rounded-2xl border border-amber-400/50 bg-amber-400 px-5 py-3 text-center text-sm font-bold tracking-wide text-black">
-          DEPLOY CHECK CALENDAR ROUTES
-        </div>
         <section className="animate-fade-up">
           <p className="mb-4 inline-flex items-center gap-2 rounded-full border border-[#0066FF]/30 bg-[#0066FF]/10 px-4 py-1.5 text-xs font-medium tracking-wide text-[#00D4FF]">
             <span className="relative flex h-2 w-2">
@@ -146,11 +147,12 @@ export default async function DashboardPage() {
           <>
             <section className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
               {stats.map((stat) => (
-                <div
+                <Link
                   key={stat.label}
-                  className="rounded-2xl border border-white/10 bg-white/[0.02] p-6 transition-all hover:border-[#0066FF]/40 hover:bg-[#0066FF]/5"
+                  href={stat.href}
+                  className="group block rounded-2xl border border-white/10 bg-white/[0.02] p-6 transition-all hover:border-[#0066FF]/40 hover:bg-[#0066FF]/5 hover:shadow-lg hover:shadow-[#0066FF]/5 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0066FF]/50"
                 >
-                  <p className="text-xs font-medium uppercase tracking-wider text-white/40">
+                  <p className="text-xs font-medium uppercase tracking-wider text-white/40 transition-colors group-hover:text-white/55">
                     {stat.label}
                   </p>
                   <p
@@ -158,8 +160,10 @@ export default async function DashboardPage() {
                   >
                     {stat.value}
                   </p>
-                  <p className="mt-2 text-xs text-white/40">{stat.change}</p>
-                </div>
+                  <p className="mt-2 text-xs text-white/40 transition-colors group-hover:text-white/55">
+                    {stat.change}
+                  </p>
+                </Link>
               ))}
             </section>
 

@@ -2,13 +2,34 @@ import type { Metadata } from "next";
 import { VisitsList } from "@/components/visits/visits-list";
 import { getVisitRequests } from "@/lib/data/visit-requests";
 import { createClient } from "@/lib/supabase/server";
+import type { VisitRequestStatus } from "@/types/database";
+
+function isVisitStatusFilter(
+  value: string | undefined
+): value is "all" | VisitRequestStatus {
+  return (
+    value === "all" ||
+    value === "pending" ||
+    value === "confirmed" ||
+    value === "cancelled"
+  );
+}
 
 export const metadata: Metadata = {
   title: "Visit Requests — Agentive01",
   description: "Manage property visit requests from WhatsApp leads.",
 };
 
-export default async function VisitsPage() {
+type VisitsPageProps = {
+  searchParams: Promise<{ status?: string }>;
+};
+
+export default async function VisitsPage({ searchParams }: VisitsPageProps) {
+  const params = await searchParams;
+  const initialStatus = isVisitStatusFilter(params.status)
+    ? params.status
+    : "all";
+
   const supabase = await createClient();
   const {
     data: { user },
@@ -45,7 +66,11 @@ export default async function VisitsPage() {
         </section>
 
         <div className="mt-10">
-          <VisitsList visits={visits ?? []} dbError={dbError} />
+          <VisitsList
+            visits={visits ?? []}
+            dbError={dbError}
+            initialStatus={initialStatus}
+          />
         </div>
       </div>
     </main>

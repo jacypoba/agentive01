@@ -4,13 +4,35 @@ import { LeadsList } from "@/components/leads/leads-list";
 import { LeadsListSkeleton } from "@/components/leads/leads-list-skeleton";
 import { getLeads } from "@/lib/data/leads";
 import { createClient } from "@/lib/supabase/server";
+import type { LeadStatus } from "@/types/database";
+
+const LEAD_STATUSES: LeadStatus[] = [
+  "new",
+  "contacted",
+  "qualified",
+  "scheduled",
+  "closed",
+  "lost",
+];
+
+function isLeadStatusParam(value: string | undefined): value is LeadStatus {
+  return LEAD_STATUSES.includes(value as LeadStatus);
+}
 
 export const metadata: Metadata = {
   title: "Leads — Agentive01",
   description: "Manage your real estate leads pipeline.",
 };
 
-async function LeadsContent() {
+type LeadsPageProps = {
+  searchParams: Promise<{ status?: string }>;
+};
+
+async function LeadsContent({
+  initialStatus,
+}: {
+  initialStatus?: LeadStatus;
+}) {
   const supabase = await createClient();
   const {
     data: { user },
@@ -28,10 +50,21 @@ async function LeadsContent() {
     }
   }
 
-  return <LeadsList leads={leads ?? []} dbError={dbError} />;
+  return (
+    <LeadsList
+      leads={leads ?? []}
+      dbError={dbError}
+      initialStatus={initialStatus}
+    />
+  );
 }
 
-export default function LeadsPage() {
+export default async function LeadsPage({ searchParams }: LeadsPageProps) {
+  const params = await searchParams;
+  const initialStatus = isLeadStatusParam(params.status)
+    ? params.status
+    : undefined;
+
   return (
     <main className="px-6 pb-16 lg:px-8">
       <div className="mx-auto max-w-6xl">
@@ -56,7 +89,7 @@ export default function LeadsPage() {
 
         <section className="mt-10">
           <Suspense fallback={<LeadsListSkeleton />}>
-            <LeadsContent />
+            <LeadsContent initialStatus={initialStatus} />
           </Suspense>
         </section>
       </div>

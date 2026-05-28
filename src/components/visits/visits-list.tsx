@@ -14,12 +14,26 @@ import type { VisitRequestStatus, VisitRequestWithLead } from "@/types/database"
 type VisitsListProps = {
   visits: VisitRequestWithLead[];
   dbError?: string | null;
+  initialStatus?: StatusFilter;
 };
 
 type StatusFilter = "all" | VisitRequestStatus;
 
-export function VisitsList({ visits, dbError }: VisitsListProps) {
-  const [filter, setFilter] = useState<StatusFilter>("all");
+function isVisitStatusFilter(value: string | undefined): value is StatusFilter {
+  return (
+    value === "all" ||
+    value === "pending" ||
+    value === "confirmed" ||
+    value === "cancelled"
+  );
+}
+
+export function VisitsList({
+  visits,
+  dbError,
+  initialStatus = "all",
+}: VisitsListProps) {
+  const [filter, setFilter] = useState<StatusFilter>(initialStatus);
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -126,10 +140,15 @@ export function VisitsList({ visits, dbError }: VisitsListProps) {
 
       <div className="flex flex-wrap gap-2">
         {filters.map((item) => (
-          <button
+          <Link
             key={item.key}
-            type="button"
-            onClick={() => setFilter(item.key)}
+            href={
+              item.key === "all" ? "/visits" : `/visits?status=${item.key}`
+            }
+            onClick={(event) => {
+              event.preventDefault();
+              setFilter(item.key);
+            }}
             className={`rounded-full border px-3 py-1.5 text-xs font-medium transition-all ${
               filter === item.key
                 ? "border-[#0066FF]/40 bg-[#0066FF]/20 text-[#00D4FF]"
@@ -137,7 +156,7 @@ export function VisitsList({ visits, dbError }: VisitsListProps) {
             }`}
           >
             {item.label}
-          </button>
+          </Link>
         ))}
       </div>
 
