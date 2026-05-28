@@ -61,6 +61,23 @@ export async function createConversation(
   return data;
 }
 
+export async function deleteConversationsByLeadId(
+  supabase: Client,
+  leadId: string
+): Promise<number> {
+  const { data, error } = await supabase
+    .from("conversations")
+    .delete()
+    .eq("lead_id", leadId)
+    .select("id");
+
+  if (error) {
+    throw new Error(`Failed to delete conversations: ${error.message}`);
+  }
+
+  return data?.length ?? 0;
+}
+
 export async function getRecentConversationsForUser(
   supabase: Client,
   userId: string,

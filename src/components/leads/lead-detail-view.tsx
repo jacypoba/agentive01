@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ClearLeadMemoryPanel } from "@/components/leads/clear-lead-memory";
 import { ConversationPanel } from "@/components/leads/conversation-panel";
 import { LanguageBadge } from "@/components/leads/language-badge";
 import { LeadFollowUpsPanel } from "@/components/leads/lead-follow-ups-panel";
@@ -172,6 +173,10 @@ export function LeadDetailView({ lead, conversations }: LeadDetailViewProps) {
 
               <div className="mt-6 border-t border-white/5 pt-6">
                 <LeadFollowUpsPanel leadId={lead.id} />
+              </div>
+
+              <div className="mt-6 border-t border-white/5 pt-6">
+                <ClearLeadMemoryPanel leadId={lead.id} />
               </div>
             </div>
           </div>

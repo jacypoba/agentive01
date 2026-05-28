@@ -2,12 +2,53 @@
 
 import { revalidatePath } from "next/cache";
 import { createLead } from "@/lib/data/leads";
+import {
+  buildClearMemorySuccessMessage,
+  clearLeadMemory,
+} from "@/lib/leads/clear-memory";
 import { createClient } from "@/lib/supabase/server";
 
 export type CreateTestLeadState = {
   error?: string;
   success?: string;
 };
+
+export type ClearLeadMemoryState = {
+  error?: string;
+  success?: string;
+};
+
+export async function clearLeadMemoryAction(
+  leadId: string,
+  resetQualificationFields = false
+): Promise<ClearLeadMemoryState> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { error: "You must be signed in." };
+  }
+
+  try {
+    const result = await clearLeadMemory(supabase, user.id, leadId, {
+      resetQualificationFields,
+    });
+
+    revalidatePath("/dashboard");
+    revalidatePath("/follow-ups");
+    revalidatePath("/leads");
+    revalidatePath(`/leads/${leadId}`);
+
+    return { success: buildClearMemorySuccessMessage(result) };
+  } catch (error) {
+    return {
+      error:
+        error instanceof Error ? error.message : "Failed to clear lead memory.",
+    };
+  }
+}
 
 const TEST_LEAD = {
   client_name: "Marco Rossi",
