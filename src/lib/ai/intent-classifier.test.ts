@@ -80,6 +80,27 @@ describe("classifyMessageIntent", () => {
     );
     assert.equal(result.intent, "ask_more_options");
   });
+
+  it('classifies "show options" as ask_more_options with fresh query', () => {
+    const result = classifyMessageIntent(historyFrom(["show options"]));
+    assert.equal(result.intent, "ask_more_options");
+    assert.equal(result.wantsMore, true);
+    assert.equal(shouldRunFreshPropertyQuery(result), true);
+  });
+
+  it('classifies Italian apartment search as property_search', () => {
+    const result = classifyMessageIntent(
+      historyFrom(["Cerco appartamento a Milano fino a 600 mil"])
+    );
+    assert.equal(result.intent, "property_search");
+    assert.equal(shouldQueryProperties(result), true);
+  });
+
+  it('classifies "mostrami" as ask_more_options', () => {
+    const result = classifyMessageIntent(historyFrom(["mostrami"]));
+    assert.equal(result.intent, "ask_more_options");
+    assert.equal(result.wantsMore, true);
+  });
 });
 
 describe("reply guardrails", () => {

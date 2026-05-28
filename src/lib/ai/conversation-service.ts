@@ -25,8 +25,9 @@ import {
 } from "@/lib/data/conversations";
 import { getPropertiesByIds } from "@/lib/data/properties";
 import { cancelFollowUpsOnClientReply } from "@/lib/follow-ups/scheduler";
-import { getExhaustedMatchLines } from "@/lib/i18n/messages";
-import { getLeadLanguage, syncLeadPreferredLanguage } from "@/lib/i18n/sync-language";
+import { getExhaustedMatchLines, getNoMatchLine } from "@/lib/i18n/messages";
+import { resolveReplyLanguage, syncLeadPreferredLanguage } from "@/lib/i18n/sync-language";
+import { derivePropertySearchCriteriaDebug } from "@/lib/properties/search-criteria";
 import type { SupportedLanguage } from "@/lib/i18n/types";
 import { findPropertyRecommendations } from "@/lib/properties/find-recommendations";
 import {
@@ -39,7 +40,6 @@ import {
   formatPropertyCard,
   formatPropertyListingRecord,
   getLastShownPropertyBatchIds,
-  getShownPropertyIds,
   isCatalogBatch,
 } from "@/lib/properties/property-cards";
 import {
@@ -263,6 +263,15 @@ async function buildIntroReply(
     );
   }
 
+  if (
+    propertiesToRecommend.length === 0 &&
+    availability.noMatchesInDatabase &&
+    (classified.intent === "property_search" ||
+      classified.intent === "ask_more_options")
+  ) {
+    return getNoMatchLine(language, `${memoryLead.id}:no-match`);
+  }
+
   return generateAIReply(
     memoryLead,
     history,
@@ -270,7 +279,8 @@ async function buildIntroReply(
     availability,
     clientAskedForMoreOptions(history),
     isReshow,
-    classified.intent
+    classified.intent,
+    language
   );
 }
 
@@ -302,13 +312,13 @@ export async function processClientMessageWithAI(
     lead
   );
 
+  const language = resolveReplyLanguage(message, memoryLead);
   const languageLead = await syncLeadPreferredLanguage(
     supabase,
     memoryLead,
     message,
     history
   );
-  const language = getLeadLanguage(languageLead);
 
   const classified = classifyMessageIntent(history, languageLead);
   logIntentDecision(lead.id, classified, language);
@@ -359,6 +369,12 @@ export async function processClientMessageWithAI(
   let freshQueryMade = false;
 
   if (shouldQueryProperties(classified)) {
+    const searchDebug = derivePropertySearchCriteriaDebug(
+      memoryLead,
+      history,
+      { preferLatestMessage: shouldRunFreshPropertyQuery(classified) }
+    );
+
     const resolved = await resolvePropertiesToRecommend(
       supabase,
       memoryLead,
@@ -371,16 +387,20 @@ export async function processClientMessageWithAI(
     isReshow = resolved.isReshow;
     freshQueryMade = resolved.freshQueryMade;
 
-    console.log("[WhatsApp debug] Search criteria:", criteria);
-    console.log("[WhatsApp debug] Matching properties count:", availability.matchingTotal);
-    console.log("[WhatsApp debug] Shown property IDs:", [...getShownPropertyIds(history)]);
-    console.log("[WhatsApp debug] Remaining unsent:", availability.remainingCount);
-    console.log("[WhatsApp debug] Re-show:", isReshow);
-    console.log("[WhatsApp debug] Fresh query:", freshQueryMade);
-    console.log(
-      "[WhatsApp debug] Sending this turn:",
-      propertiesToRecommend.map((p) => p.title)
-    );
+    console.log("[WhatsApp debug] Multilingual search", {
+      leadId: lead.id,
+      detectedLanguage: language,
+      normalizedCity: searchDebug.normalizedCity,
+      normalizedPropertyType: searchDebug.normalizedPropertyType,
+      normalizedBudget: searchDebug.normalizedBudget,
+      intent: classified.intent,
+      matchedPropertiesCount: availability.matchingTotal,
+      sendingCount: propertiesToRecommend.length,
+      wantsReshow: classified.wantsReshow,
+      wantsMore: classified.wantsMore,
+      freshQueryMade,
+      isReshow,
+    });
   }
 
   const guardContext = {

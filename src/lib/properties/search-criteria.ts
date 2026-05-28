@@ -1,12 +1,17 @@
 import { getLastClientMessageText } from "@/lib/ai/qualification";
 import { getLanguageLocale, normalizeLanguage, type SupportedLanguage } from "@/lib/i18n/types";
+import {
+  normalizeCity,
+  normalizePropertyType,
+  parseNormalizedBudget,
+} from "@/lib/properties/normalize-search";
 import type { Conversation, Lead, PropertySearchCriteria } from "@/types/database";
 
 const CITY_PATTERN =
-  /\b(?:em|in|a)\s+([A-ZÀ-Ú][a-zà-ú]+(?:\s+[A-ZÀ-Ú][a-zà-ú]+)?)\b|\b(lisboa|porto|milano|milan|firenze|florence|roma|rome|cascais|sintra|oeiras|faro|coimbra|braga|paris|london|madrid|barcelona)\b/i;
+  /\b(?:em|in|en|a)\s+([A-ZÀ-Ú][a-zà-ú]+(?:\s+[A-ZÀ-Ú][a-zà-ú]+)?)\b|\b(lisboa|porto|milano|milan|milão|milao|firenze|florence|roma|rome|cascais|sintra|oeiras|faro|coimbra|braga|paris|london|madrid|barcelona)\b/i;
 
 const PROPERTY_TYPE_PATTERN =
-  /\b(apartamento|moradia|vivenda|loft|duplex|penthouse|estúdio|studio|t[0-4]|house|apartment|flat|villa)\b/i;
+  /\b(apartamento|moradia|vivenda|loft|duplex|penthouse|estúdio|estudio|studio|t[0-4]|house|apartment|appartamento|flat|villa|home|casa|villetta|vivienda)\b/i;
 
 function clientMessagesText(history: Conversation[]): string {
   return history
@@ -16,84 +21,27 @@ function clientMessagesText(history: Conversation[]): string {
 }
 
 export function parseBudgetMax(budgetText: string | null | undefined): number | null {
-  if (!budgetText?.trim()) return null;
-
-  const text = budgetText.toLowerCase().replace(/\s+/g, " ");
-
-  const milhoesMatch = text.match(
-    /(\d[\d.,]*)\s*(?:milh[oõ]es|milhão|million|m\b)(?!\w)/i
-  );
-  if (milhoesMatch) {
-    const value = parseLocalizedNumber(milhoesMatch[1]);
-    return value != null ? Math.round(value * 1_000_000) : null;
-  }
-
-  const milMatch = text.match(/(\d[\d.,]*)\s*(?:mil|k\b)/i);
-  if (milMatch) {
-    const value = parseLocalizedNumber(milMatch[1]);
-    return value != null ? Math.round(value * 1_000) : null;
-  }
-
-  const currencyMatch = text.match(/(\d[\d.,]{2,})/);
-  if (currencyMatch) {
-    const value = parseLocalizedNumber(currencyMatch[1]);
-    if (value != null && value >= 10_000) {
-      return Math.round(value);
-    }
-  }
-
-  return null;
-}
-
-function parseLocalizedNumber(raw: string): number | null {
-  const cleaned = raw.trim();
-  if (!cleaned) return null;
-
-  if (cleaned.includes(",") && cleaned.includes(".")) {
-    const normalized = cleaned.replace(/\./g, "").replace(",", ".");
-    const value = Number.parseFloat(normalized);
-    return Number.isFinite(value) ? value : null;
-  }
-
-  if (cleaned.includes(",") && !cleaned.includes(".")) {
-    const parts = cleaned.split(",");
-    if (parts.length === 2 && parts[1].length <= 2) {
-      const value = Number.parseFloat(`${parts[0]}.${parts[1]}`);
-      return Number.isFinite(value) ? value : null;
-    }
-    const value = Number.parseFloat(cleaned.replace(/,/g, ""));
-    return Number.isFinite(value) ? value : null;
-  }
-
-  const value = Number.parseFloat(cleaned.replace(/\./g, ""));
-  return Number.isFinite(value) ? value : null;
+  return parseNormalizedBudget(budgetText);
 }
 
 function extractCityFromText(text: string): string | null {
   const prepositionMatch = text.match(CITY_PATTERN);
   if (prepositionMatch?.[1]) {
-    return prepositionMatch[1].trim();
+    return normalizeCity(prepositionMatch[1].trim());
   }
   if (prepositionMatch?.[2]) {
-    return capitalizeWords(prepositionMatch[2]);
+    return normalizeCity(prepositionMatch[2]);
   }
   return null;
 }
 
 function extractPropertyTypeFromText(text: string): string | null {
   const match = text.match(PROPERTY_TYPE_PATTERN);
-  return match?.[1] ? match[1].trim() : null;
-}
-
-function capitalizeWords(value: string): string {
-  return value
-    .split(/\s+/)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
-    .join(" ");
+  return match?.[1] ? normalizePropertyType(match[1].trim()) : null;
 }
 
 function resolveCity(lead: Lead, history: Conversation[]): string | null {
-  const fromLead = lead.preferred_area?.trim();
+  const fromLead = normalizeCity(lead.preferred_area);
   if (fromLead) return fromLead;
 
   const latest = getLastClientMessageText(history);
@@ -102,12 +50,11 @@ function resolveCity(lead: Lead, history: Conversation[]): string | null {
     if (fromLatest) return fromLatest;
   }
 
-  const fromHistory = extractCityFromText(clientMessagesText(history));
-  return fromHistory;
+  return extractCityFromText(clientMessagesText(history));
 }
 
 function resolvePropertyType(lead: Lead, history: Conversation[]): string | null {
-  const fromLead = lead.property_type?.trim();
+  const fromLead = normalizePropertyType(lead.property_type);
   if (fromLead) return fromLead;
 
   const latest = getLastClientMessageText(history);
@@ -149,6 +96,12 @@ function resolveLatestBudgetText(history: Conversation[]): string | null {
   return parseBudgetMax(latest) ? latest : null;
 }
 
+export type DerivedSearchCriteria = PropertySearchCriteria & {
+  normalizedCity: string;
+  normalizedPropertyType: string;
+  normalizedBudget: number | null;
+};
+
 /**
  * Returns search criteria when city and property type are available.
  * Strict mode (default) also requires a parseable budget.
@@ -160,10 +113,12 @@ export function derivePropertySearchCriteria(
 ): PropertySearchCriteria | null {
   const preferLatest = options?.preferLatestMessage ?? false;
   const city = preferLatest
-    ? extractCityFromLatest(history) ?? lead.preferred_area?.trim() ?? null
+    ? normalizeCity(extractCityFromLatest(history) ?? lead.preferred_area) ??
+      normalizeCity(lead.preferred_area)
     : resolveCity(lead, history);
   const propertyType = preferLatest
-    ? extractTypeFromLatest(history) ?? lead.property_type?.trim() ?? null
+    ? normalizePropertyType(extractTypeFromLatest(history) ?? lead.property_type) ??
+      normalizePropertyType(lead.property_type)
     : resolvePropertyType(lead, history);
   const budgetText = preferLatest
     ? resolveLatestBudgetText(history) ?? lead.budget?.trim() ?? null
@@ -189,6 +144,29 @@ export function derivePropertySearchCriteria(
     city,
     propertyType,
     maxBudget,
+  };
+}
+
+export function derivePropertySearchCriteriaDebug(
+  lead: Lead,
+  history: Conversation[],
+  options?: { relaxed?: boolean; preferLatestMessage?: boolean }
+): {
+  criteria: PropertySearchCriteria | null;
+  normalizedCity: string | null;
+  normalizedPropertyType: string | null;
+  normalizedBudget: number | null;
+} {
+  const criteria = derivePropertySearchCriteria(lead, history, options);
+  const budgetText = getLastClientMessageText(history) ?? lead.budget ?? null;
+
+  return {
+    criteria,
+    normalizedCity: criteria?.city ?? normalizeCity(lead.preferred_area),
+    normalizedPropertyType:
+      criteria?.propertyType ?? normalizePropertyType(lead.property_type),
+    normalizedBudget:
+      criteria?.maxBudget ?? parseBudgetMax(budgetText) ?? parseBudgetMax(lead.budget),
   };
 }
 

@@ -106,14 +106,14 @@ export const PROPERTY_CARD_LABELS: Record<
   pt: {
     bedroom: "quarto",
     bedrooms: "quartos",
-    bathroom: "wc",
-    bathrooms: "wcs",
+    bathroom: "casa de banho",
+    bathrooms: "casas de banho",
   },
   en: {
     bedroom: "bedroom",
     bedrooms: "bedrooms",
-    bathroom: "bath",
-    bathrooms: "baths",
+    bathroom: "bathroom",
+    bathrooms: "bathrooms",
   },
   it: {
     bedroom: "camera",
@@ -365,6 +365,70 @@ export const BANNED_ON_THANKS: Record<SupportedLanguage, RegExp[]> = {
   it: [/qualcosa di nuovo/i, /migliori opzioni/i, /visita/i],
   es: [/algo nuevo/i, /mejores opciones/i, /visita/i],
 };
+
+export const BANNED_DEFERRAL: Record<SupportedLanguage, RegExp[]> = {
+  pt: [
+    /vou verificar/i,
+    /deixa-me ver/i,
+    /deixe-me ver/i,
+    /j[aá] te digo/i,
+    /vou confirmar/i,
+    /vou procurar/i,
+    /vou atualizar/i,
+  ],
+  en: [
+    /i['']ll check/i,
+    /let me check/i,
+    /i will check/i,
+    /i['']ll look/i,
+    /get back to you/i,
+    /i['']ll update you/i,
+  ],
+  it: [
+    /verifico/i,
+    /controllo/i,
+    /ti faccio sapere/i,
+    /ti aggiorno/i,
+  ],
+  es: [
+    /voy a verificar/i,
+    /déjame ver/i,
+    /dejame ver/i,
+    /te confirmo/i,
+    /te aviso/i,
+  ],
+};
+
+export const NO_MATCH_LINES: Record<SupportedLanguage, string[]> = {
+  pt: [
+    "Neste perfil não encontrei nada de momento — se alargarmos zona ou orçamento, vejo já.",
+    "Por agora nada encaixa neste perfil. Quer ajustar algum critério?",
+  ],
+  en: [
+    "Nothing matched this profile right now — happy to widen the search if you want.",
+    "No exact matches for this brief at the moment.",
+  ],
+  it: [
+    "Al momento non ho nulla in questo profilo — se vuoi allargare zona o budget, guardo subito.",
+    "Per ora nessun match preciso con questi criteri.",
+  ],
+  es: [
+    "Por ahora no hay nada que encaje con este perfil — si ampliamos zona o presupuesto, lo miro.",
+    "De momento no encuentro matches exactos con estos criterios.",
+  ],
+};
+
+export function getNoMatchLine(
+  language: SupportedLanguage,
+  seed: string
+): string {
+  const lines = NO_MATCH_LINES[language];
+  let hash = 0;
+  for (let i = 0; i < seed.length; i += 1) {
+    hash = (hash * 31 + seed.charCodeAt(i)) >>> 0;
+  }
+  return lines[hash % lines.length];
+}
 
 export const AI_LANGUAGE_INSTRUCTION: Record<SupportedLanguage, string> = {
   pt: "Responda SEMPRE em português de Portugal. Tom natural de consultor imobiliário premium. Nunca misture idiomas na mesma mensagem.",

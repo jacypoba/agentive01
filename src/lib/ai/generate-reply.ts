@@ -105,6 +105,7 @@ function toOpenAIMessages(
       clientAskedForMore,
       clientAskedToReshow,
       messageIntent,
+      language,
     }
   );
   const propertyDirective = buildPropertyRecommendationDirective(
@@ -159,9 +160,10 @@ export async function generateAIReply(
   availability: PropertyAvailability,
   clientAskedForMore = false,
   clientAskedToReshow = false,
-  messageIntent: MessageIntent = "unknown"
+  messageIntent: MessageIntent = "unknown",
+  languageOverride?: SupportedLanguage
 ): Promise<string> {
-  const language = getLeadLanguage(lead);
+  const language = languageOverride ?? getLeadLanguage(lead);
   const openai = getOpenAIClient();
   const messages = toOpenAIMessages(
     history,

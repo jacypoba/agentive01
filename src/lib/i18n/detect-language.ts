@@ -9,17 +9,17 @@ type LanguageScore = Record<SupportedLanguage, number>;
 
 const STRONG_LANGUAGE_PATTERNS: Record<SupportedLanguage, RegExp[]> = {
   pt: [
-    /\b(obrigad[oa]|obg|olá|ola|procuro|procurar|quais|está bem|tudo bem|imóvel|imoveis|orçamento|orcamento|amanhã|manhã)\b/i,
+    /\b(obrigad[oa]|obg|olá|ola|procuro|procurar|quais|está bem|tudo bem|imóvel|imoveis|orçamento|orcamento|amanhã|manhã|mostra opções|mostra novamente)\b/i,
     /[ãõç]/i,
   ],
   en: [
-    /\b(thank|thanks|hello|hi\b|hey\b|looking for|please|viewing|schedule|bedroom|property|tomorrow|which)\b/i,
+    /\b(thank|thanks|hello|hi\b|hey\b|looking for|please|viewing|schedule|bedroom|property|tomorrow|which|show me|show options|what you have|any options)\b/i,
   ],
   it: [
-    /\b(grazie|ciao|buongiorno|buonasera|cerco|cercare|voglio|domani|quale|mattina|pomeriggio|fino a)\b/i,
+    /\b(grazie|ciao|buongiorno|buonasera|cerco|cercare|voglio|domani|quale|mattina|pomeriggio|fino a|mostrami|fammi vedere|fami vedere)\b/i,
   ],
   es: [
-    /\b(gracias|hola|buenos días|buenas tardes|busco|buscar|quiero|mañana|manana|cuál|cual|presupuesto|hasta|habitacion|habitación)\b/i,
+    /\b(gracias|hola|buenos días|buenas tardes|busco|buscar|quiero|mañana|manana|cuál|cual|presupuesto|hasta|habitacion|habitación|qué opciones|que opciones|muéstrame|muestrame)\b/i,
     /[ñ¿¡]/i,
   ],
 };
@@ -28,7 +28,7 @@ const WEAK_LANGUAGE_PATTERNS: Record<SupportedLanguage, RegExp[]> = {
   pt: [
     /\b(bom dia|boa tarde|boa noite|apartamento|moradia|visita|quero|até|quartos?|horário|tarde)\b/i,
   ],
-  en: [/\b(apartment|house|visit|want|budget|morning|afternoon)\b/i],
+  en: [/\b(apartment|house|visit|want|budget|morning|afternoon|options|listings)\b/i],
   it: [/\b(appartamento|casa|visita|camera|milano|budget)\b/i],
   es: [/\b(apartamento|casa|visita|horario|tarde)\b/i],
 };
@@ -89,10 +89,16 @@ export function detectLanguageFromText(
 
   const scores = scoreText(trimmed);
   const detected = pickHighestScore(scores);
-  return detected === DEFAULT_LANGUAGE && scores.pt === 0 ? fallback : detected;
+  return detected === DEFAULT_LANGUAGE && bestScoreFrom(scores) === 0
+    ? fallback
+    : detected;
 }
 
-/** Prefer the latest client message; fall back to recent client history. */
+function bestScoreFrom(scores: LanguageScore): number {
+  return Math.max(scores.pt, scores.en, scores.it, scores.es);
+}
+
+/** Prefer the latest client message only — do not blend older history. */
 export function detectLanguageFromHistory(
   history: Conversation[],
   latestMessage?: string,
@@ -102,17 +108,15 @@ export function detectLanguageFromHistory(
     return detectLanguageFromText(latestMessage, fallback);
   }
 
-  const clientMessages = history
+  const lastClient = history
     .filter((item) => item.sender === "client")
-    .slice(-3)
-    .map((item) => item.message);
+    .slice(-1)[0]?.message;
 
-  if (clientMessages.length === 0) {
+  if (!lastClient?.trim()) {
     return fallback;
   }
 
-  const combined = clientMessages.join("\n");
-  return detectLanguageFromText(combined, fallback);
+  return detectLanguageFromText(lastClient, fallback);
 }
 
 export function resolveLeadLanguage(

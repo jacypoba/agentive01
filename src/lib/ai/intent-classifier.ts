@@ -2,6 +2,7 @@ import type { Conversation, Lead } from "@/types/database";
 import {
   clientAskedForMoreOptions,
   clientAskedToReshowOptions,
+  clientAskedToSeeOptions,
   getLastClientMessageText,
   lastClientMessageMentionsVisit,
 } from "@/lib/ai/qualification";
@@ -22,25 +23,25 @@ export type ClassifiedIntent = {
 };
 
 const THANKS_CLOSING_PATTERN =
-  /\b(obrigad[oa]|obg|thanks|thank you|thx|agradeço|agradecido|valeu)\b/i;
+  /\b(obrigad[oa]|obg|thanks|thank you|thx|grazie|gracias|agradeço|agradecido|valeu)\b/i;
 
 const CLOSING_ONLY_PATTERN =
-  /^(est[aá]\s+bem|tudo\s+bem|ok|okay|perfeito|combinado|sem\s+problema|fico\s+por\s+aqui|at[eé]\s+(logo|j[aá]|breve)|adeus|boa\s+(tarde|noite|sorte))[\s,!.👌🙂]*$/i;
+  /^(est[aá]\s+bem|tudo\s+bem|ok|okay|perfeito|perfetto|perfecto|combinado|sem\s+problema|fico\s+por\s+aqui|at[eé]\s+(logo|j[aá]|breve)|adeus|boa\s+(tarde|noite|sorte))[\s,!.👌🙂]*$/i;
 
 const PROPERTY_SEARCH_PATTERN =
-  /\b(procuro|procurar|procura|quero|preciso|interess(?:a|o)|busco|pesquiso|looking for|searching for)\b/i;
+  /\b(procuro|procurar|procura|quero|preciso|interess(?:a|o)|busco|pesquiso|looking for|searching for|cerco|cercare|voglio|quiero|buscar)\b/i;
 
 const PROPERTY_TYPE_IN_MESSAGE =
-  /\b(apartamento|moradia|vivenda|loft|duplex|penthouse|estúdio|studio|house|apartment|flat|villa|t[0-4])\b/i;
+  /\b(apartamento|moradia|vivenda|loft|duplex|penthouse|estúdio|estudio|studio|house|apartment|appartamento|flat|villa|home|casa|villetta|vivienda|t[0-4])\b/i;
 
 const CITY_OR_BUDGET_SIGNAL =
-  /\b(em\s+[a-zà-ú]|lisboa|porto|milano|milan|firenze|florence|roma|cascais|sintra|oeiras|faro|coimbra|braga|até|orçamento|budget|€|\d[\d.,\s]*(mil|k|milhões?))\b/i;
+  /\b(em\s+[a-zà-ú]|in\s+[a-z]|en\s+[a-z]|a\s+[a-z]|lisboa|porto|milano|milan|milão|firenze|florence|roma|cascais|sintra|oeiras|faro|coimbra|braga|até|fino a|hasta|orçamento|budget|presupuesto|€|\d[\d.,\s]*(mil|mila|k|milhões?))\b/i;
 
 const GENERAL_QUESTION_PATTERN =
-  /\?|^(como|quando|onde|quanto|qual|quais|o que|what|how|when|where|why|pode|podes|consegue)\b/i;
+  /\?|^(como|quando|onde|quanto|qual|quais|o que|what|how|when|where|why|come|quando|dove|quanto|quale|quali|cosa|qué|que|como|cuando|dónde|donde|cuánto|cuanto|pode|podes|consegue|puoi|puedes)\b/i;
 
 const ACTIVE_REQUEST_PATTERN =
-  /\b(mostra|mostrar|opções|opcões|imóveis|imoveis|visita|visitar|agendar|marcar|procuro|procura|quero ver|reenvi|mais opções|tem mais|tens mais)\b/i;
+  /\b(mostra|mostrar|mostrami|fammi vedere|fami vedere|muéstrame|muestrame|opções|opcões|options|imóveis|imoveis|listings|visita|visitar|agendar|marcar|procuro|procura|quero ver|show options|show me|reenvi|mais opções|tem mais|tens mais|more options)\b/i;
 
 function getLatestClientText(history: Conversation[]): string {
   return getLastClientMessageText(history)?.trim() ?? "";
@@ -82,7 +83,15 @@ function isPropertySearchMessage(text: string): boolean {
   const hasType = PROPERTY_TYPE_IN_MESSAGE.test(text);
   const hasLocationOrBudget = CITY_OR_BUDGET_SIGNAL.test(text);
 
-  return hasSearchVerb && (hasType || hasLocationOrBudget);
+  if (hasSearchVerb && (hasType || hasLocationOrBudget)) {
+    return true;
+  }
+
+  if (hasType && hasLocationOrBudget) {
+    return true;
+  }
+
+  return false;
 }
 
 function isGeneralQuestion(text: string): boolean {
@@ -102,12 +111,15 @@ export function classifyMessageIntent(
   const latestMessage = getLatestClientText(history);
   const wantsReshow = clientAskedToReshowOptions(history);
   const wantsMore = clientAskedForMoreOptions(history);
+  const askedToSee = clientAskedToSeeOptions(history);
 
-  if (wantsReshow || wantsMore) {
+  if (wantsReshow || wantsMore || askedToSee) {
+    const isReshow = wantsReshow;
+    const isMore = wantsMore || (askedToSee && !isReshow);
     return {
       intent: "ask_more_options",
-      wantsReshow,
-      wantsMore,
+      wantsReshow: isReshow,
+      wantsMore: isMore,
       latestMessage,
     };
   }
@@ -169,6 +181,7 @@ export function shouldUseReshowBatch(intent: ClassifiedIntent): boolean {
 export function shouldRunFreshPropertyQuery(intent: ClassifiedIntent): boolean {
   return (
     intent.intent === "property_search" ||
-    (intent.intent === "ask_more_options" && intent.wantsMore)
+    (intent.intent === "ask_more_options" &&
+      (intent.wantsMore || intent.wantsReshow))
   );
 }

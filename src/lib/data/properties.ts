@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { citiesMatch, propertyTypesMatch } from "@/lib/properties/normalize-search";
 import type {
   Database,
   Property,
@@ -134,41 +135,22 @@ function normalizeProperty(row: Property): Property {
   };
 }
 
-function normalizeSearchTerm(value: string): string {
-  return value.trim().toLowerCase();
-}
-
 function propertyMatchesCriteria(
   property: Property,
   criteria: PropertySearchCriteria
 ): boolean {
-  const cityTerm = criteria.city ? normalizeSearchTerm(criteria.city) : null;
-  const typeTerm = criteria.propertyType
-    ? normalizeSearchTerm(criteria.propertyType)
-    : null;
-
-  if (cityTerm) {
-    const city = normalizeSearchTerm(property.city);
-    const neighborhood = property.neighborhood
-      ? normalizeSearchTerm(property.neighborhood)
-      : "";
+  if (criteria.city) {
+    const neighborhood = property.neighborhood?.trim() ?? "";
     const locationMatch =
-      city.includes(cityTerm) ||
-      cityTerm.includes(city) ||
-      neighborhood.includes(cityTerm) ||
-      cityTerm.includes(neighborhood);
+      citiesMatch(criteria.city, property.city) ||
+      (neighborhood.length > 0 && citiesMatch(criteria.city, neighborhood));
     if (!locationMatch) {
       return false;
     }
   }
 
-  if (typeTerm) {
-    const propertyType = normalizeSearchTerm(property.property_type);
-    const typeMatch =
-      propertyType.includes(typeTerm) ||
-      typeTerm.includes(propertyType) ||
-      typeAliasesMatch(typeTerm, propertyType);
-    if (!typeMatch) {
+  if (criteria.propertyType) {
+    if (!propertyTypesMatch(criteria.propertyType, property.property_type)) {
       return false;
     }
   }
@@ -180,31 +162,18 @@ function propertyMatchesCriteria(
   return true;
 }
 
-function typeAliasesMatch(search: string, propertyType: string): boolean {
-  const apartmentTerms = ["apartamento", "apartment", "flat", "t0", "t1", "t2", "t3", "t4"];
-  const houseTerms = ["moradia", "vivenda", "house", "villa"];
-
-  const searchIsApartment = apartmentTerms.some((term) => search.includes(term));
-  const searchIsHouse = houseTerms.some((term) => search.includes(term));
-  const propertyIsApartment = apartmentTerms.some((term) =>
-    propertyType.includes(term)
-  );
-  const propertyIsHouse = houseTerms.some((term) => propertyType.includes(term));
-
-  if (searchIsApartment && propertyIsApartment) return true;
-  if (searchIsHouse && propertyIsHouse) return true;
-
-  return false;
-}
-
 function scoreProperty(property: Property, criteria: PropertySearchCriteria): number {
   let score = 0;
 
   if (criteria.city) {
-    const cityTerm = normalizeSearchTerm(criteria.city);
-    const city = normalizeSearchTerm(property.city);
-    if (city === cityTerm) score += 30;
-    else if (city.includes(cityTerm) || cityTerm.includes(city)) score += 20;
+    if (citiesMatch(criteria.city, property.city)) {
+      score += 30;
+    } else if (
+      property.neighborhood &&
+      citiesMatch(criteria.city, property.neighborhood)
+    ) {
+      score += 20;
+    }
   }
 
   if (criteria.maxBudget != null) {
@@ -214,12 +183,11 @@ function scoreProperty(property: Property, criteria: PropertySearchCriteria): nu
     }
   }
 
-  if (criteria.propertyType) {
-    const typeTerm = normalizeSearchTerm(criteria.propertyType);
-    const propertyType = normalizeSearchTerm(property.property_type);
-    if (propertyType.includes(typeTerm) || typeTerm.includes(propertyType)) {
-      score += 20;
-    }
+  if (
+    criteria.propertyType &&
+    propertyTypesMatch(criteria.propertyType, property.property_type)
+  ) {
+    score += 20;
   }
 
   return score;

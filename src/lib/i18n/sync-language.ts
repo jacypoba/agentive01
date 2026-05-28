@@ -1,17 +1,28 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { detectLanguageFromHistory } from "@/lib/i18n/detect-language";
-import { normalizeLanguage, type SupportedLanguage } from "@/lib/i18n/types";
+import { detectLanguageFromText } from "@/lib/i18n/detect-language";
+import { DEFAULT_LANGUAGE, normalizeLanguage, type SupportedLanguage } from "@/lib/i18n/types";
 import type { Conversation, Database, Lead } from "@/types/database";
 
 type Client = SupabaseClient<Database>;
 
+/** Language for this reply — always from the latest inbound message first. */
+export function resolveReplyLanguage(
+  latestMessage: string,
+  lead: Pick<Lead, "preferred_language">
+): SupportedLanguage {
+  const stored = normalizeLanguage(lead.preferred_language);
+  if (!latestMessage.trim()) {
+    return stored;
+  }
+  return detectLanguageFromText(latestMessage, stored);
+}
+
 export function resolveLanguageForLead(
   lead: Lead,
   latestMessage: string,
-  history: Conversation[]
+  _history: Conversation[]
 ): SupportedLanguage {
-  const stored = normalizeLanguage(lead.preferred_language);
-  return detectLanguageFromHistory(history, latestMessage, stored);
+  return resolveReplyLanguage(latestMessage, lead);
 }
 
 export async function syncLeadPreferredLanguage(
@@ -51,5 +62,5 @@ export async function syncLeadPreferredLanguage(
 }
 
 export function getLeadLanguage(lead: Pick<Lead, "preferred_language">): SupportedLanguage {
-  return normalizeLanguage(lead.preferred_language);
+  return normalizeLanguage(lead.preferred_language ?? DEFAULT_LANGUAGE);
 }

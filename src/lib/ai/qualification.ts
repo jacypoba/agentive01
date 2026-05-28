@@ -1,6 +1,8 @@
 import type { Conversation, Lead, Property } from "@/types/database";
-import type { PropertyAvailability } from "@/lib/properties/property-availability";
 import type { MessageIntent } from "@/lib/ai/intent-classifier";
+import type { PropertyAvailability } from "@/lib/properties/property-availability";
+import type { SupportedLanguage } from "@/lib/i18n/types";
+import { AI_LANGUAGE_INSTRUCTION } from "@/lib/i18n/messages";
 
 type QualificationField =
   | "budget"
@@ -155,13 +157,13 @@ const VISIT_PATTERN =
   /\b(visita|visitar|ver o imóvel|agendar|marcar|conhecer|viewing|schedule|marcação|horário|horario)\b/i;
 
 const OPTIONS_REQUEST_PATTERN =
-  /\b(opções|opcões|imóveis|imoveis|mostra|mostrar|envia|enviar|manda|mandar|partilha|partilhar|recomenda|sugere|tens algo|tem algo|alguma coisa|algum imóvel|quero ver|ver opções|ver imóveis|mandar opções|enviar opções|procura algo|procuro algo)\b/i;
+  /\b(opções|opcões|opcoes|options|imóveis|imoveis|listings|mostra|mostrar|mostrami|fammi vedere|fami vedere|muéstrame|muestrame|envia|enviar|manda|mandar|partilha|partilhar|recomenda|sugere|tens algo|tem algo|alguma coisa|algum imóvel|quero ver|ver opções|ver imóveis|mandar opções|enviar opções|procura algo|procuro algo|show options|show me|show what you have|what do you have|what you have|qué opciones|que opciones|che opzioni)\b/i;
 
 const MORE_OPTIONS_PATTERN =
-  /\b(mostra outras|outras opções|outras opcões|tem mais|tens mais|há mais|ha mais|mais opções|mais opcões|ver semelhantes|semelhantes|outras moradias|outros imóveis|outras casas|mais imóveis|mais imoveis|envia mais|manda mais|outra opção|outra opcão|outras opcoes|alguma mais|mais alguma)\b/i;
+  /\b(mostra outras|outras opções|outras opcões|outras opcoes|tem mais|tens mais|há mais|ha mais|mais opções|mais opcões|ver semelhantes|semelhantes|outras moradias|outros imóveis|outras casas|mais imóveis|mais imoveis|envia mais|manda mais|outra opção|outra opcão|alguma mais|mais alguma|more options|altre opzioni|más opciones)\b/i;
 
 const RESHOW_OPTIONS_PATTERN =
-  /\b(mostra de novo|mostra novamente|mostra outra vez|envia de novo|enviar de novo|manda de novo|mandar de novo|reenvia|reenviar|podes reenviar|pode reenviar|outra vez|manda outra vez|envia outra vez|volta a enviar|volta a mandar|quais\s*(mesmo|são|sao|eram|opções|opcoes|imóveis|imoveis)?|quais opções|quais opcoes|quais imóveis|quais imoveis)\b/i;
+  /\b(mostra de novo|mostra novamente|mostra outra vez|mostra opções|mostra novamente|envia de novo|enviar de novo|manda de novo|mandar de novo|reenvia|reenviar|podes reenviar|pode reenviar|outra vez|manda outra vez|envia outra vez|volta a enviar|volta a mandar|show again|quais\s*(mesmo|são|sao|eram|opções|opcoes|imóveis|imoveis)?|quais opções|quais opcoes|quais imóveis|quais imoveis)\b/i;
 
 function getLastClientMessage(history: Conversation[]): Conversation | null {
   return (
@@ -299,6 +301,7 @@ export type QualificationDirectiveOptions = {
   clientAskedForMore?: boolean;
   clientAskedToReshow?: boolean;
   messageIntent?: MessageIntent;
+  language?: import("@/lib/i18n/types").SupportedLanguage;
 };
 
 /**
@@ -310,7 +313,7 @@ export function buildQualificationDirective(
   lead: Lead,
   options: QualificationDirectiveOptions = {}
 ): string {
-  const { propertiesBeingSent = [], matchingPropertyCount = 0, availability, clientAskedForMore = false, clientAskedToReshow = false, messageIntent = "unknown" } = options;
+  const { propertiesBeingSent = [], matchingPropertyCount = 0, availability, clientAskedForMore = false, clientAskedToReshow = false, messageIntent = "unknown", language = "pt" } = options;
   const catalogCount = propertiesBeingSent.length;
   const nextField = getNextField(history, lead);
   const firstReply = isFirstAiReply(history);
@@ -324,6 +327,7 @@ export function buildQualificationDirective(
     "---",
     "Directive for this reply:",
     `- Classified intent: ${messageIntent}`,
+    `- Reply language: ${language} — ${AI_LANGUAGE_INSTRUCTION[language]}`,
     `- Conversation messages in context: ${messageCount} (last ${messageCount} from Supabase)`,
     `- First AI reply: ${firstReply ? "yes — you may greet briefly" : "no — do NOT greet or re-introduce yourself"}`,
     `- Latest client message: ${latestClient ? `"${latestClient.slice(0, 120)}${latestClient.length > 120 ? "…" : ""}"` : "none"}`,
@@ -331,6 +335,7 @@ export function buildQualificationDirective(
     "- Do NOT repeat criteria the client already gave (budget, zone, type, timeline).",
     "- Do NOT end with a question unless one key field is genuinely missing.",
     "- Do NOT mention visits unless the latest client message asks about or references one.",
+    "- NEVER say you will check, verify, or get back to them when property cards are being sent this turn.",
     "- NEVER use exhausted-catalog lines ('Por agora estas são as melhores…', 'se entrar algo novo aviso') unless the availability block confirms all matches were already shared after a fresh query.",
     ...buildSavedLeadMemoryLines(lead),
     ...buildSafetyLines(history, lead),
@@ -362,7 +367,7 @@ export function buildQualificationDirective(
       "- Do NOT ask what they think or say there are no more options."
     );
     lines.push(
-      "- Reply in natural conversational Portuguese. Statement only — no question.",
+      "- Reply in the client's language. Statement only — no question.",
       "- Never use corporate/customer-support phrasing."
     );
     return lines.join("\n");
@@ -382,7 +387,7 @@ export function buildQualificationDirective(
         : "- Example: 'Tenho mais uma opção 👇' — then stop."
     );
     lines.push(
-      "- Reply in natural conversational Portuguese. Statement only — no question.",
+      "- Reply in the client's language. Statement only — no question.",
       "- Never use corporate/customer-support phrasing."
     );
     return lines.join("\n");
@@ -400,7 +405,7 @@ export function buildQualificationDirective(
       "- Do NOT say 'não tenho mais opções' or 'não há mais imóveis' robotically."
     );
     lines.push(
-      "- Reply in natural conversational Portuguese. Statement only — no question.",
+      "- Reply in the client's language. Statement only — no question.",
       "- Never use corporate/customer-support phrasing."
     );
     return lines.join("\n");
@@ -473,9 +478,10 @@ export function buildQualificationDirective(
   }
 
   lines.push(
-    "- Reply in natural conversational Portuguese, 1–2 sentences.",
+    `- Reply in ${language} — natural conversational tone, 1–2 sentences.`,
     "- Question is optional — prefer a statement when enough context exists.",
-    "- Never use corporate/customer-support phrasing."
+    "- Never use corporate/customer-support phrasing.",
+    "- Never say 'I'll check' or 'vou verificar' when you can answer or send listings now."
   );
 
   return lines.join("\n");

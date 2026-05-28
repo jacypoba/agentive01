@@ -6,6 +6,7 @@ import {
 } from "@/lib/ai/dedupe-reply";
 import type { ClassifiedIntent, MessageIntent } from "@/lib/ai/intent-classifier";
 import {
+  BANNED_DEFERRAL,
   BANNED_ON_THANKS,
   BANNED_WITHOUT_FRESH_QUERY,
   getClosingMarkers,
@@ -63,6 +64,18 @@ export function violatesReplyGuardrails(
     return BANNED_ON_THANKS[context.language].some((pattern) =>
       pattern.test(trimmed)
     );
+  }
+
+  if (
+    context.propertiesSent ||
+    context.intent === "property_search" ||
+    context.intent === "ask_more_options"
+  ) {
+    if (
+      BANNED_DEFERRAL[context.language].some((pattern) => pattern.test(trimmed))
+    ) {
+      return true;
+    }
   }
 
   if (!context.freshQueryMade && !context.propertiesSent) {
