@@ -75,11 +75,11 @@ export async function updateVisitStatus(
     const googleConnected =
       isGoogleCalendarConfigured() && isGoogleCalendarConnected(profile);
 
-    let parsedSlot = parseRequestedVisitDatetime(
+    const parsedSlot = parseRequestedVisitDatetime(
       existing.requested_datetime_text,
       calendarSettings.visitDurationMinutes
     );
-    let naturalWhen = parsedSlot?.displayText ?? null;
+    const naturalWhen = parsedSlot?.displayText ?? null;
 
     if (status === "confirmed" && googleConnected && profile) {
       if (!parsedSlot) {
