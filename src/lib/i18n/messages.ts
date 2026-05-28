@@ -92,6 +92,88 @@ export const RESHOW_SINGLE_INTROS: Record<SupportedLanguage, string[]> = {
   es: ["Claro — era esta opción 👇", "Te la reenvío 👇"],
 };
 
+/** First property recommendation — warm premium welcome before cards. */
+export const FIRST_RECOMMENDATION_CATALOG_INTROS: Record<SupportedLanguage, string[]> = {
+  pt: [
+    "Perfeito 👌 Separei algumas opções que encaixam bem no que procura:",
+    "Já percebi o perfil 😊 Estas podem fazer sentido para si:",
+    "Boa — encontrei algumas opções que batem certo com o que pediu:",
+    "Fixe 👌 Veja se alguma destas encaixa:",
+  ],
+  en: [
+    "Perfect 👌 I picked a few options that fit what you're looking for:",
+    "Got it 😊 These might be a good fit:",
+    "Nice — I pulled a few places that match your brief:",
+    "Great 👌 Take a look at these — they line up with what you asked:",
+  ],
+  it: [
+    "Perfetto 👌 Ho selezionato alcune opzioni che potrebbero interessarti:",
+    "Ho capito il profilo 😊 Queste potrebbero fare al caso tuo:",
+    "Ottimo — ho trovato alcune opzioni in linea con quello che cerchi:",
+    "Benissimo 👌 Dà un'occhiata a queste:",
+  ],
+  es: [
+    "Perfecto 👌 He separado algunas opciones que encajan bastante bien contigo:",
+    "Entendido 😊 Estas podrían encajar con lo que buscas:",
+    "Genial — he encontrado unas opciones que cuadran con tu perfil:",
+    "Muy bien 👌 Mira si alguna de estas te encaja:",
+  ],
+};
+
+export const FIRST_RECOMMENDATION_SINGLE_INTROS: Record<SupportedLanguage, string[]> = {
+  pt: [
+    "Perfeito 👌 Tenho uma opção que encaixa bem no que procura:",
+    "Já percebi o perfil 😊 Esta pode fazer sentido para si:",
+    "Boa — esta parece bater certo com o que pediu:",
+  ],
+  en: [
+    "Perfect 👌 I found one option that fits what you're looking for:",
+    "Got it 😊 This might be a good fit:",
+    "Nice — this one lines up with your brief:",
+  ],
+  it: [
+    "Perfetto 👌 Ho un'opzione che potrebbe interessarti:",
+    "Ho capito il profilo 😊 Questa potrebbe fare al caso tuo:",
+    "Ottimo — questa sembra in linea con quello che cerchi:",
+  ],
+  es: [
+    "Perfecto 👌 Tengo una opción que encaja con lo que buscas:",
+    "Entendido 😊 Esta podría encajarte:",
+    "Genial — esta cuadra bastante bien con tu perfil:",
+  ],
+};
+
+/** Follow-up batches — short, no repeated welcome. */
+export const MORE_OPTIONS_CATALOG_INTROS: Record<SupportedLanguage, string[]> = {
+  pt: [
+    "Tenho mais algumas 👇",
+    "Estas também encaixam no perfil:",
+    "Mais opções que vale a pena ver:",
+  ],
+  en: [
+    "I have a few more 👇",
+    "These also fit the brief:",
+    "A few more worth a look:",
+  ],
+  it: [
+    "Ne ho altre 👇",
+    "Anche queste potrebbero interessarti:",
+    "Altre opzioni da vedere:",
+  ],
+  es: [
+    "Tengo algunas más 👇",
+    "Estas también encajan:",
+    "Más opciones que merecen la pena:",
+  ],
+};
+
+export const MORE_OPTIONS_SINGLE_INTROS: Record<SupportedLanguage, string[]> = {
+  pt: ["Tenho mais uma opção 👇", "Esta também pode encaixar:"],
+  en: ["I have one more option 👇", "This one could work too:"],
+  it: ["Ne ho un'altra 👇", "Anche questa potrebbe andare:"],
+  es: ["Tengo otra opción 👇", "Esta también podría encajar:"],
+};
+
 export const LISTING_LABELS: Record<SupportedLanguage, string> = {
   pt: "🔗 Ver detalhes",
   en: "🔗 View details",

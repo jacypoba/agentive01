@@ -30,6 +30,7 @@ import { resolveReplyLanguage, syncLeadPreferredLanguage } from "@/lib/i18n/sync
 import { derivePropertySearchCriteriaDebug } from "@/lib/properties/search-criteria";
 import type { SupportedLanguage } from "@/lib/i18n/types";
 import { findPropertyRecommendations } from "@/lib/properties/find-recommendations";
+import { buildRecommendationIntroText } from "@/lib/properties/recommendation-intros";
 import {
   analyzePropertyAvailability,
   buildReshowAvailability,
@@ -272,6 +273,17 @@ async function buildIntroReply(
       classified.intent === "ask_more_options")
   ) {
     return getNoMatchLine(language, `${memoryLead.id}:no-match`);
+  }
+
+  if (propertiesToRecommend.length > 0) {
+    return buildRecommendationIntroText(
+      language,
+      history,
+      memoryLead.id,
+      propertiesToRecommend.length,
+      classified,
+      freshQueryMade
+    );
   }
 
   return generateAIReply(
