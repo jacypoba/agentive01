@@ -114,8 +114,18 @@ export async function getDueFollowUps(
   supabase: Client,
   limit = 20
 ): Promise<FollowUpWithLead[]> {
+  return getPendingFollowUps(supabase, limit, { dueOnly: true });
+}
+
+export async function getPendingFollowUps(
+  supabase: Client,
+  limit = 20,
+  options: { dueOnly?: boolean } = {}
+): Promise<FollowUpWithLead[]> {
+  const dueOnly = options.dueOnly ?? false;
   const now = new Date().toISOString();
-  const { data, error } = await supabase
+
+  let query = supabase
     .from("follow_ups")
     .select(
       `
@@ -135,12 +145,17 @@ export async function getDueFollowUps(
     `
     )
     .eq("status", "pending")
-    .lte("scheduled_for", now)
     .order("scheduled_for", { ascending: true })
     .limit(limit);
 
+  if (dueOnly) {
+    query = query.lte("scheduled_for", now);
+  }
+
+  const { data, error } = await query;
+
   if (error) {
-    throw new Error(`Failed to fetch due follow-ups: ${error.message}`);
+    throw new Error(`Failed to fetch pending follow-ups: ${error.message}`);
   }
 
   return (data ?? []) as FollowUpWithLead[];

@@ -1,6 +1,9 @@
 import { createConversation } from "@/lib/data/conversations";
-import { updateFollowUpStatus } from "@/lib/data/follow-ups";
-import { getDueFollowUps } from "@/lib/data/follow-ups";
+import {
+  getDueFollowUps,
+  getPendingFollowUps,
+  updateFollowUpStatus,
+} from "@/lib/data/follow-ups";
 import { sendWhatsAppText } from "@/lib/evolution/client";
 import { FOLLOW_UP_CONFIG } from "@/lib/follow-ups/config";
 import { generateFollowUpMessage } from "@/lib/follow-ups/messages";
@@ -15,6 +18,20 @@ export type ProcessFollowUpsResult = {
   sent: number;
   failed: number;
   skipped: number;
+};
+
+export type ProcessFollowUpDetail = {
+  followUpId: string;
+  leadId: string;
+  leadName: string;
+  type: string;
+  outcome: "sent" | "failed" | "skipped" | "cancelled";
+  error?: string;
+  messagePreview?: string;
+};
+
+export type ProcessPendingFollowUpsResult = ProcessFollowUpsResult & {
+  details: ProcessFollowUpDetail[];
 };
 
 function isEligibleLead(status: string, intentStatus: string | null): boolean {
@@ -99,24 +116,39 @@ export async function sendFollowUpImmediately(
   }
 }
 
-export async function processDueFollowUps(
-  supabase: Client
-): Promise<ProcessFollowUpsResult> {
-  const due = await getDueFollowUps(supabase, FOLLOW_UP_CONFIG.batchSize);
-  const result: ProcessFollowUpsResult = {
+export async function processPendingFollowUps(
+  supabase: Client,
+  options: { dueOnly?: boolean; batchSize?: number } = {}
+): Promise<ProcessPendingFollowUpsResult> {
+  const dueOnly = options.dueOnly ?? true;
+  const batchSize = options.batchSize ?? FOLLOW_UP_CONFIG.batchSize;
+  const pending = dueOnly
+    ? await getDueFollowUps(supabase, batchSize)
+    : await getPendingFollowUps(supabase, batchSize, { dueOnly: false });
+
+  const result: ProcessPendingFollowUpsResult = {
     processed: 0,
     sent: 0,
     failed: 0,
     skipped: 0,
+    details: [],
   };
 
-  for (const item of due) {
+  for (const item of pending) {
     result.processed += 1;
     const lead = item.leads;
 
     if (!isEligibleLead(lead.status, lead.intent_status)) {
       await updateFollowUpStatus(supabase, item.id, "cancelled");
       result.skipped += 1;
+      result.details.push({
+        followUpId: item.id,
+        leadId: item.lead_id,
+        leadName: lead.client_name,
+        type: item.type,
+        outcome: "cancelled",
+        error: "Lead not eligible",
+      });
       continue;
     }
 
@@ -124,6 +156,14 @@ export async function processDueFollowUps(
     if (!phoneDigits) {
       await updateFollowUpStatus(supabase, item.id, "failed");
       result.failed += 1;
+      result.details.push({
+        followUpId: item.id,
+        leadId: item.lead_id,
+        leadName: lead.client_name,
+        type: item.type,
+        outcome: "failed",
+        error: "Lead has no phone number",
+      });
       continue;
     }
 
@@ -144,6 +184,14 @@ export async function processDueFollowUps(
         sent_at: new Date().toISOString(),
       });
       result.sent += 1;
+      result.details.push({
+        followUpId: item.id,
+        leadId: item.lead_id,
+        leadName: lead.client_name,
+        type: item.type,
+        outcome: "sent",
+        messagePreview: message.slice(0, 120),
+      });
       console.log("[Follow-ups] Sent", {
         followUpId: item.id,
         leadId: item.lead_id,
@@ -152,13 +200,34 @@ export async function processDueFollowUps(
     } catch (error) {
       await updateFollowUpStatus(supabase, item.id, "failed", { message });
       result.failed += 1;
+      const errorMessage =
+        error instanceof Error ? error.message : "WhatsApp send failed";
+      result.details.push({
+        followUpId: item.id,
+        leadId: item.lead_id,
+        leadName: lead.client_name,
+        type: item.type,
+        outcome: "failed",
+        error: errorMessage,
+        messagePreview: message.slice(0, 120),
+      });
       console.error("[Follow-ups] Send failed", {
         followUpId: item.id,
         leadId: item.lead_id,
-        error: error instanceof Error ? error.message : error,
+        error: errorMessage,
       });
     }
   }
 
+  return result;
+}
+
+export async function processDueFollowUps(
+  supabase: Client
+): Promise<ProcessFollowUpsResult> {
+  const { details: _details, ...result } = await processPendingFollowUps(
+    supabase,
+    { dueOnly: true }
+  );
   return result;
 }
