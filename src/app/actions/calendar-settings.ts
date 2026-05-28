@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import {
   disconnectGoogleCalendar,
   getProfile,
+  profileSeedFromAuthUser,
   updateCalendarSettings,
 } from "@/lib/data/profiles";
 import { listGoogleCalendars } from "@/lib/google-calendar/oauth";
@@ -42,12 +43,17 @@ export async function saveCalendarSettingsAction(
   }
 
   try {
-    await updateCalendarSettings(supabase, user.id, {
-      googleCalendarId,
-      workStart,
-      workEnd,
-      visitDurationMinutes: duration,
-    });
+    await updateCalendarSettings(
+      supabase,
+      user.id,
+      {
+        googleCalendarId,
+        workStart,
+        workEnd,
+        visitDurationMinutes: duration,
+      },
+      profileSeedFromAuthUser(user)
+    );
   } catch (error) {
     return {
       error:
@@ -71,7 +77,11 @@ export async function disconnectGoogleCalendarAction(): Promise<CalendarSettings
   }
 
   try {
-    await disconnectGoogleCalendar(supabase, user.id);
+    await disconnectGoogleCalendar(
+      supabase,
+      user.id,
+      profileSeedFromAuthUser(user)
+    );
   } catch (error) {
     return {
       error:

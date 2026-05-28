@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { saveGoogleTokens } from "@/lib/data/profiles";
+import { saveGoogleTokens, profileSeedFromAuthUser } from "@/lib/data/profiles";
 import { exchangeGoogleCode } from "@/lib/google-calendar/oauth";
 import { createClient } from "@/lib/supabase/server";
 
@@ -65,10 +65,26 @@ export async function GET(request: Request) {
       );
     }
 
-    await saveGoogleTokens(supabase, user.id, {
-      refresh_token: tokens.refresh_token,
-      access_token: tokens.access_token,
-      expiry_date: tokens.expiry_date,
+    console.log("[Google OAuth] Callback authenticated", {
+      userId: user.id,
+      email: user.email,
+    });
+
+    const profile = await saveGoogleTokens(
+      supabase,
+      user.id,
+      {
+        refresh_token: tokens.refresh_token,
+        access_token: tokens.access_token,
+        expiry_date: tokens.expiry_date,
+      },
+      profileSeedFromAuthUser(user)
+    );
+
+    console.log("[Google OAuth] Tokens persisted", {
+      userId: user.id,
+      profileId: profile.id,
+      connectedAt: profile.google_calendar_connected_at,
     });
   } catch (error) {
     const message =
