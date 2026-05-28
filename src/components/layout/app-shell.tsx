@@ -45,12 +45,18 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
             <AppNav />
           </div>
           <div className="flex shrink-0 items-center gap-2 sm:gap-3">
-            <span className="hidden max-w-[100px] truncate text-sm text-white/50 sm:inline md:max-w-[140px]">
+            <span className="max-w-[120px] truncate text-sm text-white/50 md:max-w-[140px]">
               {displayName}
             </span>
             <Suspense fallback={<WorkspacePillFallback />}>
               <WorkspaceSwitcher userId={user.id} />
             </Suspense>
+            <span
+              className="shrink-0 text-[11px] font-bold uppercase tracking-widest text-lime-400"
+              data-testid="workspace-test-marker"
+            >
+              WORKSPACE TEST
+            </span>
             <LogoutButton />
           </div>
         </nav>
