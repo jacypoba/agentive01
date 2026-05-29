@@ -17,7 +17,14 @@ import {
   recordOutboundSuccess,
 } from "@/lib/evolution/outbound-health";
 import {
+  applyVerificationToSendResult,
+  pollEvolutionMessageDelivery,
+  resolveVerificationRemoteJid,
+  type MessageDeliveryVerification,
+} from "@/lib/evolution/message-delivery-verify";
+import {
   buildSendTextPayloadVariants,
+  getProductionSendTextFormatOrder,
   selectSendTextPayloadVariant,
   type SendTextFormat,
 } from "@/lib/evolution/send-text-payload";
@@ -32,6 +39,10 @@ export type SendWhatsAppOptions = {
   remoteJid?: string | null;
   format?: SendTextFormat;
   skipConnectionCheck?: boolean;
+  /** When true, only attempt the selected/single format (diagnostics). */
+  disableFallback?: boolean;
+  /** When true, skip post-send delivery polling. */
+  disableDeliveryVerification?: boolean;
 };
 
 export type EvolutionSendResult = SendTextResult & {
@@ -50,6 +61,16 @@ export type EvolutionSendResult = SendTextResult & {
   sentToWhatsApp?: boolean;
   warning?: string | null;
   instanceState?: string | null;
+  deliveryVerification?: MessageDeliveryVerification | null;
+  attempts?: Array<{
+    format: SendTextFormat;
+    endpoint?: string;
+    status?: number;
+    pendingOnly?: boolean;
+    sentToWhatsApp?: boolean;
+    evolutionMessageId?: string;
+  }>;
+  fallbackUsed?: boolean;
 };
 
 export type SendMediaPayload = {
@@ -278,6 +299,20 @@ async function postEvolutionJson(
     }
   );
 
+  logOutboundDebug({
+    phase: outcome.pendingOnly ? "send_pending" : "send_response",
+    targetPhone: context.destinationNumber,
+    normalizedPhone: normalizePhoneDigits(context.destinationNumber),
+    payload,
+    payloadFormat: context.payloadFormat,
+    endpoint,
+    httpStatus: response.status,
+    responseBody,
+    evolutionMessageId: parsed.messageId,
+    deliveryStatus: parsed.deliveryStatus,
+    instanceState: context.instanceState ?? null,
+  });
+
   persistOutboundHeartbeat({
     instanceName: context.instanceName,
     success: true,
@@ -324,6 +359,14 @@ function recordTextOutcome(
     return;
   }
 
+  if (result.sentToWhatsApp) {
+    recordOutboundSuccess({
+      kind: "text",
+      ...buildOutboundHealthFields(phoneDigits, destinationNumber, result),
+    });
+    return;
+  }
+
   if (result.pendingOnly) {
     recordOutboundFailure({
       kind: "text",
@@ -337,6 +380,115 @@ function recordTextOutcome(
     kind: "text",
     ...buildOutboundHealthFields(phoneDigits, destinationNumber, result),
   });
+}
+
+function logOutboundDebug(details: {
+  phase: string;
+  targetPhone: string;
+  normalizedPhone: string;
+  remoteJid?: string | null;
+  payload?: Record<string, unknown>;
+  payloadFormat?: SendTextFormat;
+  endpoint?: string;
+  httpStatus?: number;
+  responseBody?: string;
+  evolutionMessageId?: string | null;
+  deliveryStatus?: string | null;
+  instanceName?: string;
+  instanceState?: string | null;
+  verification?: MessageDeliveryVerification | null;
+}) {
+  console.log("[WHATSAPP OUTBOUND DEBUG]", details);
+}
+
+async function executeTextSendAttempt(input: {
+  config: ReturnType<typeof getEvolutionConfig>;
+  phoneDigits: string;
+  text: string;
+  remoteJid?: string | null;
+  format: SendTextFormat;
+  connectionState?: string | null;
+}): Promise<EvolutionSendResult> {
+  const selected = selectSendTextPayloadVariant({
+    phoneDigits: input.phoneDigits,
+    text: input.text,
+    remoteJid: input.remoteJid,
+    format: input.format,
+  });
+
+  const destinationNumber = String(
+    selected.payload.number ?? normalizeWhatsAppRecipient(input.phoneDigits)
+  );
+
+  const endpoint = `${input.config.baseUrl}/message/sendText/${encodeURIComponent(input.config.instanceName)}`;
+
+  logOutboundDebug({
+    phase: "send_attempt",
+    targetPhone: input.phoneDigits,
+    normalizedPhone: normalizeWhatsAppRecipient(input.phoneDigits),
+    remoteJid: input.remoteJid ?? null,
+    payload: selected.payload,
+    payloadFormat: selected.format,
+    endpoint,
+    instanceName: input.config.instanceName,
+    instanceState: input.connectionState ?? null,
+  });
+
+  return postEvolutionJson(endpoint, input.config.apiKey, selected.payload, {
+    instanceName: input.config.instanceName,
+    kind: "text",
+    destinationNumber,
+    payloadFormat: selected.format,
+    instanceState: input.connectionState ?? null,
+  });
+}
+
+async function verifyAndEnhanceTextResult(input: {
+  result: EvolutionSendResult;
+  phoneDigits: string;
+  remoteJid?: string | null;
+  instanceName: string;
+  disableDeliveryVerification?: boolean;
+}): Promise<EvolutionSendResult> {
+  const result = { ...input.result };
+
+  if (
+    input.disableDeliveryVerification ||
+    !result.success ||
+    !result.evolutionMessageId
+  ) {
+    return result;
+  }
+
+  const verificationJid = resolveVerificationRemoteJid({
+    remoteJid: input.remoteJid,
+    phoneDigits: input.phoneDigits,
+    deliveryKey: result.deliveryKey,
+    destinationNumber: result.destinationNumber,
+  });
+
+  const verification = await pollEvolutionMessageDelivery({
+    messageId: result.evolutionMessageId,
+    remoteJid: verificationJid,
+    instanceName: input.instanceName,
+  });
+
+  applyVerificationToSendResult(result, verification);
+  result.deliveryVerification = verification;
+
+  logOutboundDebug({
+    phase: "delivery_verify",
+    targetPhone: input.phoneDigits,
+    normalizedPhone: normalizeWhatsAppRecipient(input.phoneDigits),
+    remoteJid: input.remoteJid ?? null,
+    endpoint: verification.endpoint ?? result.endpoint,
+    evolutionMessageId: result.evolutionMessageId ?? null,
+    deliveryStatus: result.deliveryStatus ?? null,
+    instanceName: input.instanceName,
+    verification,
+  });
+
+  return result;
 }
 
 export async function sendWhatsAppTextSafe(
@@ -373,109 +525,139 @@ export async function sendWhatsAppTextSafe(
       endpoint: connection.endpoint,
       state: connection.state,
       interpretation: connection.interpretation,
+      instanceName: config.instanceName,
+      baseUrl: config.baseUrl,
+      hasApiKey: Boolean(config.apiKey),
     });
   }
-
-  const selected = selectSendTextPayloadVariant({
-    phoneDigits,
-    text: trimmed,
-    remoteJid: options.remoteJid,
-    format: options.format,
-  });
-
-  const destinationNumber = String(
-    selected.payload.number ?? normalizeWhatsAppRecipient(phoneDigits)
-  );
 
   const phoneContext = describeWhatsAppPhoneRouting({
     remoteJid: options.remoteJid,
     inboundPhoneDigits: phoneDigits,
-    outboundPhoneInput: destinationNumber,
+    outboundPhoneInput: phoneDigits,
   });
   logWhatsAppPhoneRouting("outbound_text", phoneContext);
 
-  const endpoint = `${config.baseUrl}/message/sendText/${encodeURIComponent(config.instanceName)}`;
-
-  console.log("[WHATSAPP OUTBOUND TEXT]", {
-    endpoint,
-    payloadFormat: selected.format,
-    payloadDescription: selected.description,
-    destinationNumber,
-    remoteJid: options.remoteJid ?? null,
-    textLength: trimmed.length,
-    preview: trimmed.slice(0, 120),
-    instanceState: connection?.state ?? null,
+  const allVariants = buildSendTextPayloadVariants({
+    phoneDigits,
+    text: trimmed,
+    remoteJid: options.remoteJid,
   });
 
-  try {
-    const result = await postEvolutionJson(
-      endpoint,
-      config.apiKey,
-      selected.payload,
-      {
-        instanceName: config.instanceName,
-        kind: "text",
-        destinationNumber,
-        payloadFormat: selected.format,
-        instanceState: connection?.state ?? null,
-      }
-    );
+  const formatOrder = options.format
+    ? [options.format]
+    : options.disableFallback
+      ? [selectSendTextPayloadVariant({
+          phoneDigits,
+          text: trimmed,
+          remoteJid: options.remoteJid,
+        }).format]
+      : getProductionSendTextFormatOrder(options.remoteJid).filter((format) =>
+          allVariants.some((variant) => variant.format === format)
+        );
 
-    if (result.success && !result.pendingOnly) {
-      console.log("[WHATSAPP OUTBOUND SUCCESS]", {
-        kind: "text",
-        endpoint,
-        status: result.status,
-        payloadFormat: selected.format,
-        destinationNumber,
-        evolutionMessageId: result.evolutionMessageId ?? null,
-        deliveryKey: result.deliveryKey ?? null,
-        deliveryStatus: result.deliveryStatus ?? null,
-        responseBody: result.responseBody ?? null,
+  const attempts: EvolutionSendResult["attempts"] = [];
+  let lastResult: EvolutionSendResult = {
+    success: false,
+    error: "No send attempt executed.",
+  };
+
+  try {
+    for (let index = 0; index < formatOrder.length; index += 1) {
+      const format = formatOrder[index]!;
+      const isFallback = index > 0;
+
+      if (isFallback) {
+        console.warn("[WHATSAPP OUTBOUND FALLBACK]", {
+          previousFormat: formatOrder[index - 1],
+          nextFormat: format,
+          previousStatus: lastResult.deliveryStatus ?? null,
+          previousMessageId: lastResult.evolutionMessageId ?? null,
+        });
+      }
+
+      let result = await executeTextSendAttempt({
+        config,
+        phoneDigits,
+        text: trimmed,
+        remoteJid: options.remoteJid,
+        format,
+        connectionState: connection?.state ?? null,
       });
-    } else if (result.success && result.pendingOnly) {
+
+      result = await verifyAndEnhanceTextResult({
+        result,
+        phoneDigits,
+        remoteJid: options.remoteJid,
+        instanceName: config.instanceName,
+        disableDeliveryVerification: options.disableDeliveryVerification,
+      });
+
+      attempts.push({
+        format,
+        endpoint: result.endpoint,
+        status: result.status,
+        pendingOnly: result.pendingOnly,
+        sentToWhatsApp: result.sentToWhatsApp,
+        evolutionMessageId: result.evolutionMessageId,
+      });
+
+      lastResult = {
+        ...result,
+        attempts,
+        fallbackUsed: isFallback,
+      };
+
+      if (result.sentToWhatsApp) {
+        console.log("[WHATSAPP OUTBOUND SUCCESS]", {
+          kind: "text",
+          payloadFormat: format,
+          destinationNumber: result.destinationNumber,
+          evolutionMessageId: result.evolutionMessageId ?? null,
+          deliveryStatus: result.deliveryStatus ?? null,
+          fallbackUsed: isFallback,
+        });
+        recordTextOutcome(phoneDigits, result.destinationNumber ?? phoneDigits, lastResult);
+        return lastResult;
+      }
+
+      if (!result.success) {
+        continue;
+      }
+
+      if (result.pendingOnly && index < formatOrder.length - 1 && !options.disableFallback) {
+        continue;
+      }
+
+      break;
+    }
+
+    if (lastResult.success && lastResult.pendingOnly) {
       console.warn("[WHATSAPP OUTBOUND PENDING]", {
         kind: "text",
-        endpoint,
-        status: result.status,
-        payloadFormat: selected.format,
-        destinationNumber,
-        evolutionMessageId: result.evolutionMessageId ?? null,
-        deliveryStatus: result.deliveryStatus ?? null,
-        warning: result.warning,
+        attempts,
+        warning: lastResult.warning,
         diagnosis: getPendingDeliveryDiagnosis(),
       });
-    } else {
+    } else if (!lastResult.success) {
       console.error("[WHATSAPP OUTBOUND FAILURE]", {
         kind: "text",
-        endpoint,
-        status: result.status,
-        payloadFormat: selected.format,
-        destinationNumber,
-        evolutionMessageId: result.evolutionMessageId ?? null,
-        reason: result.error,
-        responseBody: result.responseBody ?? null,
+        attempts,
+        reason: lastResult.error,
       });
     }
 
-    recordTextOutcome(phoneDigits, destinationNumber, result);
-    return result;
+    recordTextOutcome(
+      phoneDigits,
+      lastResult.destinationNumber ?? phoneDigits,
+      lastResult
+    );
+    return lastResult;
   } catch (error) {
     const reason = error instanceof Error ? error.message : "Network error sending text.";
-    console.error("[WHATSAPP OUTBOUND FAILURE]", {
-      kind: "text",
-      endpoint,
-      destinationNumber,
-      reason,
-    });
-    recordOutboundFailure({
-      kind: "text",
-      phoneDigits,
-      destinationNumber,
-      endpoint,
-      reason,
-    });
-    return { success: false, endpoint, destinationNumber, error: reason };
+    console.error("[WHATSAPP OUTBOUND FAILURE]", { kind: "text", reason });
+    recordOutboundFailure({ kind: "text", phoneDigits, reason });
+    return { success: false, error: reason, attempts };
   }
 }
 
@@ -545,6 +727,7 @@ export async function runEvolutionSendTextDiagnostic(input: {
         remoteJid: input.remoteJid,
         format: variant.format,
         skipConnectionCheck: compareResults.length > 0,
+        disableFallback: true,
       });
       compareResults.push(result);
     }
@@ -562,6 +745,7 @@ export async function runEvolutionSendTextDiagnostic(input: {
   const sendResult = await sendWhatsAppTextSafe(input.phoneDigits, input.text, {
     remoteJid: input.remoteJid,
     format: selectedFormat,
+    disableFallback: true,
   });
 
   return {
@@ -575,9 +759,9 @@ export async function runEvolutionSendTextDiagnostic(input: {
 }
 
 function resolvePreferredFromVariants(
-  remoteJid?: string | null
+  _remoteJid?: string | null
 ): SendTextFormat {
-  return remoteJid?.includes("@") ? "jid" : "digits";
+  return "digits";
 }
 
 export async function sendWhatsAppMediaSafe(
@@ -750,5 +934,6 @@ export async function sendWhatsAppMedia(
 
 export {
   buildSendTextPayloadVariants,
+  getProductionSendTextFormatOrder,
   type SendTextFormat,
 } from "@/lib/evolution/send-text-payload";

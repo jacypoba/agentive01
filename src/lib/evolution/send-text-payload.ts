@@ -28,26 +28,27 @@ export function buildSendTextPayloadVariants(input: {
 
   const variants: SendTextPayloadVariant[] = [];
 
+  // Production order: digits first, then JID, then nested textMessage variants.
+  if (digits) {
+    variants.push({
+      format: "digits",
+      description: "Digits-only number field (Evolution v2 SendTextDto default)",
+      payload: { number: digits, text: input.text },
+    });
+  }
+
   if (jid) {
     variants.push({
       format: "jid",
-      description: "Evolution recommended: full remoteJid in number field",
+      description: "Full remoteJid in number field (Evolution reply pattern)",
       payload: { number: jid, text: input.text },
     });
   }
 
   if (digits) {
     variants.push({
-      format: "digits",
-      description: "Digits-only number field (legacy/simple)",
-      payload: { number: digits, text: input.text },
-    });
-  }
-
-  if (digits) {
-    variants.push({
       format: "textMessage",
-      description: "Foundation/OpenAPI nested textMessage wrapper with digits",
+      description: "Nested textMessage wrapper with digits",
       payload: {
         number: digits,
         textMessage: { text: input.text },
@@ -69,6 +70,20 @@ export function buildSendTextPayloadVariants(input: {
   return variants;
 }
 
+/** Ordered formats for production fallback when delivery stays PENDING. */
+export function getProductionSendTextFormatOrder(
+  _remoteJid?: string | null
+): SendTextFormat[] {
+  const envFormat = process.env.EVOLUTION_SEND_NUMBER_FORMAT?.trim().toLowerCase();
+
+  if (envFormat === "digits") return ["digits"];
+  if (envFormat === "jid") return ["jid"];
+  if (envFormat === "textmessage") return ["textMessage"];
+  if (envFormat === "jid_textmessage") return ["jid_textMessage"];
+
+  return ["digits", "jid", "textMessage", "jid_textMessage"];
+}
+
 export function resolvePreferredSendTextFormat(
   remoteJid?: string | null
 ): SendTextFormat {
@@ -85,8 +100,8 @@ export function resolvePreferredSendTextFormat(
     return envFormat;
   }
 
-  // auto: prefer JID when we know the inbound chat JID (Evolution issue #1247 pattern).
-  return remoteJid?.includes("@") ? "jid" : "digits";
+  // auto: digits first; production fallback tries jid next when PENDING persists.
+  return "digits";
 }
 
 export function selectSendTextPayloadVariant(input: {
