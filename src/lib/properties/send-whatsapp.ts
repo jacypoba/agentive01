@@ -50,7 +50,8 @@ export type OutboundSendReport = {
 export async function sendOutboundWhatsAppMessages(
   phoneDigits: string,
   messages: OutboundWhatsAppMessage[],
-  instance?: string
+  instance?: string,
+  remoteJid?: string
 ): Promise<OutboundSendReport> {
   const report: OutboundSendReport = {
     attempted: 0,
@@ -63,7 +64,7 @@ export async function sendOutboundWhatsAppMessages(
 
   for (const message of messages) {
     if (message.kind === "catalog_spacer") {
-      await deliverText(phoneDigits, formatCatalogSpacer(), instance, report, "catalog_spacer");
+      await deliverText(phoneDigits, formatCatalogSpacer(), instance, report, "catalog_spacer", undefined, remoteJid);
       continue;
     }
 
@@ -73,7 +74,8 @@ export async function sendOutboundWhatsAppMessages(
         message.property,
         message.fallbackText,
         instance,
-        report
+        report,
+        remoteJid
       );
       if (delivered) {
         deliveredPropertyText.add(message.property.id);
@@ -91,7 +93,8 @@ export async function sendOutboundWhatsAppMessages(
         instance,
         report,
         "property_details",
-        message.property.id
+        message.property.id,
+        remoteJid
       );
       if (delivered) {
         deliveredPropertyText.add(message.property.id);
@@ -103,11 +106,11 @@ export async function sendOutboundWhatsAppMessages(
       if (deliveredPropertyText.has(message.property.id)) {
         continue;
       }
-      await deliverLink(phoneDigits, message.url, instance, report, message.property.id);
+      await deliverLink(phoneDigits, message.url, instance, report, message.property.id, remoteJid);
       continue;
     }
 
-    await deliverText(phoneDigits, message.text, instance, report, "text");
+    await deliverText(phoneDigits, message.text, instance, report, "text", undefined, remoteJid);
   }
 
   if (report.failed > 0) {
@@ -122,7 +125,8 @@ async function deliverPropertyPackage(
   property: Property,
   fallbackText: string,
   instance: string | undefined,
-  report: OutboundSendReport
+  report: OutboundSendReport,
+  remoteJid?: string
 ): Promise<boolean> {
   const imageUrl = property.image_url?.trim() ?? "";
   const listingUrl = property.listing_url?.trim() ?? "";
@@ -141,14 +145,14 @@ async function deliverPropertyPackage(
         mimetype: guessImageMimeType(imageUrl),
         fileName: buildImageFileName(property),
       },
-      instance
+      { instance, remoteJid }
     );
 
-    if (mediaResult.success) {
+    if (mediaResult.sentToWhatsApp) {
       report.sent += 1;
 
       if (listingUrl && isValidOutboundUrl(listingUrl)) {
-        await deliverLink(phoneDigits, listingUrl, instance, report, property.id);
+        await deliverLink(phoneDigits, listingUrl, instance, report, property.id, remoteJid);
       }
 
       return true;
@@ -158,7 +162,12 @@ async function deliverPropertyPackage(
     report.failures.push({
       kind: "property_image",
       propertyId: property.id,
-      error: mediaResult.error ?? "Image send failed.",
+      error:
+        mediaResult.error ??
+        mediaResult.warning ??
+        (mediaResult.pendingOnly
+          ? "Image accepted by Evolution but WhatsApp delivery is PENDING."
+          : "Image send failed."),
     });
   } else if (imageUrl) {
     console.warn("[WHATSAPP OUTBOUND] Invalid property image URL, skipping media", {
@@ -167,11 +176,11 @@ async function deliverPropertyPackage(
     });
   }
 
-  if (await deliverText(phoneDigits, textCard, instance, report, "property_details", property.id)) {
+  if (await deliverText(phoneDigits, textCard, instance, report, "property_details", property.id, remoteJid)) {
     return true;
   }
 
-  return deliverText(phoneDigits, plainSummary, instance, report, "property_package", property.id);
+  return deliverText(phoneDigits, plainSummary, instance, report, "property_package", property.id, remoteJid);
 }
 
 async function deliverText(
@@ -180,7 +189,8 @@ async function deliverText(
   instance: string | undefined,
   report: OutboundSendReport,
   kind: OutboundSendFailure["kind"],
-  propertyId?: string
+  propertyId?: string,
+  remoteJid?: string
 ): Promise<boolean> {
   const trimmed = text.trim();
   if (!trimmed) {
@@ -188,9 +198,9 @@ async function deliverText(
   }
 
   report.attempted += 1;
-  const result = await sendWhatsAppTextSafe(phoneDigits, trimmed, instance);
+  const result = await sendWhatsAppTextSafe(phoneDigits, trimmed, { instance, remoteJid });
 
-  if (result.success) {
+  if (result.sentToWhatsApp) {
     report.sent += 1;
     return true;
   }
@@ -199,7 +209,12 @@ async function deliverText(
   report.failures.push({
     kind,
     propertyId,
-    error: result.error ?? "Text send failed.",
+    error:
+      result.error ??
+      result.warning ??
+      (result.pendingOnly
+        ? "Evolution accepted the text but WhatsApp delivery is PENDING."
+        : "Text send failed."),
   });
   return false;
 }
@@ -209,7 +224,8 @@ async function deliverLink(
   url: string,
   instance: string | undefined,
   report: OutboundSendReport,
-  propertyId?: string
+  propertyId?: string,
+  remoteJid?: string
 ): Promise<boolean> {
   const trimmed = url.trim();
   if (!trimmed || !isValidOutboundUrl(trimmed)) {
@@ -228,9 +244,9 @@ async function deliverLink(
   });
 
   report.attempted += 1;
-  const result = await sendWhatsAppTextSafe(phoneDigits, trimmed, instance);
+  const result = await sendWhatsAppTextSafe(phoneDigits, trimmed, { instance, remoteJid });
 
-  if (result.success) {
+  if (result.sentToWhatsApp) {
     report.sent += 1;
     console.log("[WHATSAPP OUTBOUND SUCCESS]", { kind: "link", propertyId });
     return true;
@@ -240,12 +256,17 @@ async function deliverLink(
   report.failures.push({
     kind: "property_listing",
     propertyId,
-    error: result.error ?? "Link send failed.",
+    error:
+      result.error ??
+      result.warning ??
+      (result.pendingOnly
+        ? "Evolution accepted the link but WhatsApp delivery is PENDING."
+        : "Link send failed."),
   });
   console.error("[WHATSAPP OUTBOUND FAILURE]", {
     kind: "link",
     propertyId,
-    reason: result.error,
+    reason: result.error ?? result.warning,
   });
   return false;
 }

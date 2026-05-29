@@ -5,6 +5,14 @@ export type ParsedEvolutionSendResponse = {
   rawStatus: unknown;
 };
 
+export type EvolutionSendOutcome = {
+  accepted: boolean;
+  pendingOnly: boolean;
+  deliveryConfirmed: boolean;
+  sentToWhatsApp: boolean;
+  warning: string | null;
+};
+
 function readString(value: unknown): string | null {
   return typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
 }
@@ -87,4 +95,56 @@ export function parseEvolutionSendResponse(body: string): ParsedEvolutionSendRes
       rawStatus: null,
     };
   }
+}
+
+const CONFIRMED_DELIVERY_STATUSES = new Set([
+  "SERVER_ACK",
+  "DELIVERED",
+  "READ",
+  "PLAYED",
+  "2",
+  "3",
+  "4",
+  "5",
+]);
+
+/** Classify whether Evolution HTTP success actually reached WhatsApp. */
+export function classifyEvolutionSendOutcome(input: {
+  httpOk: boolean;
+  parsed: ParsedEvolutionSendResponse;
+}): EvolutionSendOutcome {
+  const status = input.parsed.deliveryStatus?.toUpperCase() ?? null;
+  const accepted = input.httpOk;
+  const pendingOnly =
+    accepted &&
+    (status === "PENDING" ||
+      status === "1" ||
+      input.parsed.rawStatus === 1 ||
+      (!status && accepted));
+
+  const deliveryConfirmed =
+    accepted &&
+    status !== null &&
+    !pendingOnly &&
+    status !== "ERROR" &&
+    status !== "0" &&
+    CONFIRMED_DELIVERY_STATUSES.has(status);
+
+  const sentToWhatsApp = deliveryConfirmed;
+
+  let warning: string | null = null;
+  if (pendingOnly) {
+    warning =
+      "Evolution returned HTTP 201 with status PENDING — message is NOT confirmed delivered to WhatsApp. Restart the Evolution instance after reconnect, verify connection state is open, and confirm MESSAGES_UPDATE advances to SERVER_ACK.";
+  } else if (accepted && !deliveryConfirmed && status === "ERROR") {
+    warning = "Evolution accepted the request but reported ERROR status.";
+  }
+
+  return {
+    accepted,
+    pendingOnly,
+    deliveryConfirmed,
+    sentToWhatsApp,
+    warning,
+  };
 }

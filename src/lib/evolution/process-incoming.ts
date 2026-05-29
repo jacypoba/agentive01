@@ -64,7 +64,8 @@ export async function processIncomingWhatsAppMessage(
       whatsappReport = await sendOutboundWhatsAppMessages(
         incoming.phoneDigits,
         outboundMessages,
-        incoming.instance
+        incoming.instance,
+        incoming.remoteJid
       );
       whatsappSent = whatsappReport.sent > 0;
 

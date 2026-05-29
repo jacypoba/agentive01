@@ -4,17 +4,34 @@ import {
   normalizePhoneDigits,
 } from "@/lib/phone/normalize";
 import {
+  classifyEvolutionSendOutcome,
   parseEvolutionSendResponse,
 } from "@/lib/evolution/parse-evolution-response";
+import {
+  getEvolutionConnectionSnapshot,
+  getPendingDeliveryDiagnosis,
+} from "@/lib/evolution/evolution-instance";
 import { recordOutboundHeartbeat } from "@/lib/evolution/whatsapp-heartbeat";
 import {
   recordOutboundFailure,
   recordOutboundSuccess,
 } from "@/lib/evolution/outbound-health";
+import {
+  buildSendTextPayloadVariants,
+  selectSendTextPayloadVariant,
+  type SendTextFormat,
+} from "@/lib/evolution/send-text-payload";
 
 export type SendTextResult = {
   success: boolean;
   status?: number;
+};
+
+export type SendWhatsAppOptions = {
+  instance?: string;
+  remoteJid?: string | null;
+  format?: SendTextFormat;
+  skipConnectionCheck?: boolean;
 };
 
 export type EvolutionSendResult = SendTextResult & {
@@ -25,6 +42,14 @@ export type EvolutionSendResult = SendTextResult & {
   evolutionMessageId?: string;
   deliveryKey?: string;
   deliveryStatus?: string;
+  payloadFormat?: SendTextFormat;
+  payload?: Record<string, unknown>;
+  accepted?: boolean;
+  pendingOnly?: boolean;
+  deliveryConfirmed?: boolean;
+  sentToWhatsApp?: boolean;
+  warning?: string | null;
+  instanceState?: string | null;
 };
 
 export type SendMediaPayload = {
@@ -34,6 +59,15 @@ export type SendMediaPayload = {
   mimetype?: string;
   fileName?: string;
 };
+
+function resolveSendOptions(
+  instanceOrOptions?: string | SendWhatsAppOptions
+): SendWhatsAppOptions {
+  if (typeof instanceOrOptions === "string") {
+    return { instance: instanceOrOptions };
+  }
+  return instanceOrOptions ?? {};
+}
 
 function getEvolutionConfig(instance?: string) {
   const baseUrl = process.env.EVOLUTION_API_URL?.replace(/\/+$/, "");
@@ -82,7 +116,7 @@ async function readResponseBody(response: Response): Promise<string> {
 }
 
 function logEvolutionResponseBody(
-  label: "request_success" | "request_failed",
+  label: "request_success" | "request_failed" | "request_pending",
   details: {
     endpoint: string;
     status: number;
@@ -90,32 +124,42 @@ function logEvolutionResponseBody(
     payload: Record<string, unknown>;
     parsed?: ReturnType<typeof parseEvolutionSendResponse>;
     destinationNumber?: string;
+    payloadFormat?: SendTextFormat;
+    outcome?: ReturnType<typeof classifyEvolutionSendOutcome>;
+    instanceState?: string | null;
   }
 ) {
-  const logFn = label === "request_success" ? console.log : console.error;
+  const logFn =
+    label === "request_failed" ? console.error : console.log;
+
   logFn("[EVOLUTION RESPONSE BODY]", {
     label,
     endpoint: details.endpoint,
     status: details.status,
     destinationNumber: details.destinationNumber ?? null,
+    payloadFormat: details.payloadFormat ?? null,
+    instanceState: details.instanceState ?? null,
     responseBody: details.responseBody,
     evolutionMessageId: details.parsed?.messageId ?? null,
     deliveryKey: details.parsed?.deliveryKey ?? null,
     deliveryStatus: details.parsed?.deliveryStatus ?? null,
+    pendingOnly: details.outcome?.pendingOnly ?? null,
+    deliveryConfirmed: details.outcome?.deliveryConfirmed ?? null,
+    warning: details.outcome?.warning ?? null,
     payload: details.payload,
   });
 }
 
-async function persistOutboundHeartbeat(input: {
+function persistOutboundHeartbeat(input: {
   instanceName: string;
   success: boolean;
   kind: "text" | "image";
   destinationNumber: string;
-  phoneDigits: string;
   status?: number;
   responseBody?: string;
   parsed: ReturnType<typeof parseEvolutionSendResponse>;
   error?: string;
+  outcome?: ReturnType<typeof classifyEvolutionSendOutcome>;
 }) {
   void recordOutboundHeartbeat({
     instance: input.instanceName,
@@ -125,22 +169,35 @@ async function persistOutboundHeartbeat(input: {
     last_delivery_key: input.parsed.deliveryKey,
     last_delivery_status: input.parsed.deliveryStatus,
     last_response_body: input.responseBody ?? null,
-    last_processing_status: input.success ? `${input.kind}_sent` : `${input.kind}_failed`,
-    last_error: input.error ?? null,
+    last_processing_status: input.success
+      ? input.outcome?.pendingOnly
+        ? `${input.kind}_accepted_pending`
+        : `${input.kind}_sent`
+      : `${input.kind}_failed`,
+    last_error: input.error ?? input.outcome?.warning ?? null,
   });
 }
 
 async function postEvolutionJson(
   endpoint: string,
   apiKey: string,
-  payload: Record<string, string>,
+  payload: Record<string, unknown>,
   context: {
     instanceName: string;
     kind: "text" | "image";
-    phoneDigits: string;
     destinationNumber: string;
+    payloadFormat?: SendTextFormat;
+    instanceState?: string | null;
   }
 ): Promise<EvolutionSendResult> {
+  console.log("[EVOLUTION SEND REQUEST]", {
+    endpoint,
+    payloadFormat: context.payloadFormat ?? null,
+    instanceState: context.instanceState ?? null,
+    destinationNumber: context.destinationNumber,
+    payload,
+  });
+
   const response = await fetch(endpoint, {
     method: "POST",
     headers: {
@@ -152,6 +209,29 @@ async function postEvolutionJson(
 
   const responseBody = await readResponseBody(response);
   const parsed = parseEvolutionSendResponse(responseBody);
+  const outcome = classifyEvolutionSendOutcome({
+    httpOk: response.ok,
+    parsed,
+  });
+
+  const baseResult: EvolutionSendResult = {
+    success: response.ok,
+    status: response.status,
+    endpoint,
+    responseBody,
+    destinationNumber: context.destinationNumber,
+    evolutionMessageId: parsed.messageId ?? undefined,
+    deliveryKey: parsed.deliveryKey ?? undefined,
+    deliveryStatus: parsed.deliveryStatus ?? undefined,
+    payloadFormat: context.payloadFormat,
+    payload,
+    accepted: outcome.accepted,
+    pendingOnly: outcome.pendingOnly,
+    deliveryConfirmed: outcome.deliveryConfirmed,
+    sentToWhatsApp: outcome.sentToWhatsApp,
+    warning: outcome.warning,
+    instanceState: context.instanceState ?? null,
+  };
 
   if (!response.ok) {
     logEvolutionResponseBody("request_failed", {
@@ -161,65 +241,55 @@ async function postEvolutionJson(
       payload,
       parsed,
       destinationNumber: context.destinationNumber,
+      payloadFormat: context.payloadFormat,
+      outcome,
+      instanceState: context.instanceState,
     });
 
     const error = `Evolution API request failed (${response.status}): ${responseBody}`;
 
-    void persistOutboundHeartbeat({
+    persistOutboundHeartbeat({
       instanceName: context.instanceName,
       success: false,
       kind: context.kind,
       destinationNumber: context.destinationNumber,
-      phoneDigits: context.phoneDigits,
       status: response.status,
       responseBody,
       parsed,
       error,
+      outcome,
     });
 
-    return {
-      success: false,
-      status: response.status,
-      endpoint,
-      responseBody,
-      destinationNumber: context.destinationNumber,
-      evolutionMessageId: parsed.messageId ?? undefined,
-      deliveryKey: parsed.deliveryKey ?? undefined,
-      deliveryStatus: parsed.deliveryStatus ?? undefined,
-      error,
-    };
+    return { ...baseResult, error };
   }
 
-  logEvolutionResponseBody("request_success", {
-    endpoint,
-    status: response.status,
-    responseBody,
-    payload,
-    parsed,
-    destinationNumber: context.destinationNumber,
-  });
+  logEvolutionResponseBody(
+    outcome.pendingOnly ? "request_pending" : "request_success",
+    {
+      endpoint,
+      status: response.status,
+      responseBody,
+      payload,
+      parsed,
+      destinationNumber: context.destinationNumber,
+      payloadFormat: context.payloadFormat,
+      outcome,
+      instanceState: context.instanceState,
+    }
+  );
 
-  void persistOutboundHeartbeat({
+  persistOutboundHeartbeat({
     instanceName: context.instanceName,
     success: true,
     kind: context.kind,
     destinationNumber: context.destinationNumber,
-    phoneDigits: context.phoneDigits,
     status: response.status,
     responseBody,
     parsed,
+    outcome,
   });
 
-  return {
-    success: true,
-    status: response.status,
-    endpoint,
-    responseBody,
-    destinationNumber: context.destinationNumber,
-    evolutionMessageId: parsed.messageId ?? undefined,
-    deliveryKey: parsed.deliveryKey ?? undefined,
-    deliveryStatus: parsed.deliveryStatus ?? undefined,
-  };
+  return baseResult;
 }
 
 function buildOutboundHealthFields(
@@ -240,12 +310,43 @@ function buildOutboundHealthFields(
   };
 }
 
+function recordTextOutcome(
+  phoneDigits: string,
+  destinationNumber: string,
+  result: EvolutionSendResult
+) {
+  if (!result.success) {
+    recordOutboundFailure({
+      kind: "text",
+      reason: result.error ?? result.warning ?? "Text send failed.",
+      ...buildOutboundHealthFields(phoneDigits, destinationNumber, result),
+    });
+    return;
+  }
+
+  if (result.pendingOnly) {
+    recordOutboundFailure({
+      kind: "text",
+      reason: result.warning ?? "Evolution accepted message but status is PENDING.",
+      ...buildOutboundHealthFields(phoneDigits, destinationNumber, result),
+    });
+    return;
+  }
+
+  recordOutboundSuccess({
+    kind: "text",
+    ...buildOutboundHealthFields(phoneDigits, destinationNumber, result),
+  });
+}
+
 export async function sendWhatsAppTextSafe(
   phoneDigits: string,
   text: string,
-  instance?: string
+  instanceOrOptions?: string | SendWhatsAppOptions
 ): Promise<EvolutionSendResult> {
+  const options = resolveSendOptions(instanceOrOptions);
   const trimmed = text.trim();
+
   if (!trimmed) {
     return {
       success: false,
@@ -255,7 +356,7 @@ export async function sendWhatsAppTextSafe(
 
   let config;
   try {
-    config = getEvolutionConfig(instance);
+    config = getEvolutionConfig(options.instance);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Evolution not configured.";
     console.error("[WHATSAPP OUTBOUND FAILURE]", { kind: "text", reason: message });
@@ -263,66 +364,101 @@ export async function sendWhatsAppTextSafe(
     return { success: false, error: message };
   }
 
-  const endpoint = `${config.baseUrl}/message/sendText/${encodeURIComponent(config.instanceName)}`;
-  const destinationNumber = normalizeWhatsAppRecipient(phoneDigits);
-  const payload = stripEmptyFields({
-    number: destinationNumber,
+  const connection = options.skipConnectionCheck
+    ? null
+    : await getEvolutionConnectionSnapshot(config.instanceName);
+
+  if (connection) {
+    console.log("[EVOLUTION INSTANCE STATE]", {
+      endpoint: connection.endpoint,
+      state: connection.state,
+      interpretation: connection.interpretation,
+    });
+  }
+
+  const selected = selectSendTextPayloadVariant({
+    phoneDigits,
     text: trimmed,
+    remoteJid: options.remoteJid,
+    format: options.format,
   });
 
+  const destinationNumber = String(
+    selected.payload.number ?? normalizeWhatsAppRecipient(phoneDigits)
+  );
+
   const phoneContext = describeWhatsAppPhoneRouting({
-    outboundPhoneInput: phoneDigits,
+    remoteJid: options.remoteJid,
+    inboundPhoneDigits: phoneDigits,
+    outboundPhoneInput: destinationNumber,
   });
   logWhatsAppPhoneRouting("outbound_text", phoneContext);
 
+  const endpoint = `${config.baseUrl}/message/sendText/${encodeURIComponent(config.instanceName)}`;
+
   console.log("[WHATSAPP OUTBOUND TEXT]", {
     endpoint,
-    number: payload.number,
+    payloadFormat: selected.format,
+    payloadDescription: selected.description,
     destinationNumber,
+    remoteJid: options.remoteJid ?? null,
     textLength: trimmed.length,
     preview: trimmed.slice(0, 120),
+    instanceState: connection?.state ?? null,
   });
 
   try {
-    const result = await postEvolutionJson(endpoint, config.apiKey, payload, {
-      instanceName: config.instanceName,
-      kind: "text",
-      phoneDigits,
-      destinationNumber,
-    });
+    const result = await postEvolutionJson(
+      endpoint,
+      config.apiKey,
+      selected.payload,
+      {
+        instanceName: config.instanceName,
+        kind: "text",
+        destinationNumber,
+        payloadFormat: selected.format,
+        instanceState: connection?.state ?? null,
+      }
+    );
 
-    if (result.success) {
+    if (result.success && !result.pendingOnly) {
       console.log("[WHATSAPP OUTBOUND SUCCESS]", {
         kind: "text",
         endpoint,
         status: result.status,
+        payloadFormat: selected.format,
         destinationNumber,
         evolutionMessageId: result.evolutionMessageId ?? null,
         deliveryKey: result.deliveryKey ?? null,
         deliveryStatus: result.deliveryStatus ?? null,
         responseBody: result.responseBody ?? null,
       });
-      recordOutboundSuccess({
+    } else if (result.success && result.pendingOnly) {
+      console.warn("[WHATSAPP OUTBOUND PENDING]", {
         kind: "text",
-        ...buildOutboundHealthFields(phoneDigits, destinationNumber, result),
+        endpoint,
+        status: result.status,
+        payloadFormat: selected.format,
+        destinationNumber,
+        evolutionMessageId: result.evolutionMessageId ?? null,
+        deliveryStatus: result.deliveryStatus ?? null,
+        warning: result.warning,
+        diagnosis: getPendingDeliveryDiagnosis(),
       });
-      return result;
+    } else {
+      console.error("[WHATSAPP OUTBOUND FAILURE]", {
+        kind: "text",
+        endpoint,
+        status: result.status,
+        payloadFormat: selected.format,
+        destinationNumber,
+        evolutionMessageId: result.evolutionMessageId ?? null,
+        reason: result.error,
+        responseBody: result.responseBody ?? null,
+      });
     }
 
-    console.error("[WHATSAPP OUTBOUND FAILURE]", {
-      kind: "text",
-      endpoint,
-      status: result.status,
-      destinationNumber,
-      evolutionMessageId: result.evolutionMessageId ?? null,
-      reason: result.error,
-      responseBody: result.responseBody ?? null,
-    });
-    recordOutboundFailure({
-      kind: "text",
-      reason: result.error,
-      ...buildOutboundHealthFields(phoneDigits, destinationNumber, result),
-    });
+    recordTextOutcome(phoneDigits, destinationNumber, result);
     return result;
   } catch (error) {
     const reason = error instanceof Error ? error.message : "Network error sending text.";
@@ -346,28 +482,119 @@ export async function sendWhatsAppTextSafe(
 export async function sendWhatsAppText(
   phoneDigits: string,
   text: string,
-  instance?: string
+  instanceOrOptions?: string | SendWhatsAppOptions
 ): Promise<SendTextResult> {
-  const result = await sendWhatsAppTextSafe(phoneDigits, text, instance);
+  const result = await sendWhatsAppTextSafe(phoneDigits, text, instanceOrOptions);
   if (!result.success) {
     throw new Error(result.error ?? "Evolution API send failed.");
   }
+  if (result.pendingOnly) {
+    throw new Error(
+      result.warning ??
+        "Evolution accepted the message but WhatsApp delivery is still PENDING."
+    );
+  }
   return { success: true, status: result.status };
+}
+
+export async function runEvolutionSendTextDiagnostic(input: {
+  phoneDigits: string;
+  text: string;
+  format?: SendTextFormat | "all";
+  remoteJid?: string | null;
+  dryRun?: boolean;
+}): Promise<{
+  configured: boolean;
+  connection: Awaited<ReturnType<typeof getEvolutionConnectionSnapshot>>;
+  variants: ReturnType<typeof buildSendTextPayloadVariants>;
+  selectedFormat: SendTextFormat;
+  sendResult: EvolutionSendResult | null;
+  compareResults: EvolutionSendResult[] | null;
+}> {
+  const configured = isEvolutionConfigured();
+  const connection = configured
+    ? await getEvolutionConnectionSnapshot()
+    : null;
+
+  const variants = buildSendTextPayloadVariants({
+    phoneDigits: input.phoneDigits,
+    text: input.text,
+    remoteJid: input.remoteJid,
+  });
+
+  const selectedFormat =
+    input.format && input.format !== "all"
+      ? input.format
+      : resolvePreferredFromVariants(input.remoteJid);
+
+  if (input.dryRun || !configured) {
+    return {
+      configured,
+      connection,
+      variants,
+      selectedFormat,
+      sendResult: null,
+      compareResults: null,
+    };
+  }
+
+  if (input.format === "all") {
+    const compareResults: EvolutionSendResult[] = [];
+    for (const variant of variants) {
+      const result = await sendWhatsAppTextSafe(input.phoneDigits, input.text, {
+        remoteJid: input.remoteJid,
+        format: variant.format,
+        skipConnectionCheck: compareResults.length > 0,
+      });
+      compareResults.push(result);
+    }
+
+    return {
+      configured,
+      connection,
+      variants,
+      selectedFormat,
+      sendResult: compareResults[0] ?? null,
+      compareResults,
+    };
+  }
+
+  const sendResult = await sendWhatsAppTextSafe(input.phoneDigits, input.text, {
+    remoteJid: input.remoteJid,
+    format: selectedFormat,
+  });
+
+  return {
+    configured,
+    connection,
+    variants,
+    selectedFormat,
+    sendResult,
+    compareResults: null,
+  };
+}
+
+function resolvePreferredFromVariants(
+  remoteJid?: string | null
+): SendTextFormat {
+  return remoteJid?.includes("@") ? "jid" : "digits";
 }
 
 export async function sendWhatsAppMediaSafe(
   phoneDigits: string,
   payload: SendMediaPayload,
-  instance?: string
+  instanceOrOptions?: string | SendWhatsAppOptions
 ): Promise<EvolutionSendResult> {
+  const options = resolveSendOptions(instanceOrOptions);
   const mediaUrl = payload.media.trim();
+
   if (!mediaUrl) {
     return { success: false, error: "Cannot send media without a URL." };
   }
 
   let config;
   try {
-    config = getEvolutionConfig(instance);
+    config = getEvolutionConfig(options.instance);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Evolution not configured.";
     console.error("[WHATSAPP OUTBOUND FAILURE]", {
@@ -379,8 +606,15 @@ export async function sendWhatsAppMediaSafe(
     return { success: false, error: message };
   }
 
+  const connection = options.skipConnectionCheck
+    ? null
+    : await getEvolutionConnectionSnapshot(config.instanceName);
+
   const endpoint = `${config.baseUrl}/message/sendMedia/${encodeURIComponent(config.instanceName)}`;
-  const destinationNumber = normalizeWhatsAppRecipient(phoneDigits);
+  const digits = normalizeWhatsAppRecipient(phoneDigits);
+  const destinationNumber = options.remoteJid?.includes("@")
+    ? options.remoteJid
+    : digits;
 
   const attempts: Record<string, string>[] = [
     stripEmptyFields({
@@ -392,13 +626,13 @@ export async function sendWhatsAppMediaSafe(
       fileName: payload.fileName,
     }),
     stripEmptyFields({
-      number: destinationNumber,
+      number: digits,
       mediatype: payload.mediatype,
       media: mediaUrl,
       caption: payload.caption?.trim(),
     }),
     stripEmptyFields({
-      number: destinationNumber,
+      number: digits,
       mediatype: payload.mediatype,
       media: mediaUrl,
     }),
@@ -406,7 +640,11 @@ export async function sendWhatsAppMediaSafe(
 
   logWhatsAppPhoneRouting(
     "outbound_media",
-    describeWhatsAppPhoneRouting({ outboundPhoneInput: phoneDigits })
+    describeWhatsAppPhoneRouting({
+      remoteJid: options.remoteJid,
+      inboundPhoneDigits: phoneDigits,
+      outboundPhoneInput: destinationNumber,
+    })
   );
 
   console.log("[WHATSAPP OUTBOUND IMAGE]", {
@@ -416,6 +654,7 @@ export async function sendWhatsAppMediaSafe(
     mediaUrl,
     mediatype: payload.mediatype,
     hasCaption: Boolean(payload.caption?.trim()),
+    instanceState: connection?.state ?? null,
   });
 
   let lastResult: EvolutionSendResult = {
@@ -432,13 +671,13 @@ export async function sendWhatsAppMediaSafe(
         {
           instanceName: config.instanceName,
           kind: "image",
-          phoneDigits,
           destinationNumber,
+          instanceState: connection?.state ?? null,
         }
       );
       lastResult = result;
 
-      if (result.success) {
+      if (result.success && !result.pendingOnly) {
         console.log("[WHATSAPP OUTBOUND SUCCESS]", {
           kind: "image",
           endpoint,
@@ -457,6 +696,10 @@ export async function sendWhatsAppMediaSafe(
         });
         return result;
       }
+
+      if (result.success && result.pendingOnly) {
+        break;
+      }
     } catch (error) {
       lastResult = {
         success: false,
@@ -473,13 +716,13 @@ export async function sendWhatsAppMediaSafe(
     status: lastResult.status,
     destinationNumber,
     evolutionMessageId: lastResult.evolutionMessageId ?? null,
-    reason: lastResult.error,
+    reason: lastResult.error ?? lastResult.warning,
     responseBody: lastResult.responseBody ?? null,
     mediaUrl,
   });
   recordOutboundFailure({
     kind: "image",
-    reason: lastResult.error,
+    reason: lastResult.error ?? lastResult.warning ?? "Media send failed.",
     mediaUrl,
     ...buildOutboundHealthFields(phoneDigits, destinationNumber, lastResult),
   });
@@ -490,11 +733,22 @@ export async function sendWhatsAppMediaSafe(
 export async function sendWhatsAppMedia(
   phoneDigits: string,
   payload: SendMediaPayload,
-  instance?: string
+  instanceOrOptions?: string | SendWhatsAppOptions
 ): Promise<SendTextResult> {
-  const result = await sendWhatsAppMediaSafe(phoneDigits, payload, instance);
+  const result = await sendWhatsAppMediaSafe(phoneDigits, payload, instanceOrOptions);
   if (!result.success) {
     throw new Error(result.error ?? "Evolution API media send failed.");
   }
+  if (result.pendingOnly) {
+    throw new Error(
+      result.warning ??
+        "Evolution accepted the media message but WhatsApp delivery is still PENDING."
+    );
+  }
   return { success: true, status: result.status };
 }
+
+export {
+  buildSendTextPayloadVariants,
+  type SendTextFormat,
+} from "@/lib/evolution/send-text-payload";
