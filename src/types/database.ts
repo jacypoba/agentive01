@@ -461,23 +461,37 @@ export type CurrentSubscription = Subscription & {
 
 export type WhatsAppWebhookHeartbeat = {
   id: string;
+  instance: string | null;
   last_webhook_received_at: string | null;
   last_message_id: string | null;
+  last_remote_jid: string | null;
   last_phone: string | null;
-  last_event: string | null;
+  last_direction: string | null;
+  last_processing_status: string | null;
   last_error: string | null;
-  last_http_status: number | null;
+  last_response_body: string | null;
+  last_evolution_message_id: string | null;
+  last_delivery_key: string | null;
+  last_delivery_status: string | null;
+  created_at: string;
   updated_at: string;
 };
 
 export type WhatsAppWebhookHeartbeatInsert = {
   id: string;
+  instance?: string | null;
   last_webhook_received_at?: string | null;
   last_message_id?: string | null;
+  last_remote_jid?: string | null;
   last_phone?: string | null;
-  last_event?: string | null;
+  last_direction?: string | null;
+  last_processing_status?: string | null;
   last_error?: string | null;
-  last_http_status?: number | null;
+  last_response_body?: string | null;
+  last_evolution_message_id?: string | null;
+  last_delivery_key?: string | null;
+  last_delivery_status?: string | null;
+  created_at?: string;
   updated_at?: string;
 };
 

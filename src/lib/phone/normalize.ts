@@ -17,3 +17,52 @@ export function formatPhoneDisplay(digits: string): string {
 export function isIndividualChat(remoteJid: string): boolean {
   return remoteJid.endsWith("@s.whatsapp.net");
 }
+
+export type WhatsAppPhoneContext = {
+  remoteJid: string | null;
+  inboundPhoneDigits: string | null;
+  outboundPhoneDigits: string;
+  outboundDestination: string;
+  phonesMatch: boolean | null;
+};
+
+/** Compare inbound remoteJid digits with the outbound Evolution send number. */
+export function describeWhatsAppPhoneRouting(input: {
+  remoteJid?: string | null;
+  inboundPhoneDigits?: string | null;
+  outboundPhoneInput: string;
+}): WhatsAppPhoneContext {
+  const remoteJid = input.remoteJid?.trim() || null;
+  const inboundPhoneDigits =
+    input.inboundPhoneDigits?.trim() ||
+    (remoteJid ? phoneFromRemoteJid(remoteJid) : null);
+  const outboundPhoneDigits = normalizePhoneDigits(input.outboundPhoneInput);
+  const outboundDestination = outboundPhoneDigits;
+
+  const phonesMatch =
+    inboundPhoneDigits && outboundPhoneDigits
+      ? inboundPhoneDigits === outboundPhoneDigits
+      : null;
+
+  return {
+    remoteJid,
+    inboundPhoneDigits,
+    outboundPhoneDigits,
+    outboundDestination,
+    phonesMatch,
+  };
+}
+
+export function logWhatsAppPhoneRouting(
+  label: string,
+  context: WhatsAppPhoneContext
+): void {
+  console.log("[WHATSAPP PHONE]", {
+    label,
+    remoteJid: context.remoteJid,
+    inboundPhoneDigits: context.inboundPhoneDigits,
+    outboundPhoneDigits: context.outboundPhoneDigits,
+    outboundDestination: context.outboundDestination,
+    phonesMatch: context.phonesMatch,
+  });
+}

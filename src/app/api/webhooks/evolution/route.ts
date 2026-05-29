@@ -1,8 +1,6 @@
 import { NextResponse } from "next/server";
-import {
-  recordWebhookHeartbeat,
-  recordWebhookHit,
-} from "@/lib/evolution/inbound-heartbeat";
+import { handleEvolutionMessageStatusUpdate } from "@/lib/evolution/message-status-update";
+import { recordInboundHeartbeat, recordWebhookHit } from "@/lib/evolution/whatsapp-heartbeat";
 import {
   logIncomingWebhookPayload,
   parseEvolutionWebhook,
@@ -13,6 +11,10 @@ import {
   tryClaimWhatsAppMessage,
 } from "@/lib/evolution/message-dedup";
 import { processIncomingWhatsAppMessage } from "@/lib/evolution/process-incoming";
+import {
+  describeWhatsAppPhoneRouting,
+  logWhatsAppPhoneRouting,
+} from "@/lib/phone/normalize";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { EvolutionWebhookPayload } from "@/lib/evolution/types";
 
@@ -43,30 +45,49 @@ export async function POST(request: Request) {
   try {
     const payload = (await request.json()) as EvolutionWebhookPayload;
 
-    void recordWebhookHeartbeat({
+    void recordInboundHeartbeat({
       last_webhook_received_at: new Date().toISOString(),
-      last_event: payload.event ?? null,
+      instance: payload.instance ?? null,
+      last_processing_status: "received",
     });
+
+    if (payload.event === "messages.update") {
+      void handleEvolutionMessageStatusUpdate(payload);
+      return NextResponse.json({ ok: true, handled: "messages.update" });
+    }
 
     logIncomingWebhookPayload(payload);
 
     if (!verifyEvolutionWebhook(request, payload)) {
-      void recordWebhookHeartbeat({
+      void recordInboundHeartbeat({
+        last_processing_status: "unauthorized",
         last_error: "Unauthorized webhook request.",
-        last_http_status: 401,
       });
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const incoming = parseEvolutionWebhook(payload);
     if (!incoming) {
+      void recordInboundHeartbeat({
+        last_processing_status: "skipped",
+        last_error: null,
+      });
       return NextResponse.json({ ok: true, skipped: true });
     }
 
-    void recordWebhookHeartbeat({
+    const phoneContext = describeWhatsAppPhoneRouting({
+      remoteJid: incoming.remoteJid,
+      inboundPhoneDigits: incoming.phoneDigits,
+      outboundPhoneInput: incoming.phoneDigits,
+    });
+    logWhatsAppPhoneRouting("inbound_webhook", phoneContext);
+
+    void recordInboundHeartbeat({
       last_message_id: incoming.messageId,
+      last_remote_jid: incoming.remoteJid,
       last_phone: incoming.phoneDigits,
-      last_event: payload.event ?? "messages.upsert",
+      instance: incoming.instance,
+      last_processing_status: "processing",
       last_error: null,
     });
 
@@ -83,6 +104,10 @@ export async function POST(request: Request) {
     );
 
     if (!claimed) {
+      void recordInboundHeartbeat({
+        last_processing_status: "duplicate",
+        last_error: null,
+      });
       return NextResponse.json({
         ok: true,
         skipped: true,
@@ -96,9 +121,12 @@ export async function POST(request: Request) {
 
     const result = await processIncomingWhatsAppMessage(incoming);
 
-    void recordWebhookHeartbeat({
-      last_http_status: 200,
-      last_error: null,
+    void recordInboundHeartbeat({
+      last_processing_status: result.whatsappSent ? "processed_sent" : "processed",
+      last_error:
+        result.whatsappReport && result.whatsappReport.failed > 0
+          ? `Outbound failures: ${result.whatsappReport.failed}/${result.whatsappReport.attempted}`
+          : null,
     });
 
     return NextResponse.json({
@@ -127,9 +155,9 @@ export async function POST(request: Request) {
     const message =
       error instanceof Error ? error.message : "Webhook processing failed.";
 
-    void recordWebhookHeartbeat({
+    void recordInboundHeartbeat({
+      last_processing_status: "error",
       last_error: message,
-      last_http_status: 500,
     });
 
     console.error("[Evolution webhook] Processing failed", error);

@@ -1,5 +1,5 @@
 import "server-only";
-import { getWebhookHeartbeat } from "@/lib/evolution/inbound-heartbeat";
+import { getInboundHeartbeat } from "@/lib/evolution/whatsapp-heartbeat";
 import { getAppUrl } from "@/lib/stripe/app-url";
 
 type EvolutionFetchResult = {
@@ -130,7 +130,7 @@ export async function getWhatsAppInboundDiagnostics() {
   const apiKey = process.env.EVOLUTION_API_KEY?.trim() ?? null;
   const instanceName = process.env.EVOLUTION_INSTANCE_NAME?.trim() ?? null;
   const expectedWebhookUrl = buildExpectedWebhookUrl();
-  const heartbeat = await getWebhookHeartbeat();
+  const heartbeat = await getInboundHeartbeat();
 
   const env = {
     evolutionApiUrlPresent: Boolean(baseUrl),
