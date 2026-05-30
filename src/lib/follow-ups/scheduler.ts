@@ -21,6 +21,8 @@ import type {
   VisitRequest,
 } from "@/types/database";
 
+import { requireLeadWorkspaceId } from "@/lib/workspaces/workspace-access";
+
 type Client = SupabaseClient<Database>;
 
 function addHours(date: Date, hours: number): Date {
@@ -48,12 +50,13 @@ async function canScheduleFollowUp(
     return { allowed: false, reason: "lead_inactive" };
   }
 
-  const sentCount = await countSentFollowUpsForLead(supabase, lead.id);
+  const workspaceId = requireLeadWorkspaceId(lead);
+  const sentCount = await countSentFollowUpsForLead(supabase, workspaceId, lead.id);
   if (sentCount >= FOLLOW_UP_CONFIG.maxPerLead) {
     return { allowed: false, reason: "max_reached" };
   }
 
-  const lastSentAt = await getLastSentFollowUpAt(supabase, lead.id);
+  const lastSentAt = await getLastSentFollowUpAt(supabase, workspaceId, lead.id);
   if (lastSentAt) {
     const cooldownUntil = addHours(
       new Date(lastSentAt),
@@ -95,13 +98,19 @@ export async function scheduleFollowUp(
     return null;
   }
 
-  const existingPending = await getPendingFollowUpByType(supabase, lead.id, type);
+  const workspaceId = requireLeadWorkspaceId(lead);
+  const existingPending = await getPendingFollowUpByType(
+    supabase,
+    workspaceId,
+    lead.id,
+    type
+  );
   if (existingPending && !params.replacePending) {
     return existingPending;
   }
 
   if (existingPending && params.replacePending) {
-    await cancelPendingFollowUpsForLead(supabase, lead.id, [type]);
+    await cancelPendingFollowUpsForLead(supabase, workspaceId, lead.id, [type]);
   }
 
   const scheduledFor =
@@ -184,7 +193,12 @@ export async function scheduleForConfirmedVisit(
   const base = scheduledStart ? new Date(scheduledStart) : new Date();
   const scheduledFor = addHours(base, FOLLOW_UP_CONFIG.delaysHours.visit_completed);
 
-  await cancelPendingFollowUpsForLead(supabase, lead.id, ["visit_pending"]);
+  await cancelPendingFollowUpsForLead(
+    supabase,
+    requireLeadWorkspaceId(lead),
+    lead.id,
+    ["visit_pending"]
+  );
 
   await scheduleFollowUp(supabase, {
     lead,
@@ -215,11 +229,18 @@ export async function scheduleForNewMatchingProperty(
 
 export async function cancelFollowUpsOnClientReply(
   supabase: Client,
-  leadId: string
+  lead: Lead
 ): Promise<void> {
-  const cancelled = await cancelPendingFollowUpsForLead(supabase, leadId);
+  const cancelled = await cancelPendingFollowUpsForLead(
+    supabase,
+    requireLeadWorkspaceId(lead),
+    lead.id
+  );
   if (cancelled > 0) {
-    console.log("[Follow-ups] Cancelled on client reply", { leadId, cancelled });
+    console.log("[Follow-ups] Cancelled on client reply", {
+      leadId: lead.id,
+      cancelled,
+    });
   }
 }
 

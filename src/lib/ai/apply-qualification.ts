@@ -1,6 +1,7 @@
 import { extractLeadQualification } from "@/lib/ai/extract-qualification";
 import { syncVisitRequestFromQualification } from "@/lib/ai/sync-visit-requests";
 import { updateLeadQualification } from "@/lib/data/leads";
+import { requireLeadWorkspaceId } from "@/lib/workspaces/workspace-access";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Conversation, Database, Lead, LeadStatus } from "@/types/database";
 
@@ -79,7 +80,12 @@ export async function extractAndApplyLeadQualification(
     const extracted = await extractLeadQualification(lead, history);
     const merged = mergeQualification(lead, extracted);
 
-    const updated = await updateLeadQualification(supabase, lead.id, merged);
+    const updated = await updateLeadQualification(
+      supabase,
+      requireLeadWorkspaceId(lead),
+      lead.id,
+      merged
+    );
 
     await syncVisitRequestFromQualification(
       supabase,

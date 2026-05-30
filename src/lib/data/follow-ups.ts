@@ -13,6 +13,13 @@ import type {
 
 type Client = SupabaseClient<Database>;
 
+function workspaceFilter<T extends { eq: (col: string, val: string) => T }>(
+  query: T,
+  workspaceId: string
+): T {
+  return query.eq("workspace_id", workspaceId);
+}
+
 export async function createFollowUp(
   supabase: Client,
   followUp: FollowUpInsert
@@ -41,14 +48,18 @@ export async function createFollowUp(
 
 export async function cancelPendingFollowUpsForLead(
   supabase: Client,
+  workspaceId: string,
   leadId: string,
   types?: FollowUpType[]
 ): Promise<number> {
-  let query = supabase
-    .from("follow_ups")
-    .update({ status: "cancelled" })
-    .eq("lead_id", leadId)
-    .eq("status", "pending");
+  let query = workspaceFilter(
+    supabase
+      .from("follow_ups")
+      .update({ status: "cancelled" })
+      .eq("lead_id", leadId)
+      .eq("status", "pending"),
+    workspaceId
+  );
 
   if (types?.length) {
     query = query.in("type", types);
@@ -65,13 +76,17 @@ export async function cancelPendingFollowUpsForLead(
 
 export async function countSentFollowUpsForLead(
   supabase: Client,
+  workspaceId: string,
   leadId: string
 ): Promise<number> {
-  const { count, error } = await supabase
-    .from("follow_ups")
-    .select("*", { count: "exact", head: true })
-    .eq("lead_id", leadId)
-    .eq("status", "sent");
+  const { count, error } = await workspaceFilter(
+    supabase
+      .from("follow_ups")
+      .select("*", { count: "exact", head: true })
+      .eq("lead_id", leadId)
+      .eq("status", "sent"),
+    workspaceId
+  );
 
   if (error) {
     throw new Error(`Failed to count follow-ups: ${error.message}`);
@@ -82,13 +97,17 @@ export async function countSentFollowUpsForLead(
 
 export async function getLastSentFollowUpAt(
   supabase: Client,
+  workspaceId: string,
   leadId: string
 ): Promise<string | null> {
-  const { data, error } = await supabase
-    .from("follow_ups")
-    .select("sent_at")
-    .eq("lead_id", leadId)
-    .eq("status", "sent")
+  const { data, error } = await workspaceFilter(
+    supabase
+      .from("follow_ups")
+      .select("sent_at")
+      .eq("lead_id", leadId)
+      .eq("status", "sent"),
+    workspaceId
+  )
     .order("sent_at", { ascending: false })
     .limit(1);
 
@@ -101,15 +120,19 @@ export async function getLastSentFollowUpAt(
 
 export async function getPendingFollowUpByType(
   supabase: Client,
+  workspaceId: string,
   leadId: string,
   type: FollowUpType
 ): Promise<FollowUp | null> {
-  const { data, error } = await supabase
-    .from("follow_ups")
-    .select("*")
-    .eq("lead_id", leadId)
-    .eq("type", type)
-    .eq("status", "pending")
+  const { data, error } = await workspaceFilter(
+    supabase
+      .from("follow_ups")
+      .select("*")
+      .eq("lead_id", leadId)
+      .eq("type", type)
+      .eq("status", "pending"),
+    workspaceId
+  )
     .order("created_at", { ascending: false })
     .limit(1);
 
@@ -122,15 +145,16 @@ export async function getPendingFollowUpByType(
 
 export async function getDueFollowUps(
   supabase: Client,
-  limit = 20
+  limit = 20,
+  workspaceId?: string
 ): Promise<FollowUpWithLead[]> {
-  return getPendingFollowUps(supabase, limit, { dueOnly: true });
+  return getPendingFollowUps(supabase, limit, { dueOnly: true, workspaceId });
 }
 
 export async function getPendingFollowUps(
   supabase: Client,
   limit = 20,
-  options: { dueOnly?: boolean } = {}
+  options: { dueOnly?: boolean; workspaceId?: string } = {}
 ): Promise<FollowUpWithLead[]> {
   const dueOnly = options.dueOnly ?? false;
   const now = new Date().toISOString();
@@ -159,6 +183,10 @@ export async function getPendingFollowUps(
     .order("scheduled_for", { ascending: true })
     .limit(limit);
 
+  if (options.workspaceId) {
+    query = query.eq("workspace_id", options.workspaceId);
+  }
+
   if (dueOnly) {
     query = query.lte("scheduled_for", now);
   }
@@ -172,14 +200,13 @@ export async function getPendingFollowUps(
   return (data ?? []) as unknown as FollowUpWithLead[];
 }
 
-export async function getFollowUpsForUser(
+export async function getFollowUpsForWorkspace(
   supabase: Client,
-  userId: string,
+  workspaceId: string,
   limit = 50
 ): Promise<FollowUpWithLead[]> {
-  const { data, error } = await supabase
-    .from("follow_ups")
-    .select(
+  const { data, error } = await workspaceFilter(
+    supabase.from("follow_ups").select(
       `
       *,
       leads!inner (
@@ -196,8 +223,9 @@ export async function getFollowUpsForUser(
         preferred_language
       )
     `
-    )
-    .eq("user_id", userId)
+    ),
+    workspaceId
+  )
     .order("created_at", { ascending: false })
     .limit(limit);
 
@@ -208,15 +236,19 @@ export async function getFollowUpsForUser(
   return (data ?? []) as unknown as FollowUpWithLead[];
 }
 
+/** @deprecated Use getFollowUpsForWorkspace */
+export const getFollowUpsForUser = getFollowUpsForWorkspace;
+
 export async function getFollowUpById(
   supabase: Client,
-  userId: string,
+  workspaceId: string,
   followUpId: string
 ): Promise<FollowUpWithLead | null> {
-  const { data, error } = await supabase
-    .from("follow_ups")
-    .select(
-      `
+  const { data, error } = await workspaceFilter(
+    supabase
+      .from("follow_ups")
+      .select(
+        `
       *,
       leads!inner (
         id,
@@ -232,10 +264,10 @@ export async function getFollowUpById(
         preferred_language
       )
     `
-    )
-    .eq("id", followUpId)
-    .eq("user_id", userId)
-    .maybeSingle();
+      )
+      .eq("id", followUpId),
+    workspaceId
+  ).maybeSingle();
 
   if (error) {
     throw new Error(`Failed to fetch follow-up: ${error.message}`);
@@ -246,13 +278,15 @@ export async function getFollowUpById(
 
 export async function countPendingFollowUps(
   supabase: Client,
-  userId: string
+  workspaceId: string
 ): Promise<number> {
-  const { count, error } = await supabase
-    .from("follow_ups")
-    .select("*", { count: "exact", head: true })
-    .eq("user_id", userId)
-    .eq("status", "pending");
+  const { count, error } = await workspaceFilter(
+    supabase
+      .from("follow_ups")
+      .select("*", { count: "exact", head: true })
+      .eq("status", "pending"),
+    workspaceId
+  );
 
   if (error) {
     throw new Error(`Failed to count pending follow-ups: ${error.message}`);
@@ -269,14 +303,16 @@ function startOfTodayIso(): string {
 
 export async function countSentFollowUpsToday(
   supabase: Client,
-  userId: string
+  workspaceId: string
 ): Promise<number> {
-  const { count, error } = await supabase
-    .from("follow_ups")
-    .select("*", { count: "exact", head: true })
-    .eq("user_id", userId)
-    .eq("status", "sent")
-    .gte("sent_at", startOfTodayIso());
+  const { count, error } = await workspaceFilter(
+    supabase
+      .from("follow_ups")
+      .select("*", { count: "exact", head: true })
+      .eq("status", "sent")
+      .gte("sent_at", startOfTodayIso()),
+    workspaceId
+  );
 
   if (error) {
     throw new Error(`Failed to count sent follow-ups: ${error.message}`);
@@ -287,10 +323,10 @@ export async function countSentFollowUpsToday(
 
 export async function getFollowUpsGrouped(
   supabase: Client,
-  userId: string,
+  workspaceId: string,
   limit = 100
 ): Promise<FollowUpBuckets> {
-  const followUps = await getFollowUpsForUser(supabase, userId, limit);
+  const followUps = await getFollowUpsForWorkspace(supabase, workspaceId, limit);
 
   return {
     pending: followUps.filter((item) => item.status === "pending"),
@@ -301,6 +337,7 @@ export async function getFollowUpsGrouped(
 
 export async function updateFollowUpStatus(
   supabase: Client,
+  workspaceId: string,
   followUpId: string,
   status: FollowUpStatus,
   fields?: {
@@ -309,13 +346,16 @@ export async function updateFollowUpStatus(
     context_snapshot?: FollowUpContextSnapshot | null;
   }
 ): Promise<FollowUp> {
-  const { data, error } = await supabase
-    .from("follow_ups")
-    .update({
-      status,
-      ...fields,
-    })
-    .eq("id", followUpId)
+  const { data, error } = await workspaceFilter(
+    supabase
+      .from("follow_ups")
+      .update({
+        status,
+        ...fields,
+      })
+      .eq("id", followUpId),
+    workspaceId
+  )
     .select("*")
     .single();
 
@@ -328,9 +368,9 @@ export async function updateFollowUpStatus(
 
 export async function getFollowUpBuckets(
   supabase: Client,
-  userId: string
+  workspaceId: string
 ): Promise<FollowUpBuckets> {
-  const followUps = await getFollowUpsForUser(supabase, userId, 40);
+  const followUps = await getFollowUpsForWorkspace(supabase, workspaceId, 40);
 
   return {
     pending: followUps.filter((item) => item.status === "pending").slice(0, 8),

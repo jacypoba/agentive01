@@ -13,6 +13,8 @@ import { sendFollowUpImmediately } from "@/lib/follow-ups/processor";
 import { scheduleFollowUp } from "@/lib/follow-ups/scheduler";
 import { getLeadLanguage } from "@/lib/i18n/sync-language";
 import { createClient } from "@/lib/supabase/server";
+import { resolveTenantScope } from "@/lib/workspaces/workspace-access";
+import { requireLeadWorkspaceId } from "@/lib/workspaces/workspace-access";
 import type { FollowUpType } from "@/types/database";
 
 export type FollowUpActionState = {
@@ -40,7 +42,8 @@ export async function sendFollowUpByIdAction(
     return { error: "You must be signed in." };
   }
 
-  const followUp = await getFollowUpById(supabase, user.id, followUpId);
+  const { workspaceId } = await resolveTenantScope(supabase, user.id);
+  const followUp = await getFollowUpById(supabase, workspaceId, followUpId);
   if (!followUp) {
     return { error: "Follow-up not found." };
   }
@@ -50,7 +53,7 @@ export async function sendFollowUpByIdAction(
   }
 
   if (followUp.status === "failed") {
-    await updateFollowUpStatus(supabase, followUpId, "pending");
+    await updateFollowUpStatus(supabase, workspaceId, followUpId, "pending");
   }
 
   const result = await sendFollowUpImmediately(supabase, followUpId);
@@ -77,7 +80,8 @@ export async function markFollowUpSentAction(
     return { error: "You must be signed in." };
   }
 
-  const followUp = await getFollowUpById(supabase, user.id, followUpId);
+  const { workspaceId } = await resolveTenantScope(supabase, user.id);
+  const followUp = await getFollowUpById(supabase, workspaceId, followUpId);
   if (!followUp) {
     return { error: "Follow-up not found." };
   }
@@ -86,7 +90,7 @@ export async function markFollowUpSentAction(
     return { error: "Only pending or failed follow-ups can be marked as sent." };
   }
 
-  await updateFollowUpStatus(supabase, followUpId, "sent", {
+  await updateFollowUpStatus(supabase, workspaceId, followUpId, "sent", {
     sent_at: new Date().toISOString(),
   });
 
@@ -106,7 +110,8 @@ export async function cancelFollowUpAction(
     return { error: "You must be signed in." };
   }
 
-  const followUp = await getFollowUpById(supabase, user.id, followUpId);
+  const { workspaceId } = await resolveTenantScope(supabase, user.id);
+  const followUp = await getFollowUpById(supabase, workspaceId, followUpId);
   if (!followUp) {
     return { error: "Follow-up not found." };
   }
@@ -115,7 +120,7 @@ export async function cancelFollowUpAction(
     return { error: "Only pending follow-ups can be cancelled." };
   }
 
-  await updateFollowUpStatus(supabase, followUpId, "cancelled");
+  await updateFollowUpStatus(supabase, workspaceId, followUpId, "cancelled");
   revalidateFollowUpPaths(followUp.lead_id);
   return { success: "Follow-up cancelled." };
 }
@@ -133,16 +138,27 @@ export async function triggerFollowUpNowAction(
     return { error: "You must be signed in." };
   }
 
-  const lead = await getLeadById(supabase, user.id, leadId);
+  const { workspaceId } = await resolveTenantScope(supabase, user.id);
+  const lead = await getLeadById(supabase, workspaceId, leadId);
   if (!lead) {
     return { error: "Lead not found." };
   }
 
   try {
-    const history = await getConversationsByLead(supabase, leadId);
+    const leadWorkspaceId = requireLeadWorkspaceId(lead);
+    const history = await getConversationsByLead(
+      supabase,
+      leadWorkspaceId,
+      leadId
+    );
     const context = await buildFollowUpContext(supabase, lead, history);
     context.preferred_language = getLeadLanguage(lead);
-    const message = generateFollowUpMessage(type, context, `${leadId}:manual`, getLeadLanguage(lead));
+    const message = generateFollowUpMessage(
+      type,
+      context,
+      `${leadId}:manual`,
+      getLeadLanguage(lead)
+    );
 
     const followUp = await scheduleFollowUp(supabase, {
       lead,

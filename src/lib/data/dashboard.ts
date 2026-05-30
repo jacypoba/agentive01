@@ -3,14 +3,18 @@ import { countLeads, countLeadsByStatus, getRecentLeads } from "@/lib/data/leads
 import { getProfile } from "@/lib/data/profiles";
 import {
   countRecentConversations,
-  getRecentConversationsForUser,
+  getRecentConversationsForWorkspace,
 } from "@/lib/data/conversations";
 import {
   countVisitRequestsByStatus,
   getCalendarVisitBuckets,
   getRecentVisitRequests,
 } from "@/lib/data/visit-requests";
-import { getFollowUpBuckets, countPendingFollowUps, countSentFollowUpsToday } from "@/lib/data/follow-ups";
+import {
+  getFollowUpBuckets,
+  countPendingFollowUps,
+  countSentFollowUpsToday,
+} from "@/lib/data/follow-ups";
 import { getStatusBadgeColor } from "@/lib/leads/status";
 import type {
   CalendarVisitBuckets,
@@ -51,7 +55,7 @@ function formatActivityDescription(
 }
 
 function mapConversationToActivity(
-  conversations: Awaited<ReturnType<typeof getRecentConversationsForUser>>
+  conversations: Awaited<ReturnType<typeof getRecentConversationsForWorkspace>>
 ): RecentActivity[] {
   return conversations.map((item) => ({
     id: item.id,
@@ -109,7 +113,8 @@ function mergeRecentActivity(
 
 export async function getDashboardData(
   supabase: Client,
-  userId: string
+  userId: string,
+  workspaceId: string
 ): Promise<DashboardData> {
   const [
     profile,
@@ -127,18 +132,18 @@ export async function getDashboardData(
     sentFollowUpsToday,
   ] = await Promise.all([
     getProfile(supabase, userId),
-    countLeads(supabase, userId),
-    countLeadsByStatus(supabase, userId, "qualified"),
-    countLeadsByStatus(supabase, userId, "scheduled"),
-    countRecentConversations(supabase, userId, 7),
-    countVisitRequestsByStatus(supabase, userId, "pending"),
-    getRecentConversationsForUser(supabase, userId, 5),
-    getRecentLeads(supabase, userId, 5),
-    getRecentVisitRequests(supabase, userId, 5),
-    getCalendarVisitBuckets(supabase, userId),
-    getFollowUpBuckets(supabase, userId),
-    countPendingFollowUps(supabase, userId),
-    countSentFollowUpsToday(supabase, userId),
+    countLeads(supabase, workspaceId),
+    countLeadsByStatus(supabase, workspaceId, "qualified"),
+    countLeadsByStatus(supabase, workspaceId, "scheduled"),
+    countRecentConversations(supabase, workspaceId, 7),
+    countVisitRequestsByStatus(supabase, workspaceId, "pending"),
+    getRecentConversationsForWorkspace(supabase, workspaceId, 5),
+    getRecentLeads(supabase, workspaceId, 5),
+    getRecentVisitRequests(supabase, workspaceId, 5),
+    getCalendarVisitBuckets(supabase, workspaceId),
+    getFollowUpBuckets(supabase, workspaceId),
+    countPendingFollowUps(supabase, workspaceId),
+    countSentFollowUpsToday(supabase, workspaceId),
   ]);
 
   return {

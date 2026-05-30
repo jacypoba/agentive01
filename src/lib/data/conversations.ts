@@ -10,12 +10,14 @@ type Client = SupabaseClient<Database>;
 
 export async function getConversationsByLead(
   supabase: Client,
+  workspaceId: string,
   leadId: string
 ): Promise<Conversation[]> {
   const { data, error } = await supabase
     .from("conversations")
     .select("*")
     .eq("lead_id", leadId)
+    .eq("workspace_id", workspaceId)
     .order("created_at", { ascending: true });
 
   if (error) {
@@ -27,6 +29,7 @@ export async function getConversationsByLead(
 
 export async function getRecentConversationsByLead(
   supabase: Client,
+  workspaceId: string,
   leadId: string,
   limit = 10
 ): Promise<Conversation[]> {
@@ -34,6 +37,7 @@ export async function getRecentConversationsByLead(
     .from("conversations")
     .select("*")
     .eq("lead_id", leadId)
+    .eq("workspace_id", workspaceId)
     .order("created_at", { ascending: false })
     .limit(limit);
 
@@ -48,9 +52,24 @@ export async function createConversation(
   supabase: Client,
   conversation: ConversationInsert
 ): Promise<Conversation> {
+  let workspaceId = conversation.workspace_id ?? null;
+
+  if (!workspaceId) {
+    const { data: lead } = await supabase
+      .from("leads")
+      .select("workspace_id")
+      .eq("id", conversation.lead_id)
+      .maybeSingle();
+
+    workspaceId = lead?.workspace_id ?? null;
+  }
+
   const { data, error } = await supabase
     .from("conversations")
-    .insert(conversation)
+    .insert({
+      ...conversation,
+      workspace_id: workspaceId,
+    })
     .select("*")
     .single();
 
@@ -63,12 +82,14 @@ export async function createConversation(
 
 export async function deleteConversationsByLeadId(
   supabase: Client,
+  workspaceId: string,
   leadId: string
 ): Promise<number> {
   const { data, error } = await supabase
     .from("conversations")
     .delete()
     .eq("lead_id", leadId)
+    .eq("workspace_id", workspaceId)
     .select("id");
 
   if (error) {
@@ -78,9 +99,9 @@ export async function deleteConversationsByLeadId(
   return data?.length ?? 0;
 }
 
-export async function getRecentConversationsForUser(
+export async function getRecentConversationsForWorkspace(
   supabase: Client,
-  userId: string,
+  workspaceId: string,
   limit = 10
 ): Promise<ConversationWithLead[]> {
   const { data, error } = await supabase
@@ -98,11 +119,12 @@ export async function getRecentConversationsForUser(
         interest,
         status,
         user_id,
-        preferred_language
+        preferred_language,
+        workspace_id
       )
     `
     )
-    .eq("leads.user_id", userId)
+    .eq("workspace_id", workspaceId)
     .order("created_at", { ascending: false })
     .limit(limit);
 
@@ -113,33 +135,21 @@ export async function getRecentConversationsForUser(
   return (data ?? []) as unknown as ConversationWithLead[];
 }
 
+/** @deprecated Use getRecentConversationsForWorkspace */
+export const getRecentConversationsForUser = getRecentConversationsForWorkspace;
+
 export async function countRecentConversations(
   supabase: Client,
-  userId: string,
+  workspaceId: string,
   days = 7
 ): Promise<number> {
   const since = new Date();
   since.setDate(since.getDate() - days);
 
-  const { data: leads, error: leadsError } = await supabase
-    .from("leads")
-    .select("id")
-    .eq("user_id", userId);
-
-  if (leadsError) {
-    throw new Error(`Failed to fetch leads: ${leadsError.message}`);
-  }
-
-  if (!leads?.length) {
-    return 0;
-  }
-
-  const leadIds = leads.map((lead) => lead.id);
-
   const { count, error } = await supabase
     .from("conversations")
     .select("*", { count: "exact", head: true })
-    .in("lead_id", leadIds)
+    .eq("workspace_id", workspaceId)
     .gte("created_at", since.toISOString());
 
   if (error) {

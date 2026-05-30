@@ -11,15 +11,21 @@ import type {
 
 type Client = SupabaseClient<Database>;
 
+function workspaceFilter<T extends { eq: (col: string, val: string) => T }>(
+  query: T,
+  workspaceId: string
+): T {
+  return query.eq("workspace_id", workspaceId);
+}
+
 export async function getProperties(
   supabase: Client,
-  userId: string
+  workspaceId: string
 ): Promise<Property[]> {
-  const { data, error } = await supabase
-    .from("properties")
-    .select("*")
-    .eq("user_id", userId)
-    .order("created_at", { ascending: false });
+  const { data, error } = await workspaceFilter(
+    supabase.from("properties").select("*"),
+    workspaceId
+  ).order("created_at", { ascending: false });
 
   if (error) {
     throw new Error(`Failed to fetch properties: ${error.message}`);
@@ -30,15 +36,13 @@ export async function getProperties(
 
 export async function getPropertyById(
   supabase: Client,
-  userId: string,
+  workspaceId: string,
   propertyId: string
 ): Promise<Property | null> {
-  const { data, error } = await supabase
-    .from("properties")
-    .select("*")
-    .eq("id", propertyId)
-    .eq("user_id", userId)
-    .maybeSingle();
+  const { data, error } = await workspaceFilter(
+    supabase.from("properties").select("*").eq("id", propertyId),
+    workspaceId
+  ).maybeSingle();
 
   if (error) {
     throw new Error(`Failed to fetch property: ${error.message}`);
@@ -49,18 +53,17 @@ export async function getPropertyById(
 
 export async function getPropertiesByIds(
   supabase: Client,
-  userId: string,
+  workspaceId: string,
   ids: string[]
 ): Promise<Property[]> {
   if (ids.length === 0) {
     return [];
   }
 
-  const { data, error } = await supabase
-    .from("properties")
-    .select("*")
-    .eq("user_id", userId)
-    .in("id", ids);
+  const { data, error } = await workspaceFilter(
+    supabase.from("properties").select("*").in("id", ids),
+    workspaceId
+  );
 
   if (error) {
     throw new Error(`Failed to fetch properties: ${error.message}`);
@@ -103,14 +106,13 @@ export async function createProperty(
 export async function updateProperty(
   supabase: Client,
   propertyId: string,
-  userId: string,
+  workspaceId: string,
   fields: PropertyUpdate
 ): Promise<Property> {
-  const { data, error } = await supabase
-    .from("properties")
-    .update(fields)
-    .eq("id", propertyId)
-    .eq("user_id", userId)
+  const { data, error } = await workspaceFilter(
+    supabase.from("properties").update(fields).eq("id", propertyId),
+    workspaceId
+  )
     .select("*")
     .single();
 
@@ -124,13 +126,12 @@ export async function updateProperty(
 export async function deleteProperty(
   supabase: Client,
   propertyId: string,
-  userId: string
+  workspaceId: string
 ): Promise<void> {
-  const { error } = await supabase
-    .from("properties")
-    .delete()
-    .eq("id", propertyId)
-    .eq("user_id", userId);
+  const { error } = await workspaceFilter(
+    supabase.from("properties").delete().eq("id", propertyId),
+    workspaceId
+  );
 
   if (error) {
     throw new Error(`Failed to delete property: ${error.message}`);
@@ -204,15 +205,14 @@ function scoreProperty(property: Property, criteria: PropertySearchCriteria): nu
 
 export async function searchMatchingProperties(
   supabase: Client,
-  userId: string,
+  workspaceId: string,
   criteria: PropertySearchCriteria,
   limit = 3
 ): Promise<Property[]> {
-  const { data, error } = await supabase
-    .from("properties")
-    .select("*")
-    .eq("user_id", userId)
-    .order("created_at", { ascending: false });
+  const { data, error } = await workspaceFilter(
+    supabase.from("properties").select("*"),
+    workspaceId
+  ).order("created_at", { ascending: false });
 
   if (error) {
     throw new Error(`Failed to search properties: ${error.message}`);

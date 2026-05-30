@@ -43,7 +43,7 @@ export type PropertyAnalyticsRow = {
 
 export async function fetchLeadAnalyticsRows(
   supabase: Client,
-  userId: string,
+  workspaceId: string,
   range: AnalyticsDateRange
 ): Promise<LeadAnalyticsRow[]> {
   const { data, error } = await applyCreatedAtRange(
@@ -52,7 +52,7 @@ export async function fetchLeadAnalyticsRows(
       .select(
         "created_at, status, preferred_language, preferred_area, property_type, visit_requested"
       )
-      .eq("user_id", userId),
+      .eq("workspace_id", workspaceId),
     range
   ).order("created_at", { ascending: true });
 
@@ -65,14 +65,14 @@ export async function fetchLeadAnalyticsRows(
 
 export async function fetchAllLeadRowsForFunnel(
   supabase: Client,
-  userId: string
+  workspaceId: string
 ): Promise<LeadAnalyticsRow[]> {
   const { data, error } = await supabase
     .from("leads")
     .select(
       "created_at, status, preferred_language, preferred_area, property_type, visit_requested"
     )
-    .eq("user_id", userId);
+    .eq("workspace_id", workspaceId);
 
   if (error) {
     throw new Error(`Failed to fetch lead funnel data: ${error.message}`);
@@ -83,14 +83,14 @@ export async function fetchAllLeadRowsForFunnel(
 
 export async function fetchVisitAnalyticsRows(
   supabase: Client,
-  userId: string,
+  workspaceId: string,
   range: AnalyticsDateRange
 ): Promise<VisitAnalyticsRow[]> {
   const { data, error } = await applyCreatedAtRange(
     supabase
       .from("visit_requests")
       .select("created_at, status")
-      .eq("user_id", userId),
+      .eq("workspace_id", workspaceId),
     range
   ).order("created_at", { ascending: true });
 
@@ -103,14 +103,14 @@ export async function fetchVisitAnalyticsRows(
 
 export async function fetchFollowUpAnalyticsRows(
   supabase: Client,
-  userId: string,
+  workspaceId: string,
   range: AnalyticsDateRange
 ): Promise<FollowUpAnalyticsRow[]> {
   const { data, error } = await applyCreatedAtRange(
     supabase
       .from("follow_ups")
       .select("created_at, sent_at, status")
-      .eq("user_id", userId),
+      .eq("workspace_id", workspaceId),
     range
   );
 
@@ -123,12 +123,12 @@ export async function fetchFollowUpAnalyticsRows(
 
 export async function fetchAllVisitRowsForFunnel(
   supabase: Client,
-  userId: string
+  workspaceId: string
 ): Promise<VisitAnalyticsRow[]> {
   const { data, error } = await supabase
     .from("visit_requests")
     .select("created_at, status")
-    .eq("user_id", userId);
+    .eq("workspace_id", workspaceId);
 
   if (error) {
     throw new Error(`Failed to fetch visit funnel data: ${error.message}`);
@@ -139,13 +139,13 @@ export async function fetchAllVisitRowsForFunnel(
 
 export async function fetchPropertyAnalyticsRows(
   supabase: Client,
-  userId: string,
+  workspaceId: string,
   range?: AnalyticsDateRange
 ): Promise<PropertyAnalyticsRow[]> {
   const baseQuery = supabase
     .from("properties")
     .select("created_at, city, property_type")
-    .eq("user_id", userId);
+    .eq("workspace_id", workspaceId);
 
   const { data, error } = range
     ? await applyCreatedAtRange(baseQuery, range)
@@ -160,13 +160,13 @@ export async function fetchPropertyAnalyticsRows(
 
 export async function countInboundWhatsAppMessages(
   supabase: Client,
-  userId: string,
+  workspaceId: string,
   range: AnalyticsDateRange
 ): Promise<number> {
   const { data: leads, error: leadsError } = await supabase
     .from("leads")
     .select("id")
-    .eq("user_id", userId);
+    .eq("workspace_id", workspaceId);
 
   if (leadsError) {
     throw new Error(`Failed to fetch leads for WhatsApp analytics: ${leadsError.message}`);

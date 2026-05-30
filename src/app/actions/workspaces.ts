@@ -17,6 +17,7 @@ const REVALIDATE_PATHS = [
   "/follow-ups",
   "/properties",
   "/settings",
+  "/billing",
 ];
 
 export async function switchDefaultWorkspaceAction(

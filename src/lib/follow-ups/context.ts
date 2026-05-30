@@ -1,5 +1,6 @@
 import { getShownPropertyIds } from "@/lib/properties/property-cards";
 import { getPropertyById } from "@/lib/data/properties";
+import { requireLeadWorkspaceId } from "@/lib/workspaces/workspace-access";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type {
   Conversation,
@@ -25,7 +26,11 @@ export async function buildFollowUpContext(
   const shownTitles: string[] = [];
 
   for (const propertyId of shownIds.slice(-4)) {
-    const property = await getPropertyById(supabase, lead.user_id, propertyId);
+    const property = await getPropertyById(
+      supabase,
+      requireLeadWorkspaceId(lead),
+      propertyId
+    );
     if (property?.title) {
       shownTitles.push(property.title);
     }

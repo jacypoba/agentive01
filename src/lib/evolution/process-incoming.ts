@@ -7,6 +7,8 @@ import type { ParsedIncomingMessage } from "@/lib/whatsapp/types";
 import { createLead, getLeadByPhone } from "@/lib/data/leads";
 import { formatPhoneDisplay } from "@/lib/phone/normalize";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { resolveWhatsAppTenantContext } from "@/lib/workspaces/resolve-whatsapp-tenant";
+import { requireLeadWorkspaceId } from "@/lib/workspaces/workspace-access";
 import type { Conversation, Lead } from "@/types/database";
 
 export type ProcessIncomingResult = {
@@ -17,36 +19,52 @@ export type ProcessIncomingResult = {
   whatsappSent: boolean;
   whatsappReport: OutboundSendReport | null;
   isNewLead: boolean;
+  workspaceId: string;
 };
-
-function getDefaultUserId(): string {
-  const userId = process.env.WHATSAPP_DEFAULT_USER_ID;
-  if (!userId) {
-    throw new Error("WHATSAPP_DEFAULT_USER_ID is not configured.");
-  }
-  return userId;
-}
 
 export async function processIncomingWhatsAppMessage(
   incoming: ParsedIncomingMessage
 ): Promise<ProcessIncomingResult> {
-  const userId = getDefaultUserId();
   const supabase = createAdminClient();
 
-  let lead = await getLeadByPhone(supabase, userId, incoming.phoneDigits);
+  const tenant = await resolveWhatsAppTenantContext({
+    provider: incoming.provider,
+    providerInstanceId: incoming.instance,
+    supabase,
+  });
+
+  const workspaceId = tenant.workspaceId;
+  const userId = tenant.defaultUserId;
+
+  console.log("[WhatsApp inbound] Tenant routing", {
+    provider: incoming.provider,
+    instance: incoming.instance,
+    workspaceId,
+    defaultUserId: userId,
+    routingSource: tenant.routingSource,
+  });
+
+  let lead = await getLeadByPhone(supabase, workspaceId, incoming.phoneDigits);
   let isNewLead = false;
 
   if (!lead) {
     isNewLead = true;
-    lead = await createLead(supabase, {
-      user_id: userId,
-      client_name: incoming.pushName,
-      phone: formatPhoneDisplay(incoming.phoneDigits),
-      phone_normalized: incoming.phoneDigits,
-      interest: "WhatsApp inquiry",
-      status: "new",
-    });
+    lead = await createLead(
+      supabase,
+      {
+        user_id: userId,
+        workspace_id: workspaceId,
+        client_name: incoming.pushName,
+        phone: formatPhoneDisplay(incoming.phoneDigits),
+        phone_normalized: incoming.phoneDigits,
+        interest: "WhatsApp inquiry",
+        status: "new",
+      },
+      { systemWorkspaceId: workspaceId }
+    );
   }
+
+  requireLeadWorkspaceId(lead);
 
   const {
     userMessage,
@@ -72,6 +90,7 @@ export async function processIncomingWhatsAppMessage(
       if (whatsappReport.failed > 0) {
         console.warn("[WhatsApp inbound] Outbound completed with failures", {
           leadId: updatedLead.id,
+          workspaceId,
           messageId: incoming.messageId,
           report: whatsappReport,
         });
@@ -79,6 +98,7 @@ export async function processIncomingWhatsAppMessage(
     } catch (error) {
       console.error("[WhatsApp inbound] Unexpected outbound error", {
         leadId: updatedLead.id,
+        workspaceId,
         messageId: incoming.messageId,
         error: error instanceof Error ? error.message : error,
       });
@@ -107,5 +127,6 @@ export async function processIncomingWhatsAppMessage(
     whatsappSent,
     whatsappReport,
     isNewLead,
+    workspaceId,
   };
 }

@@ -38,6 +38,7 @@ function createTempMessage(
   return {
     id: `temp-${crypto.randomUUID()}`,
     lead_id: leadId,
+    workspace_id: null,
     message,
     sender,
     created_at: new Date().toISOString(),

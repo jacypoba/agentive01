@@ -50,6 +50,8 @@ import {
 } from "@/lib/properties/send-whatsapp";
 import { getLeadById } from "@/lib/data/leads";
 import { createClient } from "@/lib/supabase/server";
+import { resolveTenantScope } from "@/lib/workspaces/workspace-access";
+import { requireLeadWorkspaceId } from "@/lib/workspaces/workspace-access";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type {
   Conversation,
@@ -197,7 +199,7 @@ async function resolvePropertiesToRecommend(
     if (lastBatchIds.length > 0) {
       const reshown = await getPropertiesByIds(
         supabase,
-        memoryLead.user_id,
+        requireLeadWorkspaceId(memoryLead),
         lastBatchIds
       );
 
@@ -303,7 +305,11 @@ async function finalizeLead(
   lead: Lead,
   history: Conversation[]
 ): Promise<Lead> {
-  const fullHistory = await getConversationsByLead(supabase, lead.id);
+  const fullHistory = await getConversationsByLead(
+    supabase,
+    requireLeadWorkspaceId(lead),
+    lead.id
+  );
   return extractAndApplyLeadQualification(supabase, lead, fullHistory);
 }
 
@@ -319,7 +325,7 @@ export async function processClientMessageWithAI(
     sender: "client",
   });
 
-  await cancelFollowUpsOnClientReply(supabase, lead.id);
+  await cancelFollowUpsOnClientReply(supabase, lead);
 
   const { lead: memoryLead, history } = await loadConversationMemory(
     supabase,
@@ -542,7 +548,8 @@ export async function sendMessageWithAI(
     throw new Error("Unauthorized");
   }
 
-  const lead = await getLeadById(supabase, user.id, leadId);
+  const { workspaceId } = await resolveTenantScope(supabase, user.id);
+  const lead = await getLeadById(supabase, workspaceId, leadId);
   if (!lead) {
     throw new Error("Lead not found");
   }

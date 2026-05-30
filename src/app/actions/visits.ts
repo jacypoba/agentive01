@@ -30,6 +30,7 @@ import {
 import { scheduleForConfirmedVisit } from "@/lib/follow-ups/scheduler";
 import { normalizeLanguage } from "@/lib/i18n/types";
 import { createClient } from "@/lib/supabase/server";
+import { resolveTenantScope, requireLeadWorkspaceId } from "@/lib/workspaces/workspace-access";
 import type { VisitRequestStatus } from "@/types/database";
 
 export type UpdateVisitStatusState = {
@@ -64,7 +65,8 @@ export async function updateVisitStatus(
   }
 
   try {
-    const existing = await getVisitRequestById(supabase, user.id, visitId);
+    const { workspaceId } = await resolveTenantScope(supabase, user.id);
+    const existing = await getVisitRequestById(supabase, workspaceId, visitId);
     if (!existing) {
       return { error: "Visit request not found." };
     }
@@ -78,7 +80,7 @@ export async function updateVisitStatus(
     const googleConnected =
       isGoogleCalendarConfigured() && isGoogleCalendarConnected(profile);
 
-    const lead = await getLeadById(supabase, user.id, existing.lead_id);
+    const lead = await getLeadById(supabase, workspaceId, existing.lead_id);
     const leadLanguage = normalizeLanguage(lead?.preferred_language);
 
     const parsedSlot = parseRequestedVisitDatetime(
@@ -148,13 +150,13 @@ export async function updateVisitStatus(
 
     const updated = await updateVisitRequestStatus(
       supabase,
-      user.id,
+      workspaceId,
       visitId,
       status
     );
 
     if (parsedSlot || googleEventId) {
-      await updateVisitRequestCalendarFields(supabase, user.id, visitId, {
+      await updateVisitRequestCalendarFields(supabase, workspaceId, visitId, {
         scheduled_start: parsedSlot?.start.toISOString() ?? null,
         scheduled_end: parsedSlot?.end.toISOString() ?? null,
         google_calendar_event_id: googleEventId,
@@ -164,7 +166,7 @@ export async function updateVisitStatus(
     }
 
     if (status === "confirmed") {
-      await updateLeadStatus(supabase, user.id, updated.lead_id, "scheduled");
+      await updateLeadStatus(supabase, workspaceId, updated.lead_id, "scheduled");
     }
 
     if (status === "cancelled" && existing.google_calendar_event_id && profile) {
@@ -175,7 +177,7 @@ export async function updateVisitStatus(
     }
 
     const leadForWhatsApp =
-      (await getLeadById(supabase, user.id, updated.lead_id)) ?? lead;
+      (await getLeadById(supabase, workspaceId, updated.lead_id)) ?? lead;
     if (!leadForWhatsApp) {
       revalidatePath("/visits");
       revalidatePath("/dashboard");
@@ -197,7 +199,11 @@ export async function updateVisitStatus(
     );
 
     if (status === "confirmed") {
-      const history = await getConversationsByLead(supabase, leadForWhatsApp.id);
+      const history = await getConversationsByLead(
+        supabase,
+        requireLeadWorkspaceId(leadForWhatsApp),
+        leadForWhatsApp.id
+      );
       await scheduleForConfirmedVisit(
         supabase,
         leadForWhatsApp,

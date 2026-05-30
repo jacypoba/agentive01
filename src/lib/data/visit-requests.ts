@@ -11,13 +11,19 @@ import type {
 
 type Client = SupabaseClient<Database>;
 
+function workspaceFilter<T extends { eq: (col: string, val: string) => T }>(
+  query: T,
+  workspaceId: string
+): T {
+  return query.eq("workspace_id", workspaceId);
+}
+
 export async function getVisitRequests(
   supabase: Client,
-  userId: string
+  workspaceId: string
 ): Promise<VisitRequestWithLead[]> {
-  const { data, error } = await supabase
-    .from("visit_requests")
-    .select(
+  const { data, error } = await workspaceFilter(
+    supabase.from("visit_requests").select(
       `
       *,
       leads!inner (
@@ -30,9 +36,9 @@ export async function getVisitRequests(
         status
       )
     `
-    )
-    .eq("user_id", userId)
-    .order("created_at", { ascending: false });
+    ),
+    workspaceId
+  ).order("created_at", { ascending: false });
 
   if (error) {
     throw new Error(`Failed to fetch visit requests: ${error.message}`);
@@ -43,13 +49,14 @@ export async function getVisitRequests(
 
 export async function getVisitRequestById(
   supabase: Client,
-  userId: string,
+  workspaceId: string,
   visitId: string
 ): Promise<VisitRequestWithLead | null> {
-  const { data, error } = await supabase
-    .from("visit_requests")
-    .select(
-      `
+  const { data, error } = await workspaceFilter(
+    supabase
+      .from("visit_requests")
+      .select(
+        `
       *,
       leads!inner (
         id,
@@ -61,10 +68,10 @@ export async function getVisitRequestById(
         status
       )
     `
-    )
-    .eq("id", visitId)
-    .eq("user_id", userId)
-    .maybeSingle();
+      )
+      .eq("id", visitId),
+    workspaceId
+  ).maybeSingle();
 
   if (error) {
     throw new Error(`Failed to fetch visit request: ${error.message}`);
@@ -75,12 +82,11 @@ export async function getVisitRequestById(
 
 export async function getRecentVisitRequests(
   supabase: Client,
-  userId: string,
+  workspaceId: string,
   limit = 5
 ): Promise<VisitRequestWithLead[]> {
-  const { data, error } = await supabase
-    .from("visit_requests")
-    .select(
+  const { data, error } = await workspaceFilter(
+    supabase.from("visit_requests").select(
       `
       *,
       leads!inner (
@@ -93,8 +99,9 @@ export async function getRecentVisitRequests(
         status
       )
     `
-    )
-    .eq("user_id", userId)
+    ),
+    workspaceId
+  )
     .order("created_at", { ascending: false })
     .limit(limit);
 
@@ -107,14 +114,16 @@ export async function getRecentVisitRequests(
 
 export async function countVisitRequestsByStatus(
   supabase: Client,
-  userId: string,
+  workspaceId: string,
   status: VisitRequestStatus
 ): Promise<number> {
-  const { count, error } = await supabase
-    .from("visit_requests")
-    .select("*", { count: "exact", head: true })
-    .eq("user_id", userId)
-    .eq("status", status);
+  const { count, error } = await workspaceFilter(
+    supabase
+      .from("visit_requests")
+      .select("*", { count: "exact", head: true })
+      .eq("status", status),
+    workspaceId
+  );
 
   if (error) {
     throw new Error(`Failed to count visit requests: ${error.message}`);
@@ -125,14 +134,18 @@ export async function countVisitRequestsByStatus(
 
 export async function getPendingVisitRequestForLead(
   supabase: Client,
+  workspaceId: string,
   leadId: string,
   requestedDatetimeText: string | null
 ): Promise<VisitRequest | null> {
-  let query = supabase
-    .from("visit_requests")
-    .select("*")
-    .eq("lead_id", leadId)
-    .eq("status", "pending");
+  let query = workspaceFilter(
+    supabase
+      .from("visit_requests")
+      .select("*")
+      .eq("lead_id", leadId)
+      .eq("status", "pending"),
+    workspaceId
+  );
 
   if (requestedDatetimeText) {
     query = query.eq("requested_datetime_text", requestedDatetimeText);
@@ -179,15 +192,14 @@ export async function createVisitRequest(
 
 export async function updateVisitRequestStatus(
   supabase: Client,
-  userId: string,
+  workspaceId: string,
   visitId: string,
   status: VisitRequestStatus
 ): Promise<VisitRequest> {
-  const { data, error } = await supabase
-    .from("visit_requests")
-    .update({ status })
-    .eq("id", visitId)
-    .eq("user_id", userId)
+  const { data, error } = await workspaceFilter(
+    supabase.from("visit_requests").update({ status }).eq("id", visitId),
+    workspaceId
+  )
     .select("*")
     .single();
 
@@ -200,9 +212,9 @@ export async function updateVisitRequestStatus(
 
 export async function getCalendarVisitBuckets(
   supabase: Client,
-  userId: string
+  workspaceId: string
 ): Promise<import("@/types/database").CalendarVisitBuckets> {
-  const visits = await getVisitRequests(supabase, userId);
+  const visits = await getVisitRequests(supabase, workspaceId);
   const now = new Date();
   const startOfToday = new Date(now);
   startOfToday.setHours(0, 0, 0, 0);
@@ -236,15 +248,14 @@ export async function getCalendarVisitBuckets(
 
 export async function updateVisitRequestCalendarFields(
   supabase: Client,
-  userId: string,
+  workspaceId: string,
   visitId: string,
   fields: VisitRequestUpdate
 ): Promise<VisitRequest> {
-  const { data, error } = await supabase
-    .from("visit_requests")
-    .update(fields)
-    .eq("id", visitId)
-    .eq("user_id", userId)
+  const { data, error } = await workspaceFilter(
+    supabase.from("visit_requests").update(fields).eq("id", visitId),
+    workspaceId
+  )
     .select("*")
     .single();
 

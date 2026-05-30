@@ -8,20 +8,31 @@ import { createClient } from "@/lib/supabase/server";
 
 type AnalyticsSectionProps = {
   userId: string;
+  workspaceId: string;
   period: AnalyticsPeriodKey;
 };
 
 async function AnalyticsSectionContent({
   userId,
+  workspaceId,
   period,
 }: AnalyticsSectionProps) {
   const supabase = await createClient();
-  const data = await getAnalyticsDashboardData(supabase, userId, period);
+  const data = await getAnalyticsDashboardData(
+    supabase,
+    userId,
+    workspaceId,
+    period
+  );
 
   return <AnalyticsDashboard data={data} />;
 }
 
-export function AnalyticsSection({ userId, period }: AnalyticsSectionProps) {
+export function AnalyticsSection({
+  userId,
+  workspaceId,
+  period,
+}: AnalyticsSectionProps) {
   return (
     <section className="mt-14">
       <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
@@ -48,7 +59,11 @@ export function AnalyticsSection({ userId, period }: AnalyticsSectionProps) {
       </div>
 
       <Suspense key={period} fallback={<AnalyticsSkeleton />}>
-        <AnalyticsSectionContent userId={userId} period={period} />
+        <AnalyticsSectionContent
+          userId={userId}
+          workspaceId={workspaceId}
+          period={period}
+        />
       </Suspense>
     </section>
   );

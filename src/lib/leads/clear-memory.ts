@@ -1,8 +1,9 @@
 import { deleteConversationsByLeadId } from "@/lib/data/conversations";
 import { cancelPendingFollowUpsForLead } from "@/lib/data/follow-ups";
 import { getLeadById, updateLeadQualification } from "@/lib/data/leads";
+import { requireLeadWorkspaceId } from "@/lib/workspaces/workspace-access";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { Database, Lead, LeadUpdate } from "@/types/database";
+import type { Database, LeadUpdate } from "@/types/database";
 
 type Client = SupabaseClient<Database>;
 
@@ -29,30 +30,42 @@ const QUALIFICATION_RESET_FIELDS: LeadUpdate = {
 
 export async function clearLeadMemory(
   supabase: Client,
-  userId: string,
+  workspaceId: string,
   leadId: string,
   options: ClearLeadMemoryOptions = {}
 ): Promise<ClearLeadMemoryResult> {
-  const lead = await getLeadById(supabase, userId, leadId);
+  const lead = await getLeadById(supabase, workspaceId, leadId);
   if (!lead) {
     throw new Error("Lead not found.");
   }
 
-  const conversationsDeleted = await deleteConversationsByLeadId(supabase, leadId);
+  const leadWorkspaceId = requireLeadWorkspaceId(lead);
+
+  const conversationsDeleted = await deleteConversationsByLeadId(
+    supabase,
+    leadWorkspaceId,
+    leadId
+  );
   const followUpsCancelled = await cancelPendingFollowUpsForLead(
     supabase,
+    leadWorkspaceId,
     leadId
   );
 
   let qualificationReset = false;
   if (options.resetQualificationFields) {
-    await updateLeadQualification(supabase, leadId, QUALIFICATION_RESET_FIELDS);
+    await updateLeadQualification(
+      supabase,
+      leadWorkspaceId,
+      leadId,
+      QUALIFICATION_RESET_FIELDS
+    );
     qualificationReset = true;
   }
 
   console.log("[Lead memory] Cleared", {
     leadId,
-    userId,
+    workspaceId,
     conversationsDeleted,
     followUpsCancelled,
     qualificationReset,

@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createProperty, deleteProperty, updateProperty } from "@/lib/data/properties";
 import { triggerFollowUpsForNewProperty } from "@/lib/follow-ups/triggers";
+import { resolveTenantScope } from "@/lib/workspaces/workspace-access";
 import { createClient } from "@/lib/supabase/server";
 import type { PropertyUpdate } from "@/types/database";
 
@@ -99,12 +100,13 @@ export async function createPropertyAction(
   }
 
   try {
+    const { userId, workspaceId } = await resolveTenantScope(supabase, user.id);
     const property = await createProperty(supabase, {
-      user_id: user.id,
+      user_id: userId,
       ...parsed.payload,
     });
 
-    await triggerFollowUpsForNewProperty(supabase, user.id, property);
+    await triggerFollowUpsForNewProperty(supabase, workspaceId, property);
   } catch (error) {
     return {
       error:
@@ -140,7 +142,8 @@ export async function updatePropertyAction(
   }
 
   try {
-    await updateProperty(supabase, propertyId, user.id, parsed.payload);
+    const { workspaceId } = await resolveTenantScope(supabase, user.id);
+    await updateProperty(supabase, propertyId, workspaceId, parsed.payload);
   } catch (error) {
     return {
       error:
@@ -169,7 +172,8 @@ export async function deletePropertyAction(
   }
 
   try {
-    await deleteProperty(supabase, propertyId, user.id);
+    const { workspaceId } = await resolveTenantScope(supabase, user.id);
+    await deleteProperty(supabase, propertyId, workspaceId);
   } catch (error) {
     return {
       error:

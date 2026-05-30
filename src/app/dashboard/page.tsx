@@ -14,6 +14,7 @@ import {
   getDashboardData,
   getStatusBadgeColor,
 } from "@/lib/data/dashboard";
+import { resolveTenantScope } from "@/lib/workspaces/workspace-access";
 
 export const metadata: Metadata = {
   title: "Dashboard — Agentive01",
@@ -68,10 +69,13 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
 
   let dashboardData = null;
   let dbError: string | null = null;
+  let activeWorkspaceId: string | null = null;
 
   if (user) {
     try {
-      dashboardData = await getDashboardData(supabase, user.id);
+      const { userId, workspaceId } = await resolveTenantScope(supabase, user.id);
+      activeWorkspaceId = workspaceId;
+      dashboardData = await getDashboardData(supabase, userId, workspaceId);
     } catch (error) {
       dbError =
         error instanceof Error
@@ -197,8 +201,12 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               ))}
             </section>
 
-            {user && (
-              <AnalyticsSection userId={user.id} period={analyticsPeriod} />
+            {user && activeWorkspaceId && (
+              <AnalyticsSection
+                userId={user.id}
+                workspaceId={activeWorkspaceId}
+                period={analyticsPeriod}
+              />
             )}
 
             <section className="mt-12 grid gap-6 lg:grid-cols-3">

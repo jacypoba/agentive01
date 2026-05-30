@@ -4,6 +4,7 @@ import { LeadsList } from "@/components/leads/leads-list";
 import { LeadsListSkeleton } from "@/components/leads/leads-list-skeleton";
 import { getLeads } from "@/lib/data/leads";
 import { createClient } from "@/lib/supabase/server";
+import { resolveTenantScope } from "@/lib/workspaces/workspace-access";
 import type { LeadStatus } from "@/types/database";
 
 const LEAD_STATUSES: LeadStatus[] = [
@@ -43,7 +44,8 @@ async function LeadsContent({
 
   if (user) {
     try {
-      leads = await getLeads(supabase, user.id);
+      const { workspaceId } = await resolveTenantScope(supabase, user.id);
+      leads = await getLeads(supabase, workspaceId);
     } catch (error) {
       dbError =
         error instanceof Error ? error.message : "Could not load leads.";

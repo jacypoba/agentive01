@@ -4,6 +4,7 @@ import {
   scheduleForNewMatchingProperty,
   scheduleSilentLeadIfNeeded,
 } from "@/lib/follow-ups/scheduler";
+import { requireEntityWorkspaceId } from "@/lib/workspaces/workspace-access";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, Property } from "@/types/database";
 
@@ -46,10 +47,10 @@ function leadMatchesProperty(
 
 export async function triggerFollowUpsForNewProperty(
   supabase: Client,
-  userId: string,
+  workspaceId: string,
   property: Property
 ): Promise<number> {
-  const leads = await getLeads(supabase, userId);
+  const leads = await getLeads(supabase, workspaceId);
   let scheduled = 0;
 
   for (const lead of leads) {
@@ -57,7 +58,12 @@ export async function triggerFollowUpsForNewProperty(
       continue;
     }
 
-    const history = await getRecentConversationsByLead(supabase, lead.id, 20);
+    const history = await getRecentConversationsByLead(
+      supabase,
+      workspaceId,
+      lead.id,
+      20
+    );
     const created = await scheduleForNewMatchingProperty(
       supabase,
       lead,
@@ -74,9 +80,9 @@ export async function triggerFollowUpsForNewProperty(
 
 export async function scanSilentLeadsForFollowUp(
   supabase: Client,
-  userId: string
+  workspaceId: string
 ): Promise<number> {
-  const leads = await getLeads(supabase, userId);
+  const leads = await getLeads(supabase, workspaceId);
   let scheduled = 0;
 
   for (const lead of leads) {
@@ -84,7 +90,12 @@ export async function scanSilentLeadsForFollowUp(
       continue;
     }
 
-    const history = await getRecentConversationsByLead(supabase, lead.id, 15);
+    const history = await getRecentConversationsByLead(
+      supabase,
+      workspaceId,
+      lead.id,
+      15
+    );
     if (history.length === 0) {
       continue;
     }
@@ -112,4 +123,8 @@ export async function scanSilentLeadsForFollowUp(
   }
 
   return scheduled;
+}
+
+export function resolvePropertyWorkspaceId(property: Property): string {
+  return requireEntityWorkspaceId(property, "Property");
 }

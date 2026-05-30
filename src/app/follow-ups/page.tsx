@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { FollowUpsList } from "@/components/follow-ups/follow-ups-list";
 import { getFollowUpsGrouped } from "@/lib/data/follow-ups";
 import { createClient } from "@/lib/supabase/server";
+import { resolveTenantScope } from "@/lib/workspaces/workspace-access";
 
 export const metadata: Metadata = {
   title: "Follow-ups — Agentive01",
@@ -32,7 +33,8 @@ export default async function FollowUpsPage({ searchParams }: FollowUpsPageProps
 
   if (user) {
     try {
-      buckets = await getFollowUpsGrouped(supabase, user.id);
+      const { workspaceId } = await resolveTenantScope(supabase, user.id);
+      buckets = await getFollowUpsGrouped(supabase, workspaceId);
     } catch (error) {
       dbError =
         error instanceof Error ? error.message : "Could not load follow-ups.";

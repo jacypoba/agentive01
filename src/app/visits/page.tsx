@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { VisitsList } from "@/components/visits/visits-list";
 import { getVisitRequests } from "@/lib/data/visit-requests";
 import { createClient } from "@/lib/supabase/server";
+import { resolveTenantScope } from "@/lib/workspaces/workspace-access";
 import type { VisitRequestStatus } from "@/types/database";
 
 function isVisitStatusFilter(
@@ -40,7 +41,8 @@ export default async function VisitsPage({ searchParams }: VisitsPageProps) {
 
   if (user) {
     try {
-      visits = await getVisitRequests(supabase, user.id);
+      const { workspaceId } = await resolveTenantScope(supabase, user.id);
+      visits = await getVisitRequests(supabase, workspaceId);
     } catch (error) {
       dbError =
         error instanceof Error

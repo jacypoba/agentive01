@@ -90,6 +90,7 @@ function buildAnalyticsKpis(input: {
 export async function getAnalyticsDashboardData(
   supabase: Client,
   userId: string,
+  workspaceId: string,
   period: AnalyticsPeriodKey = DEFAULT_ANALYTICS_PERIOD
 ): Promise<AnalyticsDashboardData> {
   const range = buildAnalyticsDateRangeForPeriod(period);
@@ -102,12 +103,12 @@ export async function getAnalyticsDashboardData(
     totalPropertyRows,
     whatsappInbound,
   ] = await Promise.all([
-    fetchLeadAnalyticsRows(supabase, userId, range),
-    fetchVisitAnalyticsRows(supabase, userId, range),
-    fetchFollowUpAnalyticsRows(supabase, userId, range),
-    fetchPropertyAnalyticsRows(supabase, userId, range),
-    fetchPropertyAnalyticsRows(supabase, userId),
-    countInboundWhatsAppMessages(supabase, userId, range),
+    fetchLeadAnalyticsRows(supabase, workspaceId, range),
+    fetchVisitAnalyticsRows(supabase, workspaceId, range),
+    fetchFollowUpAnalyticsRows(supabase, workspaceId, range),
+    fetchPropertyAnalyticsRows(supabase, workspaceId, range),
+    fetchPropertyAnalyticsRows(supabase, workspaceId),
+    countInboundWhatsAppMessages(supabase, workspaceId, range),
   ]);
 
   const qualifiedInRange = countQualifiedLeads(leadRows);
@@ -149,7 +150,7 @@ export async function getAnalyticsDashboardData(
   };
 
   const snapshot = {
-    tenant: { userId },
+    tenant: { userId, workspaceId },
     range,
     kpis: buildAnalyticsKpis({
       leads: leadRows.length,

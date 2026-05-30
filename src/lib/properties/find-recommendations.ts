@@ -22,17 +22,17 @@ export type FindPropertyRecommendationsResult = {
 
 async function searchWithCriteria(
   supabase: Client,
-  userId: string,
+  workspaceId: string,
   criteria: PropertySearchCriteria,
   limit: number
 ): Promise<Property[]> {
   const normalized = normalizeSearchCriteria(criteria);
 
   try {
-    return await searchMatchingProperties(supabase, userId, normalized, limit);
+    return await searchMatchingProperties(supabase, workspaceId, normalized, limit);
   } catch (error) {
     console.error("[Property search] Query failed", {
-      userId,
+      userId: workspaceId,
       criteria: normalized,
       error: error instanceof Error ? error.message : error,
     });
@@ -53,6 +53,11 @@ export async function findPropertyRecommendations(
 ): Promise<FindPropertyRecommendationsResult> {
   const searchOptions = { preferLatestMessage: options?.preferLatestMessage };
 
+  const workspaceId = lead.workspace_id;
+  if (!workspaceId) {
+    return { properties: [], criteria: null };
+  }
+
   const strictDebug = derivePropertySearchDebug(lead, history, searchOptions);
   let criteria = strictDebug.criteria;
   let properties: Property[] = [];
@@ -69,7 +74,7 @@ export async function findPropertyRecommendations(
   if (strictDebug.criteria) {
     properties = await searchWithCriteria(
       supabase,
-      lead.user_id,
+      workspaceId,
       strictDebug.criteria,
       limit
     );
@@ -97,7 +102,7 @@ export async function findPropertyRecommendations(
     if (relaxedDebug.criteria) {
       const relaxedResults = await searchWithCriteria(
         supabase,
-        lead.user_id,
+        workspaceId,
         relaxedDebug.criteria,
         limit
       );

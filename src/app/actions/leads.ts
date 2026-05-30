@@ -6,6 +6,7 @@ import {
   buildClearMemorySuccessMessage,
   clearLeadMemory,
 } from "@/lib/leads/clear-memory";
+import { resolveTenantScope } from "@/lib/workspaces/workspace-access";
 import { createClient } from "@/lib/supabase/server";
 
 export type CreateTestLeadState = {
@@ -32,7 +33,8 @@ export async function clearLeadMemoryAction(
   }
 
   try {
-    const result = await clearLeadMemory(supabase, user.id, leadId, {
+    const { workspaceId } = await resolveTenantScope(supabase, user.id);
+    const result = await clearLeadMemory(supabase, workspaceId, leadId, {
       resetQualificationFields,
     });
 

@@ -10,7 +10,8 @@ import { generateFollowUpMessage } from "@/lib/follow-ups/messages";
 import { normalizeLanguage } from "@/lib/i18n/types";
 import { resolveLeadPhoneDigits } from "@/lib/visits/whatsapp-notifications";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { Database, FollowUpContextSnapshot } from "@/types/database";
+import { requireLeadWorkspaceId } from "@/lib/workspaces/workspace-access";
+import type { Database, FollowUpContextSnapshot, FollowUpWithLead } from "@/types/database";
 
 type Client = SupabaseClient<Database>;
 
@@ -34,6 +35,13 @@ export type ProcessFollowUpDetail = {
 export type ProcessPendingFollowUpsResult = ProcessFollowUpsResult & {
   details: ProcessFollowUpDetail[];
 };
+
+function resolveFollowUpWorkspaceId(item: FollowUpWithLead): string {
+  if (item.workspace_id) {
+    return item.workspace_id;
+  }
+  return requireLeadWorkspaceId(item.leads as import("@/types/database").Lead);
+}
 
 function isEligibleLead(status: string, intentStatus: string | null): boolean {
   if (status === "closed" || status === "lost") {
@@ -81,13 +89,13 @@ export async function sendFollowUpImmediately(
   const lead = item.leads;
 
   if (!isEligibleLead(lead.status, lead.intent_status)) {
-    await updateFollowUpStatus(supabase, item.id, "cancelled");
+    await updateFollowUpStatus(supabase, resolveFollowUpWorkspaceId(item), item.id, "cancelled");
     return { sent: false, error: "Lead is not eligible for follow-up." };
   }
 
   const phoneDigits = resolveLeadPhoneDigits(lead);
   if (!phoneDigits) {
-    await updateFollowUpStatus(supabase, item.id, "failed");
+    await updateFollowUpStatus(supabase, resolveFollowUpWorkspaceId(item), item.id, "failed");
     return { sent: false, error: "Lead has no phone number." };
   }
 
@@ -106,13 +114,13 @@ export async function sendFollowUpImmediately(
       message,
       sender: "ai",
     });
-    await updateFollowUpStatus(supabase, item.id, "sent", {
+    await updateFollowUpStatus(supabase, resolveFollowUpWorkspaceId(item), item.id, "sent", {
       message,
       sent_at: new Date().toISOString(),
     });
     return { sent: true };
   } catch (sendError) {
-    await updateFollowUpStatus(supabase, item.id, "failed", { message });
+    await updateFollowUpStatus(supabase, resolveFollowUpWorkspaceId(item), item.id, "failed", { message });
     return {
       sent: false,
       error:
@@ -144,7 +152,7 @@ export async function processPendingFollowUps(
     const lead = item.leads;
 
     if (!isEligibleLead(lead.status, lead.intent_status)) {
-      await updateFollowUpStatus(supabase, item.id, "cancelled");
+      await updateFollowUpStatus(supabase, resolveFollowUpWorkspaceId(item), item.id, "cancelled");
       result.skipped += 1;
       result.details.push({
         followUpId: item.id,
@@ -159,7 +167,7 @@ export async function processPendingFollowUps(
 
     const phoneDigits = resolveLeadPhoneDigits(lead);
     if (!phoneDigits) {
-      await updateFollowUpStatus(supabase, item.id, "failed");
+      await updateFollowUpStatus(supabase, resolveFollowUpWorkspaceId(item), item.id, "failed");
       result.failed += 1;
       result.details.push({
         followUpId: item.id,
@@ -187,7 +195,7 @@ export async function processPendingFollowUps(
         message,
         sender: "ai",
       });
-      await updateFollowUpStatus(supabase, item.id, "sent", {
+      await updateFollowUpStatus(supabase, resolveFollowUpWorkspaceId(item), item.id, "sent", {
         message,
         sent_at: new Date().toISOString(),
       });
@@ -206,7 +214,7 @@ export async function processPendingFollowUps(
         type: item.type,
       });
     } catch (error) {
-      await updateFollowUpStatus(supabase, item.id, "failed", { message });
+      await updateFollowUpStatus(supabase, resolveFollowUpWorkspaceId(item), item.id, "failed", { message });
       result.failed += 1;
       const errorMessage =
         error instanceof Error ? error.message : "WhatsApp send failed";

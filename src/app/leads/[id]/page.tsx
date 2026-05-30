@@ -4,6 +4,7 @@ import { LeadDetailView } from "@/components/leads/lead-detail-view";
 import { getConversationsByLead } from "@/lib/data/conversations";
 import { getLeadById } from "@/lib/data/leads";
 import { createClient } from "@/lib/supabase/server";
+import { resolveTenantScope } from "@/lib/workspaces/workspace-access";
 
 type LeadPageProps = {
   params: Promise<{ id: string }>;
@@ -22,7 +23,8 @@ export async function generateMetadata({
     return { title: "Lead — Agentive01" };
   }
 
-  const lead = await getLeadById(supabase, user.id, id);
+  const { workspaceId } = await resolveTenantScope(supabase, user.id);
+  const lead = await getLeadById(supabase, workspaceId, id);
 
   return {
     title: lead
@@ -43,12 +45,13 @@ export default async function LeadDetailPage({ params }: LeadPageProps) {
     notFound();
   }
 
-  const lead = await getLeadById(supabase, user.id, id);
+  const { workspaceId } = await resolveTenantScope(supabase, user.id);
+  const lead = await getLeadById(supabase, workspaceId, id);
   if (!lead) {
     notFound();
   }
 
-  const conversations = await getConversationsByLead(supabase, id);
+  const conversations = await getConversationsByLead(supabase, workspaceId, id);
 
   return (
     <main className="px-6 pb-16 lg:px-8">

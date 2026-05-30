@@ -140,6 +140,7 @@ export type LeadQualificationFields = {
 export type Conversation = {
   id: string;
   lead_id: string;
+  workspace_id: string | null;
   message: string;
   sender: ConversationSender;
   created_at: string;
@@ -206,6 +207,7 @@ export type LeadUpdate = {
 export type ConversationInsert = {
   id?: string;
   lead_id: string;
+  workspace_id?: string | null;
   message: string;
   sender: ConversationSender;
   created_at?: string;
@@ -268,6 +270,29 @@ export type WorkspaceMemberInsert = {
   user_id: string;
   role?: WorkspaceRole;
   created_at?: string;
+};
+
+export type WorkspaceWhatsAppConnection = {
+  id: string;
+  workspace_id: string;
+  provider: "meta" | "evolution";
+  provider_instance_id: string;
+  default_user_id: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+export type WorkspaceSettings = {
+  workspace_id: string;
+  tone_of_voice: string | null;
+  business_name: string | null;
+  business_info: string | null;
+  faqs: unknown;
+  default_language: string;
+  agent_behavior_rules: string | null;
+  created_at: string;
+  updated_at: string;
 };
 
 export type VisitRequestStatus = "pending" | "confirmed" | "cancelled";
@@ -550,6 +575,18 @@ export type Database = {
         Row: WorkspaceMember;
         Insert: WorkspaceMemberInsert;
         Update: Partial<WorkspaceMemberInsert>;
+        Relationships: [];
+      };
+      workspace_whatsapp_connections: {
+        Row: WorkspaceWhatsAppConnection;
+        Insert: Partial<WorkspaceWhatsAppConnection>;
+        Update: Partial<WorkspaceWhatsAppConnection>;
+        Relationships: [];
+      };
+      workspace_settings: {
+        Row: WorkspaceSettings;
+        Insert: Partial<WorkspaceSettings>;
+        Update: Partial<WorkspaceSettings>;
         Relationships: [];
       };
       subscriptions: {

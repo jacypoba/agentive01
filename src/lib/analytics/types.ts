@@ -4,6 +4,7 @@ import type { AnalyticsPeriodKey } from "@/lib/analytics/periods";
 
 export type AnalyticsTenantScope = {
   userId: string;
+  workspaceId: string;
 };
 
 export type AnalyticsDateRange = {

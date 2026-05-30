@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { PropertiesAdmin } from "@/components/properties/properties-admin";
 import { getProperties } from "@/lib/data/properties";
 import { createClient } from "@/lib/supabase/server";
+import { resolveTenantScope } from "@/lib/workspaces/workspace-access";
 
 export const metadata: Metadata = {
   title: "Properties — Agentive01",
@@ -19,7 +20,8 @@ export default async function PropertiesPage() {
 
   if (user) {
     try {
-      properties = await getProperties(supabase, user.id);
+      const { workspaceId } = await resolveTenantScope(supabase, user.id);
+      properties = await getProperties(supabase, workspaceId);
     } catch (error) {
       dbError =
         error instanceof Error ? error.message : "Could not load properties.";

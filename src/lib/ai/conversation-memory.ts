@@ -1,5 +1,6 @@
 import { getRecentConversationsByLead } from "@/lib/data/conversations";
 import { getLeadById } from "@/lib/data/leads";
+import { requireLeadWorkspaceId } from "@/lib/workspaces/workspace-access";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Conversation, Database, Lead } from "@/types/database";
 
@@ -21,9 +22,10 @@ export async function loadConversationMemory(
   lead: Lead,
   limit = MEMORY_MESSAGE_LIMIT
 ): Promise<ConversationMemory> {
+  const workspaceId = requireLeadWorkspaceId(lead);
   const [freshLead, history] = await Promise.all([
-    getLeadById(supabase, lead.user_id, lead.id),
-    getRecentConversationsByLead(supabase, lead.id, limit),
+    getLeadById(supabase, workspaceId, lead.id),
+    getRecentConversationsByLead(supabase, workspaceId, lead.id, limit),
   ]);
 
   return {

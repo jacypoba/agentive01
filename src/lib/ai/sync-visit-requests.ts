@@ -6,6 +6,7 @@ import {
   getPendingVisitRequestForLead,
 } from "@/lib/data/visit-requests";
 import { scheduleForPendingVisit } from "@/lib/follow-ups/scheduler";
+import { requireLeadWorkspaceId } from "@/lib/workspaces/workspace-access";
 import { getLastShownPropertyId } from "@/lib/properties/property-cards";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Conversation, Database, Lead, VisitRequest } from "@/types/database";
@@ -34,8 +35,10 @@ export async function syncVisitRequestFromQualification(
     extracted.visit_datetime_text ?? lead.visit_datetime_text ?? null;
 
   try {
+    const workspaceId = requireLeadWorkspaceId(lead);
     const existing = await getPendingVisitRequestForLead(
       supabase,
+      workspaceId,
       lead.id,
       requestedDatetimeText
     );
@@ -52,7 +55,7 @@ export async function syncVisitRequestFromQualification(
     if (lastPropertyId) {
       const property = await getPropertyById(
         supabase,
-        lead.user_id,
+        workspaceId,
         lastPropertyId
       );
       propertyTitle = property?.title?.trim() ?? null;
