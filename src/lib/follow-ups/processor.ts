@@ -4,7 +4,7 @@ import {
   getPendingFollowUps,
   updateFollowUpStatus,
 } from "@/lib/data/follow-ups";
-import { sendWhatsAppText } from "@/lib/evolution/client";
+import { sendWhatsAppText } from "@/lib/whatsapp/send";
 import { FOLLOW_UP_CONFIG } from "@/lib/follow-ups/config";
 import { generateFollowUpMessage } from "@/lib/follow-ups/messages";
 import { normalizeLanguage } from "@/lib/i18n/types";

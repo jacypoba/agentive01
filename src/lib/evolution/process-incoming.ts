@@ -3,7 +3,7 @@ import {
   sendOutboundWhatsAppMessages,
   type OutboundSendReport,
 } from "@/lib/properties/send-whatsapp";
-import type { ParsedIncomingMessage } from "@/lib/evolution/types";
+import type { ParsedIncomingMessage } from "@/lib/whatsapp/types";
 import { createLead, getLeadByPhone } from "@/lib/data/leads";
 import { formatPhoneDisplay } from "@/lib/phone/normalize";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -70,14 +70,14 @@ export async function processIncomingWhatsAppMessage(
       whatsappSent = whatsappReport.sent > 0;
 
       if (whatsappReport.failed > 0) {
-        console.warn("[Evolution webhook] Outbound completed with failures", {
+        console.warn("[WhatsApp inbound] Outbound completed with failures", {
           leadId: updatedLead.id,
           messageId: incoming.messageId,
           report: whatsappReport,
         });
       }
     } catch (error) {
-      console.error("[Evolution webhook] Unexpected outbound error", {
+      console.error("[WhatsApp inbound] Unexpected outbound error", {
         leadId: updatedLead.id,
         messageId: incoming.messageId,
         error: error instanceof Error ? error.message : error,

@@ -78,6 +78,7 @@ export function parseEvolutionWebhook(
   }
 
   return {
+    provider: "evolution",
     instance,
     remoteJid: data.key.remoteJid,
     phoneDigits: phoneFromRemoteJid(data.key.remoteJid),

@@ -1,3 +1,7 @@
+import type { ParsedIncomingMessage } from "@/lib/whatsapp/types";
+
+export type { ParsedIncomingMessage };
+
 export type EvolutionWebhookPayload = {
   event?: string;
   instance?: string;
@@ -20,13 +24,4 @@ export type EvolutionMessageData = {
   };
   messageType?: string;
   messageTimestamp?: number;
-};
-
-export type ParsedIncomingMessage = {
-  instance: string;
-  remoteJid: string;
-  phoneDigits: string;
-  pushName: string;
-  text: string;
-  messageId: string;
 };

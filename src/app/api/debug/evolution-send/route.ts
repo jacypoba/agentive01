@@ -3,9 +3,10 @@ import {
   buildSendTextPayloadVariants,
   getProductionSendTextFormatOrder,
   isEvolutionConfigured,
-  sendWhatsAppTextSafe,
+  sendWhatsAppTextSafe as sendEvolutionWhatsAppTextSafe,
   type SendTextFormat,
 } from "@/lib/evolution/client";
+import { getWhatsAppProviderSummary } from "@/lib/whatsapp/send";
 import {
   getEvolutionConnectionSnapshot,
   getEvolutionRestartHint,
@@ -102,7 +103,7 @@ export async function GET(request: Request) {
     });
   }
 
-  const result = await sendWhatsAppTextSafe(phoneDigits, text, {
+  const result = await sendEvolutionWhatsAppTextSafe(phoneDigits, text, {
     remoteJid,
     format,
     disableFallback: !fallback || Boolean(format),
@@ -111,6 +112,7 @@ export async function GET(request: Request) {
   return NextResponse.json({
     debugLabel: "evolution-send-v1",
     timestamp: new Date().toISOString(),
+    provider: getWhatsAppProviderSummary(),
     target: {
       phone: phoneDigits,
       normalizedPhone: phoneDigits,

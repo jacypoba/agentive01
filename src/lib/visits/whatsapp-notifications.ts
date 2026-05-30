@@ -1,5 +1,5 @@
 import { createConversation } from "@/lib/data/conversations";
-import { sendWhatsAppText } from "@/lib/evolution/client";
+import { sendWhatsAppText } from "@/lib/whatsapp/send";
 import { normalizePhoneDigits } from "@/lib/phone/normalize";
 import {
   VISIT_CANCELLED,

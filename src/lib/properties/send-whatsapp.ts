@@ -1,7 +1,7 @@
 import {
   sendWhatsAppMediaSafe,
   sendWhatsAppTextSafe,
-} from "@/lib/evolution/client";
+} from "@/lib/whatsapp/send";
 import {
   formatCatalogSpacer,
   formatPropertyImageCaption,
