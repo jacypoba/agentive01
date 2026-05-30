@@ -48,7 +48,7 @@ export function resolveConversationLanguage(input: {
   }
 
   const detection = detectLanguageWithConfidence(trimmed, stored);
-  if (detection.confident) {
+  if (detection.confident || (detection.scores[detection.language] ?? 0) >= 2) {
     return detection.language;
   }
 

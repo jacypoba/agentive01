@@ -8,13 +8,19 @@ import { MEMORY_MESSAGE_LIMIT } from "@/lib/ai/conversation-memory";
 import type { MessageIntent } from "@/lib/ai/intent-classifier";
 import { buildQualificationDirective } from "@/lib/ai/qualification";
 import { REAL_ESTATE_ASSISTANT_PROMPT } from "@/lib/ai/prompts";
-import { buildWorkspaceAssistantContext } from "@/lib/ai/workspace-context";
 import {
-  AI_LANGUAGE_INSTRUCTION,
-  LEAD_CONTEXT_LABELS,
-} from "@/lib/i18n/messages";
+  buildWorkspaceAssistantContext,
+  type WorkspacePromptOptions,
+} from "@/lib/ai/workspace-context";
+import { LEAD_CONTEXT_LABELS } from "@/lib/i18n/messages";
 import { enforceReplyLanguage } from "@/lib/i18n/language-purity";
-import { getLeadLanguage } from "@/lib/i18n/sync-language";
+import {
+  buildStrictReplyLanguageDirective,
+  getConsultantLanguageFallback,
+  REPLY_LANGUAGE_CORRECTION,
+  validateReplyLanguage,
+} from "@/lib/i18n/reply-language";
+import { resolveReplyLanguage } from "@/lib/i18n/sync-language";
 import type { SupportedLanguage } from "@/lib/i18n/types";
 import { buildPropertyRecommendationDirective } from "@/lib/properties/recommendations";
 import type { PropertyAvailability } from "@/lib/properties/property-availability";
@@ -40,6 +46,34 @@ function getModel() {
 function formatKnown(value: string | null | undefined): string {
   const trimmed = value?.trim();
   return trimmed ? trimmed : "—";
+}
+
+function getLatestClientMessage(history: Conversation[]): string {
+  for (let index = history.length - 1; index >= 0; index -= 1) {
+    if (history[index]?.sender === "client") {
+      return history[index]?.message?.trim() ?? "";
+    }
+  }
+  return "";
+}
+
+function isFirstAssistantReply(history: Conversation[]): boolean {
+  return !history.some((item) => item.sender === "ai" || item.sender === "agent");
+}
+
+function resolveTurnLanguage(
+  history: Conversation[],
+  lead: Lead,
+  languageOverride?: SupportedLanguage
+): SupportedLanguage {
+  if (languageOverride) {
+    return languageOverride;
+  }
+  const latest = getLatestClientMessage(history);
+  if (latest) {
+    return resolveReplyLanguage(latest, lead);
+  }
+  return resolveReplyLanguage("", lead);
 }
 
 function buildLeadContext(lead: Lead, language: SupportedLanguage): string {
@@ -91,18 +125,25 @@ function buildConversationSummary(
     .join("\n");
 }
 
-function toOpenAIMessages(
+function buildSystemContent(
   history: Conversation[],
   lead: Lead,
   propertiesToRecommend: Property[],
   availability: PropertyAvailability,
   clientAskedForMore: boolean,
-  clientAskedToReshow = false,
-  messageIntent: MessageIntent = "unknown",
-  language: SupportedLanguage = "pt",
-  workspaceSettings: WorkspaceAISettings | null = null
-): OpenAI.Chat.ChatCompletionMessageParam[] {
+  clientAskedToReshow: boolean,
+  messageIntent: MessageIntent,
+  language: SupportedLanguage,
+  workspaceSettings: WorkspaceAISettings | null,
+  latestClientMessage: string
+): string {
   const recentHistory = history.slice(-MEMORY_MESSAGE_LIMIT);
+  const workspaceOptions: WorkspacePromptOptions = {
+    replyLanguage: language,
+    latestClientMessage,
+    isFirstAssistantReply: isFirstAssistantReply(recentHistory),
+  };
+
   const qualificationDirective = buildQualificationDirective(
     recentHistory,
     lead,
@@ -125,17 +166,22 @@ function toOpenAIMessages(
     clientAskedForMore
   );
 
-  const workspaceContext = buildWorkspaceAssistantContext(workspaceSettings);
+  const strictLanguage = buildStrictReplyLanguageDirective(
+    language,
+    latestClientMessage
+  );
+  const workspaceContext = buildWorkspaceAssistantContext(
+    workspaceSettings,
+    workspaceOptions
+  );
 
-  const systemContent = [
-    REAL_ESTATE_ASSISTANT_PROMPT,
-    "",
-    workspaceContext ? "---" : "",
-    workspaceContext,
-    workspaceContext ? "---" : "",
-    AI_LANGUAGE_INSTRUCTION[language],
+  return [
+    strictLanguage,
     "",
     "---",
+    REAL_ESTATE_ASSISTANT_PROMPT,
+    "",
+    ...(workspaceContext ? ["---", workspaceContext, "---"] : []),
     `${LEAD_CONTEXT_LABELS[language].name.split(" ")[0]} profile (CRM):`,
     buildLeadContext(lead, language),
     "",
@@ -148,7 +194,38 @@ function toOpenAIMessages(
     propertyDirective,
     "",
     availabilityDirective,
+    "",
+    "---",
+    strictLanguage,
   ].join("\n");
+}
+
+function toOpenAIMessages(
+  history: Conversation[],
+  lead: Lead,
+  propertiesToRecommend: Property[],
+  availability: PropertyAvailability,
+  clientAskedForMore: boolean,
+  clientAskedToReshow = false,
+  messageIntent: MessageIntent = "unknown",
+  language: SupportedLanguage = "pt",
+  workspaceSettings: WorkspaceAISettings | null = null
+): OpenAI.Chat.ChatCompletionMessageParam[] {
+  const recentHistory = history.slice(-MEMORY_MESSAGE_LIMIT);
+  const latestClientMessage = getLatestClientMessage(recentHistory);
+
+  const systemContent = buildSystemContent(
+    history,
+    lead,
+    propertiesToRecommend,
+    availability,
+    clientAskedForMore,
+    clientAskedToReshow,
+    messageIntent,
+    language,
+    workspaceSettings,
+    latestClientMessage
+  );
 
   const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
     { role: "system", content: systemContent },
@@ -165,31 +242,48 @@ function toOpenAIMessages(
   return messages;
 }
 
-export async function generateAIReply(
-  lead: Lead,
+function polishReply(
+  rawReply: string,
   history: Conversation[],
-  propertiesToRecommend: Property[] = [],
-  availability: PropertyAvailability,
-  clientAskedForMore = false,
-  clientAskedToReshow = false,
-  messageIntent: MessageIntent = "unknown",
-  languageOverride?: SupportedLanguage,
-  workspaceSettings: WorkspaceAISettings | null = null
-): Promise<string> {
-  const language = languageOverride ?? getLeadLanguage(lead);
-  const openai = getOpenAIClient();
-  const messages = toOpenAIMessages(
-    history,
-    lead,
-    propertiesToRecommend,
-    availability,
-    clientAskedForMore,
-    clientAskedToReshow,
-    messageIntent,
-    language,
-    workspaceSettings
-  );
+  language: SupportedLanguage,
+  leadId: string
+): string {
+  const deduped = dedupeAiReply(rawReply, history);
+  if (!deduped) {
+    return "";
+  }
 
+  const finalized = finalizeWhatsAppText(deduped);
+  if (!finalized) {
+    console.warn("[AI reply] Incomplete reply discarded", {
+      leadId,
+      preview: deduped.slice(0, 80),
+    });
+    return "";
+  }
+
+  const validation = validateReplyLanguage(finalized, language);
+  if (validation.valid) {
+    return finalized;
+  }
+
+  const enforced = enforceReplyLanguage(finalized, language);
+  if (enforced.adjusted) {
+    console.warn("[AI reply] Language/style correction applied", {
+      leadId,
+      reason: enforced.reason ?? validation.reason,
+      preview: finalized.slice(0, 80),
+    });
+  }
+
+  return enforced.text;
+}
+
+async function callModel(
+  messages: OpenAI.Chat.ChatCompletionMessageParam[],
+  leadId: string
+): Promise<string> {
+  const openai = getOpenAIClient();
   const completion = await openai.chat.completions.create({
     model: getModel(),
     messages,
@@ -207,25 +301,60 @@ export async function generateAIReply(
 
   if (wasCutByTokenLimit(choice?.finish_reason)) {
     console.warn("[AI reply] Model output hit token limit", {
-      leadId: lead.id,
+      leadId,
       preview: reply.slice(0, 80),
     });
     return "";
   }
 
-  const deduped = dedupeAiReply(reply, history);
-  if (!deduped) {
-    return "";
+  return reply;
+}
+
+export async function generateAIReply(
+  lead: Lead,
+  history: Conversation[],
+  propertiesToRecommend: Property[] = [],
+  availability: PropertyAvailability,
+  clientAskedForMore = false,
+  clientAskedToReshow = false,
+  messageIntent: MessageIntent = "unknown",
+  languageOverride?: SupportedLanguage,
+  workspaceSettings: WorkspaceAISettings | null = null
+): Promise<string> {
+  const language = resolveTurnLanguage(history, lead, languageOverride);
+  const messages = toOpenAIMessages(
+    history,
+    lead,
+    propertiesToRecommend,
+    availability,
+    clientAskedForMore,
+    clientAskedToReshow,
+    messageIntent,
+    language,
+    workspaceSettings
+  );
+
+  let rawReply = await callModel(messages, lead.id);
+  let polished = polishReply(rawReply, history, language, lead.id);
+
+  if (!polished && rawReply) {
+    polished = getConsultantLanguageFallback(language);
   }
 
-  const finalized = finalizeWhatsAppText(deduped);
-  if (!finalized) {
-    console.warn("[AI reply] Incomplete reply discarded", {
-      leadId: lead.id,
-      preview: deduped.slice(0, 80),
-    });
-    return "";
+  if (polished && !validateReplyLanguage(polished, language).valid) {
+    const retryMessages: OpenAI.Chat.ChatCompletionMessageParam[] = [
+      ...messages,
+      { role: "assistant", content: rawReply },
+      { role: "user", content: REPLY_LANGUAGE_CORRECTION[language] },
+    ];
+
+    rawReply = await callModel(retryMessages, lead.id);
+    polished = polishReply(rawReply, history, language, lead.id);
   }
 
-  return enforceReplyLanguage(finalized, language).text;
+  if (!polished || !validateReplyLanguage(polished, language).valid) {
+    return getConsultantLanguageFallback(language);
+  }
+
+  return polished;
 }

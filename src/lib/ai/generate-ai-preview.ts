@@ -98,7 +98,11 @@ export async function generateAiSettingsPreview(
   const classified = classifyMessageIntent(history, lead);
   const detectedLanguage = resolveReplyLanguage(trimmedMessage, lead);
   const workspaceContextActive = Boolean(
-    buildWorkspaceAssistantContext(params.settings)
+    buildWorkspaceAssistantContext(params.settings, {
+      replyLanguage: detectedLanguage,
+      latestClientMessage: trimmedMessage,
+      isFirstAssistantReply: true,
+    })
   );
 
   const reply = await generateAIReply(

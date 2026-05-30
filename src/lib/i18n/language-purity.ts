@@ -1,4 +1,8 @@
 import type { SupportedLanguage } from "@/lib/i18n/types";
+import {
+  getConsultantLanguageFallback,
+  validateReplyLanguage,
+} from "@/lib/i18n/reply-language";
 
 /** Strong markers that should not appear in a monolingual reply for the target language. */
 const FOREIGN_MARKERS: Record<SupportedLanguage, RegExp[]> = {
@@ -28,10 +32,10 @@ const FOREIGN_MARKERS: Record<SupportedLanguage, RegExp[]> = {
 };
 
 const SAFE_MONOLINGUAL_FALLBACK: Record<SupportedLanguage, string> = {
-  pt: "Percebi 👌 Já trato disso.",
-  en: "Got it 👌 I'm on it.",
-  it: "Capito 👌 Ci penso io.",
-  es: "Entendido 👌 Me encargo.",
+  pt: "Claro — já vejo o que encaixa nesse perfil.",
+  en: "Sure — I'll check what fits your criteria.",
+  it: "Certo — guardo cosa c'è in quella fascia.",
+  es: "Claro — miro opciones en ese rango.",
 };
 
 export function hasLanguageMixing(
@@ -49,19 +53,22 @@ export function hasLanguageMixing(
 export function enforceReplyLanguage(
   text: string,
   language: SupportedLanguage
-): { text: string; adjusted: boolean } {
+): { text: string; adjusted: boolean; reason?: string } {
   const trimmed = text.trim();
   if (!trimmed) {
     return { text: trimmed, adjusted: false };
   }
 
-  if (!hasLanguageMixing(trimmed, language)) {
+  const validation = validateReplyLanguage(trimmed, language);
+  if (validation.valid) {
     return { text: trimmed, adjusted: false };
   }
 
+  const fallback = getConsultantLanguageFallback(language);
   return {
-    text: SAFE_MONOLINGUAL_FALLBACK[language],
+    text: fallback,
     adjusted: true,
+    reason: validation.reason,
   };
 }
 

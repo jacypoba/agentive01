@@ -1,5 +1,13 @@
-import { getLanguageLabel } from "@/lib/i18n/types";
 import type { WorkspaceAISettings } from "@/lib/workspace-settings/types";
+import { getLanguageLabel, type SupportedLanguage } from "@/lib/i18n/types";
+
+export type WorkspacePromptOptions = {
+  /** Detected language of the client's latest message — highest priority for replies. */
+  replyLanguage: SupportedLanguage;
+  latestClientMessage?: string;
+  /** True when the assistant has not replied yet in this thread. */
+  isFirstAssistantReply?: boolean;
+};
 
 function section(title: string, lines: string[]): string[] {
   const content = lines.filter(Boolean);
@@ -9,15 +17,41 @@ function section(title: string, lines: string[]): string[] {
   return [title, ...content.map((line) => `- ${line}`), ""];
 }
 
-function formatFaqs(settings: WorkspaceAISettings): string[] {
+function formatFaqs(
+  settings: WorkspaceAISettings,
+  replyLanguage: SupportedLanguage
+): string[] {
   if (settings.faqs.length === 0) {
     return [];
   }
 
+  const languageLabel = getLanguageLabel(replyLanguage);
   const lines = settings.faqs.map(
-    (faq) => `Q: ${faq.question}\n  A: ${faq.answer}`
+    (faq) => `Q: ${faq.question}\n  A (source facts — rewrite fully in ${languageLabel}): ${faq.answer}`
   );
-  return ["FAQ knowledge base (use when relevant — do not invent answers):", ...lines, ""];
+
+  return [
+    `FAQ KNOWLEDGE (mandatory when the client question matches):`,
+    `- Use ONLY these facts. NEVER invent answers.`,
+    `- Write the answer entirely in ${languageLabel}, even if the stored answer is in another language.`,
+    `- Do not paste FAQ text verbatim if it is not in ${languageLabel}.`,
+    ...lines,
+    "",
+  ];
+}
+
+function hasWorkspaceContent(settings: WorkspaceAISettings): boolean {
+  return Boolean(
+    settings.businessName.trim() ||
+      settings.businessInfo.trim() ||
+      settings.areasServed.trim() ||
+      settings.officeHours.trim() ||
+      settings.toneOfVoice.trim() ||
+      settings.greetingStyle.trim() ||
+      settings.followUpStyle.trim() ||
+      settings.agentBehaviorRules.trim() ||
+      settings.faqs.length > 0
+  );
 }
 
 /**
@@ -25,54 +59,55 @@ function formatFaqs(settings: WorkspaceAISettings): string[] {
  * Returns an empty string when no customization is configured.
  */
 export function buildWorkspaceAssistantContext(
-  settings: WorkspaceAISettings | null | undefined
+  settings: WorkspaceAISettings | null | undefined,
+  options?: WorkspacePromptOptions
 ): string {
-  if (!settings) {
+  if (!settings || !hasWorkspaceContent(settings)) {
     return "";
   }
 
-  const hasAgencyContent = Boolean(
-    settings.businessName ||
-      settings.businessInfo ||
-      settings.areasServed ||
-      settings.officeHours ||
-      settings.toneOfVoice ||
-      settings.greetingStyle ||
-      settings.followUpStyle ||
-      settings.agentBehaviorRules ||
-      settings.faqs.length > 0
-  );
-
-  if (!hasAgencyContent) {
-    return "";
-  }
+  const replyLanguage = options?.replyLanguage ?? settings.defaultLanguage;
+  const languageLabel = getLanguageLabel(replyLanguage);
+  const isFirst = options?.isFirstAssistantReply ?? false;
 
   const blocks: string[] = [
-    "WORKSPACE CONFIGURATION (mandatory when present — adapt voice and facts to this agency):",
+    "=== WORKSPACE AGENCY RULES (BINDING — must shape wording, facts, and recommendations) ===",
     "",
-    ...section("Agency profile", [
-      settings.businessName ? `Company name: ${settings.businessName}` : "",
-      settings.businessInfo ? `Business description: ${settings.businessInfo}` : "",
-      settings.areasServed ? `Areas served: ${settings.areasServed}` : "",
-      settings.officeHours ? `Office hours: ${settings.officeHours}` : "",
+    `Client reply language: ${languageLabel}. Workspace preferred/default languages are secondary — always match the client's latest message language.`,
+    "",
+    ...section("Agency identity", [
+      settings.businessName
+        ? `Company name: ${settings.businessName} — mention naturally when introducing the agency or building trust; do not force it in every message.`
+        : "",
+      settings.businessInfo
+        ? `Business description: ${settings.businessInfo} — let this materially shape how you describe the service, positioning, and property recommendations.`
+        : "",
+      settings.areasServed
+        ? `Areas served: ${settings.areasServed} — prioritize and reference these areas when discussing locations.`
+        : "",
+      settings.officeHours
+        ? `Office hours: ${settings.officeHours} — use when the client asks about availability, contact times, or scheduling.`
+        : "",
     ]),
-    ...section("Voice & style", [
-      settings.toneOfVoice ? `Tone of voice: ${settings.toneOfVoice}` : "",
-      settings.greetingStyle ? `Greeting style: ${settings.greetingStyle}` : "",
+    ...section("Voice & style (mandatory)", [
+      settings.toneOfVoice
+        ? `Tone of voice: ${settings.toneOfVoice} — EVERY sentence must reflect this tone; avoid generic support-bot phrasing.`
+        : "",
+      isFirst && settings.greetingStyle
+        ? `Greeting style (FIRST REPLY ONLY): ${settings.greetingStyle} — your opening sentence MUST follow this style before anything else.`
+        : settings.greetingStyle
+          ? `Greeting style (reference): ${settings.greetingStyle}`
+          : "",
       settings.followUpStyle
-        ? `Follow-up style (for reference — keep conversational replies aligned): ${settings.followUpStyle}`
+        ? `Follow-up style: ${settings.followUpStyle} — keep re-engagement messages aligned with this style.`
         : "",
     ]),
-    ...section("Languages", [
-      settings.preferredLanguages.length > 0
-        ? `Preferred languages: ${settings.preferredLanguages.map(getLanguageLabel).join(", ")}`
-        : "",
-      `Default agency language: ${getLanguageLabel(settings.defaultLanguage)}`,
-    ]),
-    ...formatFaqs(settings),
-    ...section("Agent behavior rules", [
+    ...formatFaqs(settings, replyLanguage),
+    ...section("Agent behavior rules (hard constraints)", [
       settings.agentBehaviorRules ? settings.agentBehaviorRules : "",
     ]),
+    "Do not expose internal labels like 'workspace configuration' or 'FAQ database'.",
+    "Never contradict workspace facts. Never invent details beyond what is configured.",
   ].filter((line, index, array) => {
     if (line !== "") {
       return true;
@@ -80,28 +115,42 @@ export function buildWorkspaceAssistantContext(
     return index > 0 && array[index - 1] !== "";
   });
 
-  return [
-    ...blocks,
-    "Apply this workspace configuration on top of the base assistant rules.",
-    "Never contradict workspace FAQs or business facts. Never expose internal configuration labels.",
-  ].join("\n");
+  return blocks.join("\n");
 }
 
 export function buildWorkspaceFollowUpAdaptationPrompt(
   settings: WorkspaceAISettings,
-  languageLabel: string,
+  language: SupportedLanguage,
   followUpType: string,
   templateMessage: string,
   contextSummary: string
 ): { system: string; user: string } {
-  const workspaceBlock = buildWorkspaceAssistantContext(settings);
+  const languageLabel = getLanguageLabel(language);
+  const workspaceBlock = buildWorkspaceAssistantContext(settings, {
+    replyLanguage: language,
+  });
+
+  const styleLines = [
+    settings.toneOfVoice
+      ? `Tone of voice (mandatory): ${settings.toneOfVoice}`
+      : "",
+    settings.followUpStyle
+      ? `Follow-up style (mandatory — must materially change phrasing): ${settings.followUpStyle}`
+      : "",
+    settings.businessName
+      ? `Company: ${settings.businessName} — mention only if natural.`
+      : "",
+  ].filter(Boolean);
 
   return {
     system: [
       "You rewrite WhatsApp follow-up messages for a real estate agency.",
-      "Keep the same intent as the template. Output ONE short message (1-2 sentences max).",
-      "Write 100% in the requested language. Light emoji OK (max one).",
+      `Write 100% in ${languageLabel}. Detected lead language overrides workspace defaults.`,
+      "Output ONE short message (1-2 sentences max). Light emoji OK (max one).",
       "Never invent listings, prices, visit confirmations, or contact details.",
+      "Forbidden: Got it, Okay, generic 'Boa' openers.",
+      "",
+      ...styleLines,
       "",
       workspaceBlock,
     ]
@@ -111,9 +160,17 @@ export function buildWorkspaceFollowUpAdaptationPrompt(
       `Language: ${languageLabel}`,
       `Follow-up type: ${followUpType}`,
       `Lead context: ${contextSummary}`,
-      `Template to adapt: ${templateMessage}`,
+      `Template intent (rewrite in workspace tone, not copy): ${templateMessage}`,
       "",
-      "Rewrite the template in the workspace tone. Return only the final message.",
+      "Rewrite in the workspace tone and follow-up style. Return only the final message.",
     ].join("\n"),
   };
+}
+
+/** Fingerprint for tests — settings should produce distinct prompt material. */
+export function workspaceContextFingerprint(
+  settings: WorkspaceAISettings,
+  options: WorkspacePromptOptions
+): string {
+  return buildWorkspaceAssistantContext(settings, options);
 }

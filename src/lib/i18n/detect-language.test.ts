@@ -93,7 +93,7 @@ describe("language purity guardrails", () => {
       "pt"
     );
     assert.equal(result.adjusted, true);
-    assert.match(result.text, /Percebi|trato/i);
+    assert.match(result.text, /Claro|vejo|perfil/i);
     assert.equal(hasLanguageMixing(result.text, "pt"), false);
   });
 });

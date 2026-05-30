@@ -1,15 +1,15 @@
 import OpenAI from "openai";
-import {
-  buildWorkspaceFollowUpAdaptationPrompt,
-} from "@/lib/ai/workspace-context";
-import {
-  getOrCreateWorkspaceSettings,
-  hasWorkspaceFollowUpCustomization,
-} from "@/lib/data/workspace-settings";
+import { buildWorkspaceFollowUpAdaptationPrompt } from "@/lib/ai/workspace-context";
+import { finalizeWhatsAppText } from "@/lib/ai/complete-response";
+import { getOrCreateWorkspaceSettings } from "@/lib/data/workspace-settings";
 import { generateFollowUpMessage } from "@/lib/follow-ups/messages";
 import { buildFollowUpContextSummary } from "@/lib/follow-ups/context";
-import { finalizeWhatsAppText } from "@/lib/ai/complete-response";
-import { getLanguageLabel, normalizeLanguage, type SupportedLanguage } from "@/lib/i18n/types";
+import { enforceReplyLanguage } from "@/lib/i18n/language-purity";
+import {
+  getConsultantLanguageFallback,
+  validateReplyLanguage,
+} from "@/lib/i18n/reply-language";
+import { normalizeLanguage, type SupportedLanguage } from "@/lib/i18n/types";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, FollowUpContextSnapshot, FollowUpType } from "@/types/database";
 
@@ -21,6 +21,22 @@ function getOpenAIClient(): OpenAI | null {
     return null;
   }
   return new OpenAI({ apiKey });
+}
+
+function shouldAdaptFollowUpToWorkspace(settings: {
+  toneOfVoice: string;
+  followUpStyle: string;
+  businessName: string;
+  agentBehaviorRules: string;
+  businessInfo: string;
+}): boolean {
+  return Boolean(
+    settings.toneOfVoice.trim() ||
+      settings.followUpStyle.trim() ||
+      settings.businessName.trim() ||
+      settings.agentBehaviorRules.trim() ||
+      settings.businessInfo.trim()
+  );
 }
 
 export async function generateFollowUpMessageForWorkspace(
@@ -35,7 +51,7 @@ export async function generateFollowUpMessageForWorkspace(
   const template = generateFollowUpMessage(type, context, seed, lang);
 
   const settings = await getOrCreateWorkspaceSettings(supabase, workspaceId);
-  if (!hasWorkspaceFollowUpCustomization(settings)) {
+  if (!shouldAdaptFollowUpToWorkspace(settings)) {
     return template;
   }
 
@@ -47,7 +63,7 @@ export async function generateFollowUpMessageForWorkspace(
   const contextSummary = buildFollowUpContextSummary(context);
   const prompt = buildWorkspaceFollowUpAdaptationPrompt(
     settings,
-    getLanguageLabel(lang),
+    lang,
     type,
     template,
     contextSummary
@@ -70,7 +86,21 @@ export async function generateFollowUpMessageForWorkspace(
     }
 
     const finalized = finalizeWhatsAppText(adapted);
-    return finalized || template;
+    if (!finalized) {
+      return template;
+    }
+
+    const validation = validateReplyLanguage(finalized, lang);
+    if (validation.valid) {
+      return finalized;
+    }
+
+    const enforced = enforceReplyLanguage(finalized, lang);
+    if (validateReplyLanguage(enforced.text, lang).valid) {
+      return enforced.text;
+    }
+
+    return template;
   } catch (error) {
     console.warn("[Follow-ups] Workspace tone adaptation failed — using template", {
       workspaceId,

@@ -9,7 +9,7 @@ type LanguageScore = Record<SupportedLanguage, number>;
 
 const STRONG_LANGUAGE_PATTERNS: Record<SupportedLanguage, RegExp[]> = {
   pt: [
-    /\b(obrigad[oa]|obg|olá|ola|procuro|procurar|quais|está bem|tudo bem|imóvel|imoveis|orçamento|orcamento|amanhã|manhã|mostra opções|mostra novamente|perfeito|perfeita|ficou|marcado|marcada|segunda-feira|segunda feira)\b/i,
+    /\b(obrigad[oa]|obg|olá|ola|procuro|procurar|quais|está bem|tudo bem|imóvel|imoveis|imóveis|orçamento|orcamento|amanhã|manhã|mostra opções|mostra novamente|perfeito|perfeita|ficou|marcado|marcada|segunda-feira|segunda feira|podem|ajudar|euros?)\b/i,
     /[ãõç]/i,
   ],
   en: [
@@ -109,10 +109,12 @@ export function detectLanguageWithConfidence(
   }
 
   const confident =
-    top.score >= 3 || (top.score >= 2 && top.score - second.score >= 2);
+    top.score >= 3 ||
+    (top.score >= 2 && top.score - second.score >= 2) ||
+    (trimmed.length >= 20 && top.score >= 2 && top.score > second.score);
 
   return {
-    language: top.score > 0 ? top.language : fallback,
+    language: top.language,
     confident,
     scores,
   };
