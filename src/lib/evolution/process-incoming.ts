@@ -5,6 +5,7 @@ import {
 } from "@/lib/properties/send-whatsapp";
 import type { ParsedIncomingMessage } from "@/lib/whatsapp/types";
 import { createLead, getLeadByPhone } from "@/lib/data/leads";
+import { assertCanCreateLead } from "@/lib/billing/workspace-subscription";
 import { formatPhoneDisplay } from "@/lib/phone/normalize";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { resolveWhatsAppTenantContext } from "@/lib/workspaces/resolve-whatsapp-tenant";
@@ -49,6 +50,7 @@ export async function processIncomingWhatsAppMessage(
 
   if (!lead) {
     isNewLead = true;
+    await assertCanCreateLead(supabase, workspaceId, userId);
     lead = await createLead(
       supabase,
       {

@@ -13,11 +13,13 @@ import {
 type BillingPlansProps = {
   currentPlanId: PlanId;
   checkoutEnabled: boolean;
+  canManageBilling: boolean;
 };
 
 export function BillingPlans({
   currentPlanId,
   checkoutEnabled,
+  canManageBilling,
 }: BillingPlansProps) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
@@ -31,6 +33,11 @@ export function BillingPlans({
   };
 
   async function startCheckout(planId: PlanId) {
+    if (!canManageBilling) {
+      setError("Only workspace owners and admins can change plans.");
+      return;
+    }
+
     if (!checkoutEnabled) {
       setError(
         "Checkout is not configured. Add Stripe keys and price IDs in your environment."
@@ -81,6 +88,11 @@ export function BillingPlans({
   }
 
   async function openPortal() {
+    if (!canManageBilling) {
+      setError("Only workspace owners and admins can manage billing.");
+      return;
+    }
+
     if (!checkoutEnabled) {
       setError(
         "Billing portal is not configured. Add Stripe keys in your environment."
@@ -127,7 +139,7 @@ export function BillingPlans({
         <button
           type="button"
           onClick={openPortal}
-          disabled={portalLoading || !checkoutEnabled}
+          disabled={portalLoading || !checkoutEnabled || !canManageBilling}
           className="shrink-0 rounded-full border border-white/15 bg-white/5 px-4 py-2 text-sm font-medium text-white transition-all hover:border-white/25 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {portalLoading ? "Opening…" : "Manage billing"}
@@ -156,7 +168,7 @@ export function BillingPlans({
               isCurrent={isCurrent}
               isUpgrade={isUpgrade}
               loading={loadingPlanId === plan.id}
-              disabled={!checkoutEnabled}
+              disabled={!checkoutEnabled || !canManageBilling}
               onSelect={startCheckout}
             />
           );

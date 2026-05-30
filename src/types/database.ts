@@ -483,6 +483,18 @@ export type SubscriptionUpdate = Partial<
   Omit<SubscriptionInsert, "workspace_id" | "user_id">
 >;
 
+export type StripeWebhookEvent = {
+  event_id: string;
+  event_type: string;
+  processed_at: string;
+};
+
+export type StripeWebhookEventInsert = {
+  event_id: string;
+  event_type: string;
+  processed_at?: string;
+};
+
 export type CurrentSubscription = Subscription & {
   isTrialing: boolean;
   isActive: boolean;
@@ -598,6 +610,12 @@ export type Database = {
         Row: Subscription;
         Insert: SubscriptionInsert;
         Update: SubscriptionUpdate;
+        Relationships: [];
+      };
+      stripe_webhook_events: {
+        Row: StripeWebhookEvent;
+        Insert: StripeWebhookEventInsert;
+        Update: Partial<StripeWebhookEventInsert>;
         Relationships: [];
       };
       whatsapp_webhook_heartbeat: {

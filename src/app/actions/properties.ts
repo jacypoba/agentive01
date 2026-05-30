@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { assertCanCreateProperty } from "@/lib/billing/workspace-subscription";
 import { createProperty, deleteProperty, updateProperty } from "@/lib/data/properties";
 import { triggerFollowUpsForNewProperty } from "@/lib/follow-ups/triggers";
 import { resolveTenantScope } from "@/lib/workspaces/workspace-access";
@@ -101,6 +102,7 @@ export async function createPropertyAction(
 
   try {
     const { userId, workspaceId } = await resolveTenantScope(supabase, user.id);
+    await assertCanCreateProperty(supabase, workspaceId, userId);
     const property = await createProperty(supabase, {
       user_id: userId,
       ...parsed.payload,

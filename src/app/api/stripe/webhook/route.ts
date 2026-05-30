@@ -4,6 +4,15 @@ import {
   getSubscriptionByStripeSubscriptionId,
   markSubscriptionCanceled,
 } from "@/lib/billing/subscriptions";
+import {
+  getStripeCustomerId,
+  getSubscriptionIdFromInvoice,
+  resolveWebhookWorkspaceContext,
+} from "@/lib/billing/webhook-workspace";
+import {
+  isStripeWebhookEventProcessed,
+  markStripeWebhookEventProcessed,
+} from "@/lib/billing/webhook-events";
 import { getStripe } from "@/lib/stripe/client";
 import {
   reconcileWorkspaceSubscriptionFromStripe,
@@ -14,20 +23,6 @@ import {
 } from "@/lib/stripe/sync-subscription";
 
 export const runtime = "nodejs";
-
-function getCustomerId(
-  customer: string | Stripe.Customer | Stripe.DeletedCustomer | null
-): string | null {
-  if (!customer || typeof customer === "string") {
-    return customer;
-  }
-
-  if ("deleted" in customer && customer.deleted) {
-    return null;
-  }
-
-  return customer.id;
-}
 
 function logSyncResult(
   eventType: string,
@@ -68,28 +63,18 @@ async function resolveWorkspaceContext(input: {
 }): Promise<{ workspaceId: string; userId: string } | null> {
   const { subscription, sessionMetadata } = input;
 
-  const workspaceId =
-    sessionMetadata?.workspace_id ?? subscription.metadata?.workspace_id;
-  const userId = sessionMetadata?.user_id ?? subscription.metadata?.user_id;
-
-  if (workspaceId && userId) {
-    return { workspaceId, userId };
-  }
-
   const existing = await getSubscriptionByStripeSubscriptionId(subscription.id);
-  if (existing) {
-    return {
-      workspaceId: existing.workspace_id,
-      userId: existing.user_id,
-    };
-  }
+  const customerId = getStripeCustomerId(subscription.customer);
+  const customerLookup = customerId
+    ? await resolveWorkspaceFromStripeCustomer(customerId)
+    : null;
 
-  const customerId = getCustomerId(subscription.customer);
-  if (customerId) {
-    return resolveWorkspaceFromStripeCustomer(customerId);
-  }
-
-  return null;
+  return resolveWebhookWorkspaceContext({
+    subscription,
+    sessionMetadata,
+    existingSubscription: existing,
+    customerLookup,
+  });
 }
 
 async function syncSubscriptionEvent(
@@ -111,7 +96,7 @@ async function syncSubscriptionEvent(
     logSyncResult(
       eventType,
       {
-        customerId: getCustomerId(expanded.customer),
+        customerId: getStripeCustomerId(expanded.customer),
         subscriptionId: expanded.id,
         workspaceId: null,
         priceId: expanded.items.data[0]?.price
@@ -133,7 +118,7 @@ async function syncSubscriptionEvent(
       stripeSubscription: expanded,
       workspaceId: context.workspaceId,
       userId: context.userId,
-      stripeCustomerId: options?.stripeCustomerId ?? getCustomerId(expanded.customer),
+      stripeCustomerId: options?.stripeCustomerId ?? getStripeCustomerId(expanded.customer),
       planNameOverride:
         options?.planNameOverride ??
         options?.sessionMetadata?.plan_name ??
@@ -143,7 +128,7 @@ async function syncSubscriptionEvent(
     logSyncResult(
       eventType,
       {
-        customerId: getCustomerId(expanded.customer),
+        customerId: getStripeCustomerId(expanded.customer),
         subscriptionId: expanded.id,
         workspaceId: context.workspaceId,
         priceId: result.priceId,
@@ -158,7 +143,7 @@ async function syncSubscriptionEvent(
     logSyncResult(
       eventType,
       {
-        customerId: getCustomerId(expanded.customer),
+        customerId: getStripeCustomerId(expanded.customer),
         subscriptionId: expanded.id,
         workspaceId: context.workspaceId,
         priceId: null,
@@ -180,7 +165,7 @@ async function handleCheckoutSessionCompleted(
       ? session.subscription
       : session.subscription?.id;
 
-  const customerId = getCustomerId(session.customer);
+  const customerId = getStripeCustomerId(session.customer);
 
   console.log("[Stripe webhook] checkout.session.completed received", {
     sessionId: session.id,
@@ -242,10 +227,31 @@ async function handleSubscriptionDeleted(
 ): Promise<void> {
   console.log("[Stripe webhook] customer.subscription.deleted", {
     subscriptionId: subscription.id,
-    customerId: getCustomerId(subscription.customer),
+    customerId: getStripeCustomerId(subscription.customer),
   });
 
   await markSubscriptionCanceled(subscription.id);
+}
+
+async function handleInvoiceEvent(
+  eventType: string,
+  invoice: Stripe.Invoice
+): Promise<void> {
+  const subscriptionId = getSubscriptionIdFromInvoice(invoice);
+
+  console.log("[Stripe webhook] invoice event", {
+    eventType,
+    invoiceId: invoice.id,
+    subscriptionId,
+    status: invoice.status,
+  });
+
+  if (!subscriptionId) {
+    return;
+  }
+
+  const subscription = await retrieveStripeSubscription(subscriptionId);
+  await syncSubscriptionEvent(eventType, subscription);
 }
 
 export async function POST(request: Request) {
@@ -278,6 +284,14 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid signature." }, { status: 400 });
   }
 
+  if (await isStripeWebhookEventProcessed(event.id)) {
+    console.log("[Stripe webhook] duplicate event skipped", {
+      id: event.id,
+      type: event.type,
+    });
+    return NextResponse.json({ received: true, duplicate: true });
+  }
+
   console.log("[Stripe webhook] event received", { type: event.type, id: event.id });
 
   try {
@@ -297,9 +311,15 @@ export async function POST(request: Request) {
       case "customer.subscription.deleted":
         await handleSubscriptionDeleted(event.data.object as Stripe.Subscription);
         break;
+      case "invoice.payment_succeeded":
+      case "invoice.payment_failed":
+        await handleInvoiceEvent(event.type, event.data.object as Stripe.Invoice);
+        break;
       default:
         break;
     }
+
+    await markStripeWebhookEventProcessed(event.id, event.type);
   } catch (error) {
     console.error("[Stripe webhook] handler error", {
       type: event.type,

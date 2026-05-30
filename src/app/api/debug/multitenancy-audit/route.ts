@@ -76,6 +76,11 @@ const RISKY_ROUTES = [
     recommendation: "Protected by CRON_SECRET or workspace owner/admin.",
   },
   {
+    route: "/api/debug/billing-audit",
+    risk: "Workspace subscription + Stripe config diagnostics",
+    recommendation: "Protected by CRON_SECRET or workspace owner/admin.",
+  },
+  {
     route: "/api/cron/follow-ups",
     risk: "Processes all workspaces when using admin client",
     recommendation: "Protected by CRON_SECRET.",

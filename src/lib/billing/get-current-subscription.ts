@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { isSubscriptionActiveForAccess } from "@/lib/billing/plan-limits";
 import { ensureTrialSubscription, getSubscriptionByWorkspaceId } from "@/lib/billing/subscriptions";
 import { TRIAL_DAYS } from "@/lib/stripe/plans";
 import type { CurrentSubscription, Database } from "@/types/database";
@@ -64,13 +65,5 @@ export async function getCurrentSubscription(
 export function isSubscriptionUsable(
   subscription: CurrentSubscription | null
 ): boolean {
-  if (!subscription) {
-    return false;
-  }
-
-  if (subscription.isActive) {
-    return true;
-  }
-
-  return false;
+  return isSubscriptionActiveForAccess(subscription);
 }

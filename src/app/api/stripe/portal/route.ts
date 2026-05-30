@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
-import { getSubscriptionByWorkspaceId } from "@/lib/billing/subscriptions";
+import {
+  BillingAccessError,
+  resolveBillingScope,
+} from "@/lib/billing/workspace-subscription";
 import { getAppUrl } from "@/lib/stripe/app-url";
 import { getStripe } from "@/lib/stripe/client";
 import { getOrCreateStripeCustomer } from "@/lib/stripe/get-or-create-customer";
-import { getCurrentWorkspaceId } from "@/lib/workspaces/get-current-workspace";
 import { createClient } from "@/lib/supabase/server";
 
 export async function POST() {
@@ -17,15 +19,11 @@ export async function POST() {
       return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
     }
 
-    const workspaceId = await getCurrentWorkspaceId(supabase, user.id);
-    if (!workspaceId) {
-      return NextResponse.json(
-        { error: "No workspace found for this account." },
-        { status: 400 }
-      );
-    }
+    const { workspaceId, subscription } = await resolveBillingScope(
+      supabase,
+      user.id
+    );
 
-    let subscription = await getSubscriptionByWorkspaceId(supabase, workspaceId);
     let customerId = subscription?.stripe_customer_id ?? null;
 
     if (!customerId) {
@@ -45,8 +43,22 @@ export async function POST() {
       return_url: `${appUrl}/billing`,
     });
 
+    console.log("[Stripe portal]", {
+      userId: user.id,
+      workspaceId,
+      customerId,
+      hasStripeSubscription: Boolean(subscription?.stripe_subscription_id),
+    });
+
     return NextResponse.json({ url: portalSession.url });
   } catch (error) {
+    if (error instanceof BillingAccessError) {
+      console.warn("[Stripe portal] billing access denied", {
+        error: error.message,
+      });
+      return NextResponse.json({ error: error.message }, { status: 403 });
+    }
+
     console.error("[Stripe portal]", error);
     return NextResponse.json(
       {

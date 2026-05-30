@@ -1,3 +1,4 @@
+import { isFollowUpsEnabledForWorkspace } from "@/lib/billing/workspace-subscription";
 import { createConversation } from "@/lib/data/conversations";
 import {
   getDueFollowUps,
@@ -99,11 +100,21 @@ export async function sendFollowUpImmediately(
     return { sent: false, error: "Lead has no phone number." };
   }
 
+  const workspaceId = resolveFollowUpWorkspaceId(item);
+  const followUpsEnabled = await isFollowUpsEnabledForWorkspace(
+    supabase,
+    workspaceId,
+    lead.user_id
+  );
+  if (!followUpsEnabled) {
+    await updateFollowUpStatus(supabase, workspaceId, item.id, "cancelled");
+    return { sent: false, error: "Follow-ups are not included in this plan." };
+  }
+
   const context = (item.context_snapshot ?? {}) as FollowUpContextSnapshot;
   const language = normalizeLanguage(
     item.context_snapshot?.preferred_language ?? lead.preferred_language
   );
-  const workspaceId = resolveFollowUpWorkspaceId(item);
   const message =
     item.message?.trim() ||
     (await generateFollowUpMessageForWorkspace(
@@ -158,6 +169,26 @@ export async function processPendingFollowUps(
   for (const item of pending) {
     result.processed += 1;
     const lead = item.leads;
+    const workspaceId = resolveFollowUpWorkspaceId(item);
+
+    const followUpsEnabled = await isFollowUpsEnabledForWorkspace(
+      supabase,
+      workspaceId,
+      lead.user_id
+    );
+    if (!followUpsEnabled) {
+      await updateFollowUpStatus(supabase, workspaceId, item.id, "cancelled");
+      result.skipped += 1;
+      result.details.push({
+        followUpId: item.id,
+        leadId: item.lead_id,
+        leadName: lead.client_name,
+        type: item.type,
+        outcome: "skipped",
+        error: "Plan does not include follow-ups",
+      });
+      continue;
+    }
 
     if (!isEligibleLead(lead.status, lead.intent_status)) {
       await updateFollowUpStatus(supabase, resolveFollowUpWorkspaceId(item), item.id, "cancelled");
@@ -192,7 +223,6 @@ export async function processPendingFollowUps(
     const language = normalizeLanguage(
       item.context_snapshot?.preferred_language ?? lead.preferred_language
     );
-    const workspaceId = resolveFollowUpWorkspaceId(item);
     const message =
       item.message?.trim() ||
       (await generateFollowUpMessageForWorkspace(

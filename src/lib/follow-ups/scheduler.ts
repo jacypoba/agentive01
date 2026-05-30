@@ -1,4 +1,7 @@
 import {
+  isFollowUpsEnabledForWorkspace,
+} from "@/lib/billing/workspace-subscription";
+import {
   cancelPendingFollowUpsForLead,
   countSentFollowUpsForLead,
   createFollowUp,
@@ -51,6 +54,15 @@ async function canScheduleFollowUp(
   }
 
   const workspaceId = requireLeadWorkspaceId(lead);
+  const followUpsEnabled = await isFollowUpsEnabledForWorkspace(
+    supabase,
+    workspaceId,
+    lead.user_id
+  );
+  if (!followUpsEnabled) {
+    return { allowed: false, reason: "plan_limit" };
+  }
+
   const sentCount = await countSentFollowUpsForLead(supabase, workspaceId, lead.id);
   if (sentCount >= FOLLOW_UP_CONFIG.maxPerLead) {
     return { allowed: false, reason: "max_reached" };

@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "npx tsx --test src/lib/ai/intent-classifier.test.ts src/lib/ai/complete-response.test.ts src/lib/ai/workspace-context.test.ts src/lib/ai/preview-context-usage.test.ts src/lib/i18n/detect-language.test.ts src/lib/i18n/reply-language.test.ts src/lib/properties/normalize-search.test.ts src/lib/properties/recommendation-intros.test.ts src/lib/workspaces/tenant-isolation.test.ts src/lib/workspace-settings/validation.test.ts src/lib/security/operational-endpoint-auth.test.ts"
+    "test": "npx tsx --test src/lib/ai/intent-classifier.test.ts src/lib/ai/complete-response.test.ts src/lib/ai/workspace-context.test.ts src/lib/ai/preview-context-usage.test.ts src/lib/i18n/detect-language.test.ts src/lib/i18n/reply-language.test.ts src/lib/properties/normalize-search.test.ts src/lib/properties/recommendation-intros.test.ts src/lib/workspaces/tenant-isolation.test.ts src/lib/workspace-settings/validation.test.ts src/lib/security/operational-endpoint-auth.test.ts src/lib/billing/billing-access.test.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.10.3",

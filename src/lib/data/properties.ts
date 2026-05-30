@@ -34,6 +34,22 @@ export async function getProperties(
   return (data ?? []).map(normalizeProperty);
 }
 
+export async function countProperties(
+  supabase: Client,
+  workspaceId: string
+): Promise<number> {
+  const { count, error } = await workspaceFilter(
+    supabase.from("properties").select("*", { count: "exact", head: true }),
+    workspaceId
+  );
+
+  if (error) {
+    throw new Error(`Failed to count properties: ${error.message}`);
+  }
+
+  return count ?? 0;
+}
+
 export async function getPropertyById(
   supabase: Client,
   workspaceId: string,

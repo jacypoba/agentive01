@@ -11,6 +11,7 @@ const links = [
   { href: "/properties", label: "Properties" },
   { href: "/settings/ai", label: "AI Assistant" },
   { href: "/settings/calendar", label: "Calendar" },
+  { href: "/billing", label: "Billing" },
 ];
 
 export function AppNav() {

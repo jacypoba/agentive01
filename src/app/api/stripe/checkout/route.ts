@@ -1,4 +1,8 @@
 import { NextResponse } from "next/server";
+import {
+  BillingAccessError,
+  resolveBillingScope,
+} from "@/lib/billing/workspace-subscription";
 import { getOrCreateStripeCustomer } from "@/lib/stripe/get-or-create-customer";
 import { getAppUrl } from "@/lib/stripe/app-url";
 import { getStripe } from "@/lib/stripe/client";
@@ -7,7 +11,6 @@ import {
   getStripePriceId,
 } from "@/lib/stripe/plan-prices.server";
 import { getPlanById, type PlanId } from "@/lib/stripe/plans";
-import { getCurrentWorkspaceId } from "@/lib/workspaces/get-current-workspace";
 import { createClient } from "@/lib/supabase/server";
 
 export async function POST(request: Request) {
@@ -30,11 +33,13 @@ export async function POST(request: Request) {
     const stripePriceId = getStripePriceId(planId);
     const envDiagnostics = getStripeEnvDiagnostics();
 
+    const { workspaceId } = await resolveBillingScope(supabase, user.id);
+
     console.log("[Stripe checkout]", {
       userId: user.id,
       selectedPlan: planId,
       priceIdExists: Boolean(stripePriceId),
-      workspaceId: null as string | null,
+      workspaceId,
       sessionUrlExists: false,
       env: envDiagnostics,
     });
@@ -45,15 +50,6 @@ export async function POST(request: Request) {
           error: `Stripe price not configured for ${plan.name}. Set ${PRICE_ENV_LABEL[planId]}.`,
         },
         { status: 503 }
-      );
-    }
-
-    const workspaceId = await getCurrentWorkspaceId(supabase, user.id);
-    if (!workspaceId) {
-      console.log("[Stripe checkout] no workspace", { userId: user.id, planId });
-      return NextResponse.json(
-        { error: "No workspace found for this account." },
-        { status: 400 }
       );
     }
 
@@ -106,6 +102,14 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ url: session.url });
   } catch (error) {
+    if (error instanceof BillingAccessError) {
+      console.warn("[Stripe checkout] billing access denied", {
+        planId,
+        error: error.message,
+      });
+      return NextResponse.json({ error: error.message }, { status: 403 });
+    }
+
     console.error("[Stripe checkout] failed", { planId, error });
     return NextResponse.json(
       {

@@ -1,11 +1,18 @@
 import type { Metadata } from "next";
+import { BillingPlanLimits } from "@/components/billing/billing-plan-limits";
 import { BillingPlans } from "@/components/billing/billing-plans";
 import { BillingStatus } from "@/components/billing/billing-status";
 import { getCurrentSubscription } from "@/lib/billing/get-current-subscription";
+import { isBillingAdminRole } from "@/lib/billing/workspace-subscription";
+import { countLeads } from "@/lib/data/leads";
+import { countProperties } from "@/lib/data/properties";
 import { isStripeTestMode } from "@/lib/stripe";
 import { areAllStripePricesConfigured } from "@/lib/stripe/plan-prices.server";
 import { reconcileWorkspaceSubscriptionFromStripe } from "@/lib/stripe/sync-subscription";
-import { getCurrentWorkspaceId } from "@/lib/workspaces/get-current-workspace";
+import {
+  getCurrentWorkspace,
+  getCurrentWorkspaceId,
+} from "@/lib/workspaces/get-current-workspace";
 import { createClient } from "@/lib/supabase/server";
 
 export const metadata: Metadata = {
@@ -27,11 +34,18 @@ export default async function BillingPage({ searchParams }: BillingPageProps) {
   let subscription = null;
   let loadError: string | null = null;
   let reconciledAfterCheckout = false;
+  let canManageBilling = false;
+  let usage: { leads: number; properties: number } | undefined;
 
   if (user) {
     try {
       const workspaceId = await getCurrentWorkspaceId(supabase, user.id);
       if (workspaceId) {
+        const workspace = await getCurrentWorkspace(supabase, user.id);
+        canManageBilling = workspace
+          ? isBillingAdminRole(workspace.role)
+          : false;
+
         if (params.success === "1") {
           try {
             const reconciled = await reconcileWorkspaceSubscriptionFromStripe(
@@ -49,6 +63,11 @@ export default async function BillingPage({ searchParams }: BillingPageProps) {
           workspaceId,
           user.id
         );
+
+        usage = {
+          leads: await countLeads(supabase, workspaceId),
+          properties: await countProperties(supabase, workspaceId),
+        };
       } else {
         loadError = "No workspace found for your account.";
       }
@@ -135,8 +154,16 @@ export default async function BillingPage({ searchParams }: BillingPageProps) {
         )}
 
         {subscription && (
-          <div className="mt-10">
-            <BillingStatus subscription={subscription} />
+          <div className="mt-10 grid gap-6 lg:grid-cols-2">
+            <BillingStatus
+              subscription={subscription}
+              canManageBilling={canManageBilling}
+            />
+            <BillingPlanLimits
+              planName={subscription.plan_name}
+              subscription={subscription}
+              usage={usage}
+            />
           </div>
         )}
 
@@ -147,6 +174,7 @@ export default async function BillingPage({ searchParams }: BillingPageProps) {
           <BillingPlans
             currentPlanId={subscription?.plan_name ?? "starter"}
             checkoutEnabled={checkoutEnabled}
+            canManageBilling={canManageBilling}
           />
         </section>
       </div>
