@@ -1,26 +1,14 @@
 import { NextResponse } from "next/server";
 import { processPendingFollowUps } from "@/lib/follow-ups/processor";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { guardOperationalRoute } from "@/lib/security/operational-endpoint-auth";
 
-function isAuthorized(request: Request): boolean {
-  const secret = process.env.CRON_SECRET;
-  if (!secret) {
-    return process.env.NODE_ENV !== "production";
-  }
-
-  const authHeader = request.headers.get("authorization");
-  return authHeader === `Bearer ${secret}`;
-}
+const ROUTE = "/api/test/follow-ups";
 
 export async function GET(request: Request) {
-  if (!isAuthorized(request)) {
-    return NextResponse.json(
-      {
-        error: "Unauthorized",
-        hint: "Set Authorization: Bearer <CRON_SECRET> or run in non-production without CRON_SECRET.",
-      },
-      { status: 401 }
-    );
+  const denied = await guardOperationalRoute(request, ROUTE);
+  if (denied) {
+    return denied;
   }
 
   console.log("[Test follow-ups] Manual run started");

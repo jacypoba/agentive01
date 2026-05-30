@@ -1,37 +1,25 @@
 import { NextResponse } from "next/server";
 import { processDueFollowUps } from "@/lib/follow-ups/processor";
-import { scanSilentLeadsForFollowUp } from "@/lib/follow-ups/triggers";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { guardOperationalRoute } from "@/lib/security/operational-endpoint-auth";
 
-function isAuthorized(request: Request): boolean {
-  const secret = process.env.CRON_SECRET;
-  if (!secret) {
-    return process.env.NODE_ENV !== "production";
-  }
-
-  const authHeader = request.headers.get("authorization");
-  return authHeader === `Bearer ${secret}`;
-}
+const ROUTE = "/api/cron/follow-ups";
 
 export async function GET(request: Request) {
-  if (!isAuthorized(request)) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const denied = await guardOperationalRoute(request, ROUTE, {
+    allowWorkspaceAdmin: false,
+  });
+  if (denied) {
+    return denied;
   }
 
   try {
     const supabase = createAdminClient();
-    const userId = process.env.WHATSAPP_DEFAULT_USER_ID;
-
-    if (userId) {
-      await scanSilentLeadsForFollowUp(supabase, userId);
-    }
-
     const result = await processDueFollowUps(supabase);
 
     return NextResponse.json({
       ok: true,
       timestamp: new Date().toISOString(),
-      scannedUserId: userId ?? null,
       ...result,
     });
   } catch (error) {

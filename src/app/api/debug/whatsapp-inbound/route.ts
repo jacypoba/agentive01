@@ -1,7 +1,15 @@
 import { NextResponse } from "next/server";
 import { getWhatsAppInboundDiagnostics } from "@/lib/evolution/inbound-diagnostics";
+import { guardOperationalRoute } from "@/lib/security/operational-endpoint-auth";
 
-export async function GET() {
+const ROUTE = "/api/debug/whatsapp-inbound";
+
+export async function GET(request: Request) {
+  const denied = await guardOperationalRoute(request, ROUTE);
+  if (denied) {
+    return denied;
+  }
+
   try {
     const diagnostics = await getWhatsAppInboundDiagnostics();
     return NextResponse.json(diagnostics);

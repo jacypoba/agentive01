@@ -11,6 +11,13 @@ import {
   getPendingDeliveryDiagnosis,
 } from "@/lib/evolution/evolution-instance";
 import { parseEvolutionSendResponse } from "@/lib/evolution/parse-evolution-response";
+import {
+  redactConnectionSnapshot,
+  redactSendResult,
+} from "@/lib/security/redact-debug-response";
+import { guardOperationalRoute } from "@/lib/security/operational-endpoint-auth";
+
+const ROUTE = "/api/debug/evolution-send-test";
 
 const VALID_FORMATS = new Set<SendTextFormat | "all">([
   "digits",
@@ -21,6 +28,11 @@ const VALID_FORMATS = new Set<SendTextFormat | "all">([
 ]);
 
 export async function GET(request: Request) {
+  const denied = await guardOperationalRoute(request, ROUTE);
+  if (denied) {
+    return denied;
+  }
+
   const url = new URL(request.url);
   const dryRun = url.searchParams.get("dryRun") === "1";
   const compareAll = url.searchParams.get("compareAll") === "1";
@@ -91,18 +103,18 @@ export async function GET(request: Request) {
     timestamp: new Date().toISOString(),
     env: {
       evolutionConfigured: diagnostic.configured,
-      whatsappHealthTestNumber: testNumber,
+      whatsappHealthTestNumberConfigured: Boolean(testNumber),
       evolutionSendNumberFormat: process.env.EVOLUTION_SEND_NUMBER_FORMAT ?? "auto",
       remoteJidUsed: remoteJid,
     },
-    connection,
+    connection: redactConnectionSnapshot(connection),
     restartHint: getEvolutionRestartHint(),
     pendingDiagnosis: getPendingDeliveryDiagnosis(),
     dryRun,
     selectedFormat: diagnostic.selectedFormat,
     payloadVariants: diagnostic.variants,
     send: sendResult
-      ? {
+      ? redactSendResult({
           endpoint: sendResult.endpoint ?? null,
           payload: sendResult.payload ?? null,
           payloadFormat: sendResult.payloadFormat ?? diagnostic.selectedFormat,
@@ -118,7 +130,7 @@ export async function GET(request: Request) {
           warning: sendResult.warning ?? null,
           instanceState: sendResult.instanceState ?? connection?.state ?? null,
           error: sendResult.error ?? null,
-        }
+        })
       : null,
     compareResults: diagnostic.compareResults?.map((result) => ({
       payloadFormat: result.payloadFormat ?? null,

@@ -13,6 +13,14 @@ import {
   getPendingDeliveryDiagnosis,
 } from "@/lib/evolution/evolution-instance";
 import { normalizePhoneDigits } from "@/lib/phone/normalize";
+import {
+  redactConnectionSnapshot,
+  redactEvolutionEnvBlock,
+  redactSendResult,
+} from "@/lib/security/redact-debug-response";
+import { guardOperationalRoute } from "@/lib/security/operational-endpoint-auth";
+
+const ROUTE = "/api/debug/evolution-send";
 
 const VALID_FORMATS = new Set<SendTextFormat>([
   "digits",
@@ -33,6 +41,11 @@ function resolveTargetPhone(request: Request): string | null {
 }
 
 export async function GET(request: Request) {
+  const denied = await guardOperationalRoute(request, ROUTE);
+  if (denied) {
+    return denied;
+  }
+
   const url = new URL(request.url);
   const dryRun = url.searchParams.get("dryRun") === "1";
   const fallback = url.searchParams.get("fallback") !== "0";
@@ -83,19 +96,15 @@ export async function GET(request: Request) {
         normalizedPhone: phoneDigits,
         remoteJid,
       },
-      evolution: {
+      evolution: redactEvolutionEnvBlock({
         baseUrl: process.env.EVOLUTION_API_URL ?? null,
         instanceName: process.env.EVOLUTION_INSTANCE_NAME ?? null,
         hasApiKey: Boolean(process.env.EVOLUTION_API_KEY),
         endpoint: configured
           ? `${process.env.EVOLUTION_API_URL?.replace(/\/+$/, "")}/message/sendText/${encodeURIComponent(process.env.EVOLUTION_INSTANCE_NAME ?? "")}`
           : null,
-        headers: {
-          "Content-Type": "application/json",
-          apikey: "(redacted)",
-        },
-      },
-      connection,
+      }),
+      connection: redactConnectionSnapshot(connection),
       formatOrder,
       payloadVariants: variants,
       restartHint: getEvolutionRestartHint(),
@@ -118,13 +127,13 @@ export async function GET(request: Request) {
       normalizedPhone: phoneDigits,
       remoteJid,
     },
-    evolution: {
+    evolution: redactEvolutionEnvBlock({
       baseUrl: process.env.EVOLUTION_API_URL ?? null,
       instanceName: process.env.EVOLUTION_INSTANCE_NAME ?? null,
       hasApiKey: Boolean(process.env.EVOLUTION_API_KEY),
-    },
-    connection,
-    send: {
+    }),
+    connection: redactConnectionSnapshot(connection),
+    send: redactSendResult({
       endpoint: result.endpoint ?? null,
       payload: result.payload ?? null,
       payloadFormat: result.payloadFormat ?? null,
@@ -142,7 +151,7 @@ export async function GET(request: Request) {
       attempts: result.attempts ?? [],
       deliveryVerification: result.deliveryVerification ?? null,
       error: result.error ?? null,
-    },
+    }),
     formatOrder,
     payloadVariants: variants,
     restartHint: getEvolutionRestartHint(),

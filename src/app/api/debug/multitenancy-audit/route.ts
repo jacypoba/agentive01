@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import { requireOperationalAccess } from "@/lib/security/operational-endpoint-auth";
 import { listUserWorkspaces } from "@/lib/workspaces/get-current-workspace";
+
+const ROUTE = "/api/debug/multitenancy-audit";
 
 type TenantTableSpec = {
   table: string;
@@ -64,33 +67,34 @@ const TENANT_TABLE_REGISTRY: TenantTableSpec[] = [
 const RISKY_ROUTES = [
   {
     route: "/api/debug/evolution-send",
-    risk: "Unauthenticated WhatsApp send diagnostic",
-    recommendation: "Gate with CRON_SECRET or restrict to non-production.",
+    risk: "WhatsApp send diagnostic",
+    recommendation: "Protected by CRON_SECRET or workspace owner/admin.",
   },
   {
     route: "/api/debug/whatsapp-health",
-    risk: "Public provider health + optional live ping",
-    recommendation: "Require auth or CRON_SECRET in production.",
+    risk: "Provider health + optional live ping",
+    recommendation: "Protected by CRON_SECRET or workspace owner/admin.",
   },
   {
     route: "/api/cron/follow-ups",
     risk: "Processes all workspaces when using admin client",
-    recommendation: "Acceptable for cron; ensure CRON_SECRET is set in production.",
+    recommendation: "Protected by CRON_SECRET.",
   },
 ];
 
-export async function GET() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+export async function GET(request: Request) {
+  const auth = await requireOperationalAccess(request, ROUTE);
+  if (auth instanceof NextResponse) {
+    return auth;
   }
 
-  const workspaces = await listUserWorkspaces(supabase, user.id);
   const admin = createAdminClient();
+  let workspaces: Awaited<ReturnType<typeof listUserWorkspaces>> = [];
+
+  if (auth.method === "workspace_admin" && auth.userId) {
+    const supabase = await createClient();
+    workspaces = await listUserWorkspaces(supabase, auth.userId);
+  }
 
   const nullWorkspaceCounts: Record<string, number | null> = {};
   for (const spec of TENANT_TABLE_REGISTRY.filter((item) => item.hasWorkspaceId)) {
@@ -108,10 +112,10 @@ export async function GET() {
     .eq("is_active", true);
 
   return NextResponse.json({
-    debugLabel: "multitenancy-audit-v1",
+    debugLabel: "multitenancy-audit-v2",
     timestamp: new Date().toISOString(),
     phase: "2 — workspace-scoped reads + RLS",
-    authenticatedUserId: user.id,
+    accessMethod: auth.method,
     workspaceMemberships: workspaces.map((workspace) => ({
       id: workspace.id,
       name: workspace.name,
@@ -138,7 +142,7 @@ export async function GET() {
     },
     whatsappRouting: {
       activeConnections: whatsappConnections ?? 0,
-      fallbackEnv: "WHATSAPP_DEFAULT_USER_ID → user's active workspace",
+      fallbackEnv: "WHATSAPP_DEFAULT_USER_ID fallback when no connection row exists",
       metaField: "phone_number_id",
       evolutionField: "instance name",
     },
@@ -165,7 +169,7 @@ export async function GET() {
             "Add workspace_whatsapp_connections rows for each Meta phone_number_id before multi-tenant production.",
           ]
         : []),
-      "Set CRON_SECRET and restrict debug routes in production deployments.",
+      "Debug and cron routes require CRON_SECRET or workspace owner/admin.",
     ],
   });
 }

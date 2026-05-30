@@ -9,6 +9,9 @@ import {
   isGoogleCalendarConfigured,
 } from "@/lib/google-calendar/config";
 import { createClient } from "@/lib/supabase/server";
+import { guardOperationalRoute } from "@/lib/security/operational-endpoint-auth";
+
+const ROUTE = "/api/debug/google-status";
 
 function maskToken(value: string | null | undefined): string | null {
   if (!value) return null;
@@ -16,7 +19,12 @@ function maskToken(value: string | null | undefined): string | null {
   return `${value.slice(0, 4)}…${value.slice(-4)}`;
 }
 
-export async function GET() {
+export async function GET(request: Request) {
+  const denied = await guardOperationalRoute(request, ROUTE);
+  if (denied) {
+    return denied;
+  }
+
   const supabase = await createClient();
   const {
     data: { user },
@@ -62,17 +70,17 @@ export async function GET() {
       hasClientId: Boolean(process.env.GOOGLE_CLIENT_ID),
       hasClientSecret: Boolean(process.env.GOOGLE_CLIENT_SECRET),
       hasRedirectUri: Boolean(process.env.GOOGLE_REDIRECT_URI),
-      redirectUri,
-      siteUrl: process.env.NEXT_PUBLIC_SITE_URL ?? null,
+      redirectUriConfigured: Boolean(redirectUri),
+      siteUrlConfigured: Boolean(process.env.NEXT_PUBLIC_SITE_URL),
       oauthConfigError,
     },
     profile: {
       found: Boolean(profile),
-      profileId: profile?.id ?? null,
+      profilePresent: Boolean(profile),
       lookupError: profileError,
       connected: isGoogleCalendarConnected(profile),
       connectedAt: profile?.google_calendar_connected_at ?? null,
-      googleCalendarId: profile?.google_calendar_id ?? null,
+      googleCalendarConfigured: Boolean(profile?.google_calendar_id),
       refreshToken: maskToken(profile?.google_refresh_token),
       accessToken: maskToken(profile?.google_access_token),
       tokenExpiresAt: profile?.google_token_expires_at ?? null,
