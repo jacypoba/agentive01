@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { AiAssistantPreviewPanel } from "@/components/settings/ai-assistant-preview-panel";
 import { AiAssistantSettingsForm } from "@/components/settings/ai-assistant-settings-form";
 import { SettingsNav } from "@/components/settings/settings-nav";
 import { getOrCreateWorkspaceSettings } from "@/lib/data/workspace-settings";
@@ -73,12 +74,13 @@ export default async function AiAssistantSettingsPage() {
         )}
 
         {settings && (
-          <div className="mt-8">
+          <div className="mt-8 space-y-8">
             <AiAssistantSettingsForm
               workspaceName={workspaceName}
               settings={settings}
               canEdit={canEdit}
             />
+            <AiAssistantPreviewPanel />
           </div>
         )}
       </div>
