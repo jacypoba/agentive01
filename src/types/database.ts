@@ -291,6 +291,11 @@ export type WorkspaceSettings = {
   faqs: unknown;
   default_language: string;
   agent_behavior_rules: string | null;
+  areas_served: string | null;
+  preferred_languages: unknown;
+  office_hours: string | null;
+  greeting_style: string | null;
+  follow_up_style: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -610,6 +615,12 @@ export type Database = {
           p_workspace_name?: string;
         };
         Returns: string;
+      };
+      ensure_workspace_settings: {
+        Args: {
+          p_workspace_id: string;
+        };
+        Returns: undefined;
       };
     };
     Enums: Record<string, never>;

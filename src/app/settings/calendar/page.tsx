@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { CalendarSettingsForm } from "@/components/settings/calendar-settings-form";
+import { SettingsNav } from "@/components/settings/settings-nav";
 import { getCalendarSettingsFromProfile, getProfile } from "@/lib/data/profiles";
 import { isGoogleCalendarConfigured } from "@/lib/google-calendar/config";
 import { createClient } from "@/lib/supabase/server";
@@ -39,11 +40,15 @@ export default async function CalendarSettingsPage({
     <main className="px-6 pb-16 lg:px-8">
       <div className="mx-auto max-w-3xl">
         <section className="animate-fade-up">
-          <h1 className="text-3xl font-semibold tracking-tight">Calendar</h1>
+          <p className="text-xs font-medium uppercase tracking-wider text-[#00D4FF]">
+            Settings
+          </p>
+          <h1 className="mt-2 text-3xl font-semibold tracking-tight">Calendar</h1>
           <p className="mt-2 text-sm text-white/50">
             Connect Google Calendar, set working hours, and sync confirmed visits
             automatically.
           </p>
+          <SettingsNav />
         </section>
 
         {dbError && (

@@ -17,6 +17,8 @@ const REVALIDATE_PATHS = [
   "/follow-ups",
   "/properties",
   "/settings",
+  "/settings/ai",
+  "/settings/calendar",
   "/billing",
 ];
 

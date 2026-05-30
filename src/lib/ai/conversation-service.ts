@@ -24,6 +24,7 @@ import {
   getConversationsByLead,
 } from "@/lib/data/conversations";
 import { getPropertiesByIds } from "@/lib/data/properties";
+import { getOrCreateWorkspaceSettings } from "@/lib/data/workspace-settings";
 import { cancelFollowUpsOnClientReply } from "@/lib/follow-ups/scheduler";
 import { getExhaustedMatchLines, getNoMatchLine } from "@/lib/i18n/messages";
 import { resolveReplyLanguage, syncLeadPreferredLanguage } from "@/lib/i18n/sync-language";
@@ -52,6 +53,7 @@ import { getLeadById } from "@/lib/data/leads";
 import { createClient } from "@/lib/supabase/server";
 import { resolveTenantScope } from "@/lib/workspaces/workspace-access";
 import { requireLeadWorkspaceId } from "@/lib/workspaces/workspace-access";
+import type { WorkspaceAISettings } from "@/lib/workspace-settings/types";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type {
   Conversation,
@@ -243,7 +245,8 @@ async function buildIntroReply(
   classified: ReturnType<typeof classifyMessageIntent>,
   isReshow: boolean,
   freshQueryMade: boolean,
-  language: SupportedLanguage
+  language: SupportedLanguage,
+  workspaceSettings: WorkspaceAISettings | null
 ): Promise<string> {
   if (isReshow && propertiesToRecommend.length > 0) {
     return buildReshowIntroText(
@@ -296,7 +299,8 @@ async function buildIntroReply(
     clientAskedForMoreOptions(history),
     isReshow,
     classified.intent,
-    language
+    language,
+    workspaceSettings
   );
 }
 
@@ -338,6 +342,12 @@ export async function processClientMessageWithAI(
     memoryLead,
     message,
     history
+  );
+
+  const workspaceId = requireLeadWorkspaceId(lead);
+  const workspaceSettings = await getOrCreateWorkspaceSettings(
+    supabase,
+    workspaceId
   );
 
   const classified = classifyMessageIntent(history, languageLead);
@@ -439,7 +449,8 @@ export async function processClientMessageWithAI(
     classified,
     isReshow,
     freshQueryMade,
-    language
+    language,
+    workspaceSettings
   );
 
   if (aiReply) {

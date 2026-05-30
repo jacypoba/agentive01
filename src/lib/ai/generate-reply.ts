@@ -8,6 +8,7 @@ import { MEMORY_MESSAGE_LIMIT } from "@/lib/ai/conversation-memory";
 import type { MessageIntent } from "@/lib/ai/intent-classifier";
 import { buildQualificationDirective } from "@/lib/ai/qualification";
 import { REAL_ESTATE_ASSISTANT_PROMPT } from "@/lib/ai/prompts";
+import { buildWorkspaceAssistantContext } from "@/lib/ai/workspace-context";
 import {
   AI_LANGUAGE_INSTRUCTION,
   LEAD_CONTEXT_LABELS,
@@ -19,6 +20,7 @@ import { buildPropertyRecommendationDirective } from "@/lib/properties/recommend
 import type { PropertyAvailability } from "@/lib/properties/property-availability";
 import { buildAvailabilityDirective } from "@/lib/properties/property-availability";
 import { getIntentStatusLabel } from "@/lib/leads/qualification-display";
+import type { WorkspaceAISettings } from "@/lib/workspace-settings/types";
 import type { Conversation, Lead, Property } from "@/types/database";
 
 const DEFAULT_MODEL = "gpt-4.1-mini";
@@ -97,7 +99,8 @@ function toOpenAIMessages(
   clientAskedForMore: boolean,
   clientAskedToReshow = false,
   messageIntent: MessageIntent = "unknown",
-  language: SupportedLanguage = "pt"
+  language: SupportedLanguage = "pt",
+  workspaceSettings: WorkspaceAISettings | null = null
 ): OpenAI.Chat.ChatCompletionMessageParam[] {
   const recentHistory = history.slice(-MEMORY_MESSAGE_LIMIT);
   const qualificationDirective = buildQualificationDirective(
@@ -122,10 +125,14 @@ function toOpenAIMessages(
     clientAskedForMore
   );
 
+  const workspaceContext = buildWorkspaceAssistantContext(workspaceSettings);
+
   const systemContent = [
     REAL_ESTATE_ASSISTANT_PROMPT,
     "",
-    "---",
+    workspaceContext ? "---" : "",
+    workspaceContext,
+    workspaceContext ? "---" : "",
     AI_LANGUAGE_INSTRUCTION[language],
     "",
     "---",
@@ -166,7 +173,8 @@ export async function generateAIReply(
   clientAskedForMore = false,
   clientAskedToReshow = false,
   messageIntent: MessageIntent = "unknown",
-  languageOverride?: SupportedLanguage
+  languageOverride?: SupportedLanguage,
+  workspaceSettings: WorkspaceAISettings | null = null
 ): Promise<string> {
   const language = languageOverride ?? getLeadLanguage(lead);
   const openai = getOpenAIClient();
@@ -178,7 +186,8 @@ export async function generateAIReply(
     clientAskedForMore,
     clientAskedToReshow,
     messageIntent,
-    language
+    language,
+    workspaceSettings
   );
 
   const completion = await openai.chat.completions.create({

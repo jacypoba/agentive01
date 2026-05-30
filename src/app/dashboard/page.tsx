@@ -30,8 +30,8 @@ const quickActions = [
   },
   {
     title: "Train your AI",
-    description: "Upload listings, FAQs, and tone guidelines.",
-    href: "#",
+    description: "Configure tone, FAQs, and agency voice for WhatsApp.",
+    href: "/settings/ai",
     badge: "Configure",
   },
   {

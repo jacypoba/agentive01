@@ -6,7 +6,7 @@ import {
 } from "@/lib/data/follow-ups";
 import { sendWhatsAppText } from "@/lib/whatsapp/send";
 import { FOLLOW_UP_CONFIG } from "@/lib/follow-ups/config";
-import { generateFollowUpMessage } from "@/lib/follow-ups/messages";
+import { generateFollowUpMessageForWorkspace } from "@/lib/follow-ups/generate-workspace-follow-up";
 import { normalizeLanguage } from "@/lib/i18n/types";
 import { resolveLeadPhoneDigits } from "@/lib/visits/whatsapp-notifications";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -103,9 +103,17 @@ export async function sendFollowUpImmediately(
   const language = normalizeLanguage(
     item.context_snapshot?.preferred_language ?? lead.preferred_language
   );
+  const workspaceId = resolveFollowUpWorkspaceId(item);
   const message =
     item.message?.trim() ||
-    generateFollowUpMessage(item.type, context, item.id, language);
+    (await generateFollowUpMessageForWorkspace(
+      supabase,
+      workspaceId,
+      item.type,
+      context,
+      item.id,
+      language
+    ));
 
   try {
     await sendWhatsAppText(phoneDigits, message);
@@ -184,9 +192,17 @@ export async function processPendingFollowUps(
     const language = normalizeLanguage(
       item.context_snapshot?.preferred_language ?? lead.preferred_language
     );
+    const workspaceId = resolveFollowUpWorkspaceId(item);
     const message =
       item.message?.trim() ||
-      generateFollowUpMessage(item.type, context, item.id, language);
+      (await generateFollowUpMessageForWorkspace(
+        supabase,
+        workspaceId,
+        item.type,
+        context,
+        item.id,
+        language
+      ));
 
     try {
       await sendWhatsAppText(phoneDigits, message);

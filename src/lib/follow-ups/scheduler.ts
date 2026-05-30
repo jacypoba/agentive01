@@ -7,7 +7,7 @@ import {
 } from "@/lib/data/follow-ups";
 import { FOLLOW_UP_CONFIG } from "@/lib/follow-ups/config";
 import { buildFollowUpContext } from "@/lib/follow-ups/context";
-import { generateFollowUpMessage } from "@/lib/follow-ups/messages";
+import { generateFollowUpMessageForWorkspace } from "@/lib/follow-ups/generate-workspace-follow-up";
 import { normalizeLanguage } from "@/lib/i18n/types";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type {
@@ -119,12 +119,14 @@ export async function scheduleFollowUp(
 
   const message =
     params.message ??
-    generateFollowUpMessage(
+    (await generateFollowUpMessageForWorkspace(
+      supabase,
+      workspaceId,
       type,
       { ...context, preferred_language: lead.preferred_language ?? context.preferred_language },
       `${lead.id}:${scheduledFor.toISOString()}`,
       normalizeLanguage(lead.preferred_language ?? context.preferred_language)
-    );
+    ));
 
   const followUp = await createFollowUp(supabase, {
     lead_id: lead.id,
