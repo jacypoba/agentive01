@@ -21,11 +21,12 @@ function SubmitButton({ pending }: { pending: boolean }) {
   );
 }
 
-export function LoginForm() {
+export function LoginForm({ redirectTo = "/dashboard" }: { redirectTo?: string }) {
   const [state, formAction, pending] = useActionState(login, initialState);
 
   return (
     <form action={formAction} className="space-y-5">
+      <input type="hidden" name="redirect" value={redirectTo} />
       {state.error && (
         <div
           role="alert"
@@ -70,7 +71,11 @@ export function LoginForm() {
       <p className="text-center text-sm text-white/40">
         Don&apos;t have an account?{" "}
         <Link
-          href="/signup"
+          href={
+            redirectTo === "/dashboard"
+              ? "/signup"
+              : `/signup?redirect=${encodeURIComponent(redirectTo)}`
+          }
           className="font-medium text-[#00D4FF] transition-colors hover:text-white"
         >
           Create one

@@ -272,6 +272,40 @@ export type WorkspaceMemberInsert = {
   created_at?: string;
 };
 
+export type WorkspaceInvitationStatus =
+  | "pending"
+  | "accepted"
+  | "canceled"
+  | "expired";
+
+export type WorkspaceInvitation = {
+  id: string;
+  workspace_id: string;
+  email: string;
+  role: InvitableRole;
+  token_hash: string;
+  status: WorkspaceInvitationStatus;
+  invited_by: string;
+  expires_at: string;
+  accepted_at: string | null;
+  created_at: string;
+};
+
+export type InvitableRole = Extract<WorkspaceRole, "admin" | "member">;
+
+export type WorkspaceInvitationInsert = {
+  id?: string;
+  workspace_id: string;
+  email: string;
+  role: InvitableRole;
+  token_hash: string;
+  status?: WorkspaceInvitationStatus;
+  invited_by: string;
+  expires_at: string;
+  accepted_at?: string | null;
+  created_at?: string;
+};
+
 export type WorkspaceWhatsAppConnection = {
   id: string;
   workspace_id: string;
@@ -592,6 +626,12 @@ export type Database = {
         Row: WorkspaceMember;
         Insert: WorkspaceMemberInsert;
         Update: Partial<WorkspaceMemberInsert>;
+        Relationships: [];
+      };
+      workspace_invitations: {
+        Row: WorkspaceInvitation;
+        Insert: WorkspaceInvitationInsert;
+        Update: Partial<WorkspaceInvitationInsert>;
         Relationships: [];
       };
       workspace_whatsapp_connections: {

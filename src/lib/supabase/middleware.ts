@@ -1,5 +1,6 @@
-import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { sanitizeRedirectPath } from "@/lib/auth/redirect";
+import { createServerClient } from "@supabase/ssr";
 import { getSupabaseUrl } from "@/lib/supabase/url";
 
 export async function updateSession(request: NextRequest) {
@@ -50,7 +51,10 @@ export async function updateSession(request: NextRequest) {
 
   if (user && (pathname === "/login" || pathname === "/signup")) {
     const url = request.nextUrl.clone();
-    url.pathname = "/dashboard";
+    url.pathname = sanitizeRedirectPath(
+      request.nextUrl.searchParams.get("redirect")
+    );
+    url.search = "";
     return NextResponse.redirect(url);
   }
 

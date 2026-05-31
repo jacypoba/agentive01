@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 const links = [
   { href: "/settings/ai", label: "AI Assistant" },
   { href: "/settings/calendar", label: "Calendar" },
+  { href: "/settings/team", label: "Team" },
 ];
 
 export function SettingsNav() {

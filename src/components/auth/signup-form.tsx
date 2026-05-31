@@ -5,7 +5,13 @@ import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 import { supabase } from "@/lib/supabase";
 
-export function SignupForm() {
+export function SignupForm({
+  redirectTo = "/dashboard",
+  defaultEmail = "",
+}: {
+  redirectTo?: string;
+  defaultEmail?: string;
+}) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -58,7 +64,7 @@ export function SignupForm() {
       return;
     }
 
-    router.push("/dashboard");
+    router.push(redirectTo);
     router.refresh();
   }
 
@@ -107,6 +113,7 @@ export function SignupForm() {
           type="email"
           autoComplete="email"
           required
+          defaultValue={defaultEmail}
           placeholder="you@agency.com"
           className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white placeholder:text-white/30 outline-none transition-colors focus:border-[#0066FF]/50 focus:ring-2 focus:ring-[#0066FF]/20"
         />
@@ -142,7 +149,11 @@ export function SignupForm() {
       <p className="text-center text-sm text-white/40">
         Already have an account?{" "}
         <Link
-          href="/login"
+          href={
+            redirectTo === "/dashboard"
+              ? "/login"
+              : `/login?redirect=${encodeURIComponent(redirectTo)}`
+          }
           className="font-medium text-[#00D4FF] transition-colors hover:text-white"
         >
           Sign in

@@ -35,6 +35,13 @@ const TENANT_TABLE_REGISTRY: TenantTableSpec[] = [
     notes: "Per-workspace tone, FAQs, business info.",
   },
   {
+    table: "workspace_invitations",
+    domain: "Team invites",
+    hasWorkspaceId: true,
+    rlsExpected: true,
+    notes: "Pending invites; admin SELECT only; writes via service role.",
+  },
+  {
     table: "workspace_whatsapp_connections",
     domain: "WhatsApp routing",
     hasWorkspaceId: true,
