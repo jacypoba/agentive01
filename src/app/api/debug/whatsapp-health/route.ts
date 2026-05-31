@@ -161,6 +161,7 @@ export async function GET(request: Request) {
       "Production default: WHATSAPP_PROVIDER=meta with Meta Cloud API credentials.",
       "Add ?ping=1 with WHATSAPP_HEALTH_TEST_NUMBER for live send test.",
       "Add ?metaOnly=1 to ping Meta without Evolution fallback.",
+      "Meta accepted (wamid) is not delivery — use /api/debug/meta-message-status for diagnosis.",
     ],
   });
 }
