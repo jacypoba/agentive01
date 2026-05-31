@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
+import { switchAccountForInviteAction } from "@/app/actions/auth";
 import { acceptInvitationAction } from "@/app/actions/team";
 import type { InvitationPreview } from "@/app/actions/team";
 
@@ -44,6 +45,7 @@ export function AcceptInvitationPanel({
       router.refresh();
     });
   }
+
 
   return (
     <div className="mx-auto w-full max-w-md space-y-6">
@@ -122,12 +124,23 @@ export function AcceptInvitationPanel({
             You are signed in as {userEmail ?? "another account"}. Sign in with{" "}
             {preview.email} to accept.
           </p>
-          <Link
-            href={`/login?redirect=${encodeURIComponent(redirectPath)}`}
-            className="inline-block rounded-full border border-white/15 px-5 py-2.5 font-medium text-white/80 hover:bg-white/5"
-          >
-            Switch account
-          </Link>
+          <div className="flex flex-col items-center gap-2 sm:flex-row sm:justify-center">
+            <form action={switchAccountForInviteAction}>
+              <input type="hidden" name="redirect" value={redirectPath} />
+              <button
+                type="submit"
+                className="rounded-full border border-white/15 px-5 py-2.5 font-medium text-white/80 transition hover:bg-white/5"
+              >
+                Switch account
+              </button>
+            </form>
+            <Link
+              href={`/signup?redirect=${encodeURIComponent(redirectPath)}&email=${encodeURIComponent(preview.email)}`}
+              className="rounded-full border border-white/15 px-5 py-2.5 font-medium text-white/80 hover:bg-white/5"
+            >
+              Create account
+            </Link>
+          </div>
         </div>
       )}
 

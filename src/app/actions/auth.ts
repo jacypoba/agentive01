@@ -2,7 +2,11 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { sanitizeRedirectPath } from "@/lib/auth/redirect";
+import {
+  buildLoginRedirectUrl,
+  sanitizeInviteRedirectPath,
+  sanitizeRedirectPath,
+} from "@/lib/auth/redirect";
 import { createClient } from "@/lib/supabase/server";
 
 export type AuthState = {
@@ -39,5 +43,25 @@ export async function logout() {
   const supabase = await createClient();
   await supabase.auth.signOut();
   revalidatePath("/", "layout");
+  redirect("/login");
+}
+
+/**
+ * Signs out the current session so the user can authenticate with the invited email.
+ * Redirect target is limited to /invite/[token] paths.
+ */
+export async function switchAccountForInviteAction(formData: FormData) {
+  const inviteRedirect = sanitizeInviteRedirectPath(
+    formData.get("redirect") as string | null
+  );
+
+  const supabase = await createClient();
+  await supabase.auth.signOut();
+  revalidatePath("/", "layout");
+
+  if (inviteRedirect) {
+    redirect(buildLoginRedirectUrl(inviteRedirect));
+  }
+
   redirect("/login");
 }
