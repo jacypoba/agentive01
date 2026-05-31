@@ -28,7 +28,8 @@ export async function GET(request: Request) {
         "Protected: CRON_SECRET (Bearer or x-cron-secret) or workspace owner/admin.",
         "Optional ?messageId=wamid... to correlate with a specific send.",
         "Optional ?template=order_confirmation to inspect template approval status.",
-        "Agentive01 outbound uses type=text — use Meta Console template send or add template send for cold outbound tests.",
+        "For business-initiated sends use GET /api/debug/meta-send-template?template=hello_world (type=template).",
+        "Text ping remains at /api/debug/whatsapp-health?ping=1&metaOnly=1 for session-window replies only.",
       ],
     });
   } catch (error) {

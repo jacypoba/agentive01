@@ -9,6 +9,10 @@ import type { MetaWebhookPayload } from "@/lib/meta/types";
 import type { ParsedIncomingMessage } from "@/lib/whatsapp/types";
 import { recordOutboundFailure, recordOutboundSuccess } from "@/lib/evolution/outbound-health";
 import { recordOutboundHeartbeat } from "@/lib/evolution/whatsapp-heartbeat";
+import {
+  buildMetaTemplateMessagePayload,
+  type MetaTemplateSendOptions,
+} from "@/lib/meta/templates";
 
 function getMetaConfig() {
   const accessToken = process.env.META_WHATSAPP_ACCESS_TOKEN?.trim();
@@ -101,7 +105,12 @@ function buildSendResult(input: {
   };
 }
 
-async function postMetaMessages(payload: Record<string, unknown>, destinationNumber: string) {
+async function postMetaMessages(
+  payload: Record<string, unknown>,
+  destinationNumber: string,
+  options?: { processingLabel?: "meta" | "meta_template" }
+) {
+  const processingLabel = options?.processingLabel ?? "meta";
   const config = getMetaConfig();
   const endpoint = `https://graph.facebook.com/${config.graphVersion}/${config.phoneNumberId}/messages`;
 
@@ -148,7 +157,9 @@ async function postMetaMessages(payload: Record<string, unknown>, destinationNum
     last_delivery_key: result.deliveryKey ?? null,
     last_delivery_status: result.deliveryStatus ?? null,
     last_response_body: responseBody,
-    last_processing_status: result.sentToWhatsApp ? "meta_sent" : "meta_failed",
+    last_processing_status: result.sentToWhatsApp
+      ? `${processingLabel}_sent`
+      : `${processingLabel}_failed`,
     last_error: result.error ?? null,
   });
 
@@ -209,6 +220,75 @@ export async function sendMetaWhatsAppTextSafe(
     return result;
   } catch (error) {
     const reason = error instanceof Error ? error.message : "Meta network error.";
+    recordOutboundFailure({ kind: "text", phoneDigits: destinationNumber, reason });
+    return { success: false, provider: "meta", destinationNumber, error: reason };
+  }
+}
+
+export async function sendMetaWhatsAppTemplateSafe(
+  phoneDigits: string,
+  options: MetaTemplateSendOptions
+): Promise<WhatsAppSendResult> {
+  const destinationNumber = normalizePhoneDigits(phoneDigits);
+  const templateName = options.name?.trim();
+
+  if (!templateName) {
+    return {
+      success: false,
+      provider: "meta",
+      error: "Meta template name is required.",
+    };
+  }
+
+  if (!destinationNumber) {
+    return {
+      success: false,
+      provider: "meta",
+      error: "Invalid destination phone number.",
+    };
+  }
+
+  let payload: Record<string, unknown>;
+  try {
+    payload = buildMetaTemplateMessagePayload(destinationNumber, options);
+  } catch (error) {
+    const reason =
+      error instanceof Error ? error.message : "Invalid Meta template configuration.";
+    return { success: false, provider: "meta", destinationNumber, error: reason };
+  }
+
+  try {
+    const result = await postMetaMessages(payload, destinationNumber, {
+      processingLabel: "meta_template",
+    });
+
+    if (result.sentToWhatsApp) {
+      recordOutboundSuccess({
+        kind: "text",
+        phoneDigits: destinationNumber,
+        destinationNumber,
+        endpoint: result.endpoint,
+        status: result.status,
+        responseBody: result.responseBody,
+        evolutionMessageId: result.providerMessageId,
+        deliveryKey: result.deliveryKey,
+        deliveryStatus: result.deliveryStatus,
+      });
+    } else {
+      recordOutboundFailure({
+        kind: "text",
+        phoneDigits: destinationNumber,
+        destinationNumber,
+        endpoint: result.endpoint,
+        status: result.status,
+        responseBody: result.responseBody,
+        reason: result.error ?? "Meta template send failed.",
+      });
+    }
+
+    return result;
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : "Meta template network error.";
     recordOutboundFailure({ kind: "text", phoneDigits: destinationNumber, reason });
     return { success: false, provider: "meta", destinationNumber, error: reason };
   }
