@@ -1,5 +1,6 @@
 import "server-only";
 import { getInboundHeartbeat } from "@/lib/evolution/whatsapp-heartbeat";
+import { buildExpectedWebhookUrl } from "@/lib/evolution/evolution-webhook-sync";
 import { getAppUrl } from "@/lib/stripe/app-url";
 
 type EvolutionFetchResult = {
@@ -52,17 +53,6 @@ async function evolutionFetch(
       json: null,
     };
   }
-}
-
-function buildExpectedWebhookUrl(): string {
-  const base = getAppUrl();
-  const secret = process.env.EVOLUTION_WEBHOOK_SECRET?.trim();
-
-  if (secret) {
-    return `${base}/api/webhooks/evolution?secret=${encodeURIComponent(secret)}`;
-  }
-
-  return `${base}/api/webhooks/evolution`;
 }
 
 function extractConnectionState(json: unknown): string | null {

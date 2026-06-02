@@ -3,7 +3,7 @@ import { handleEvolutionMessageStatusUpdate } from "@/lib/evolution/message-stat
 import {
   logIncomingWebhookPayload,
   parseEvolutionWebhook,
-  verifyEvolutionWebhook,
+  verifyEvolutionWebhookAsync,
 } from "@/lib/evolution/parse-webhook";
 import { recordInboundHeartbeat, recordWebhookHit } from "@/lib/evolution/whatsapp-heartbeat";
 import { handleInboundWhatsAppMessage } from "@/lib/whatsapp/handle-inbound";
@@ -45,10 +45,17 @@ export async function POST(request: Request) {
 
     logIncomingWebhookPayload(payload);
 
-    if (!verifyEvolutionWebhook(request, payload)) {
+    if (!(await verifyEvolutionWebhookAsync(request, payload))) {
       void recordInboundHeartbeat({
         last_processing_status: "unauthorized",
         last_error: "Unauthorized webhook request.",
+      });
+      console.warn("[EVOLUTION WEBHOOK UNAUTHORIZED]", {
+        hasPayloadApiKey: Boolean(payload.apikey),
+        hasHeaderApiKey: Boolean(request.headers.get("apikey")),
+        hasAuthorizationHeader: Boolean(request.headers.get("authorization")),
+        hasQuerySecret: Boolean(new URL(request.url).searchParams.get("secret")),
+        instance: payload.instance ?? null,
       });
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }

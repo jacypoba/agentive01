@@ -8,6 +8,12 @@ import type {
   EvolutionWebhookPayload,
   ParsedIncomingMessage,
 } from "@/lib/evolution/types";
+import {
+  verifyEvolutionWebhook,
+  verifyEvolutionWebhookAsync,
+} from "@/lib/evolution/evolution-webhook-auth";
+
+export { verifyEvolutionWebhook, verifyEvolutionWebhookAsync };
 
 const LOG_PREFIX = "[Evolution webhook]";
 
@@ -86,36 +92,6 @@ export function parseEvolutionWebhook(
     text,
     messageId,
   };
-}
-
-export function verifyEvolutionWebhook(
-  request: Request,
-  payload: EvolutionWebhookPayload
-): boolean {
-  const expectedKey = process.env.EVOLUTION_API_KEY;
-  const webhookSecret = process.env.EVOLUTION_WEBHOOK_SECRET;
-
-  if (webhookSecret) {
-    const urlSecret = new URL(request.url).searchParams.get("secret");
-    if (urlSecret === webhookSecret) {
-      return true;
-    }
-  }
-
-  if (!expectedKey) {
-    return process.env.NODE_ENV !== "production";
-  }
-
-  const headerKey = request.headers.get("apikey");
-  if (headerKey === expectedKey) {
-    return true;
-  }
-
-  if (payload.apikey === expectedKey) {
-    return true;
-  }
-
-  return false;
 }
 
 /** Log every messages.upsert payload key for observability. */

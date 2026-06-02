@@ -6,6 +6,10 @@ export type EvolutionWebhookPayload = {
   event?: string;
   instance?: string;
   apikey?: string;
+  server_url?: string;
+  destination?: string;
+  date_time?: string;
+  sender?: string;
   data?: EvolutionMessageData;
 };
 
