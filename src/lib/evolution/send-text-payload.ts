@@ -12,12 +12,67 @@ export type SendTextPayloadVariant = {
   description: string;
 };
 
-/** Build Evolution v2 sendText payload variants for diagnostics and fallback selection. */
+/** Evolution API SendTextDto (Metadata + text): { number, text } */
+export function buildCanonicalEvolutionSendTextPayload(input: {
+  number: string;
+  text: string;
+}): Record<string, unknown> {
+  const number = input.number.trim();
+  const text = input.text.trim();
+
+  return {
+    number,
+    text,
+  };
+}
+
+export function normalizeEvolutionSendTextPayload(
+  payload: Record<string, unknown>,
+  fallbackText: string
+): Record<string, unknown> {
+  const textFromRoot =
+    typeof payload.text === "string" && payload.text.trim()
+      ? payload.text.trim()
+      : null;
+
+  const nested = payload.textMessage;
+  const textFromNested =
+    nested &&
+    typeof nested === "object" &&
+    typeof (nested as { text?: unknown }).text === "string" &&
+    (nested as { text: string }).text.trim()
+      ? (nested as { text: string }).text.trim()
+      : null;
+
+  const text = textFromRoot ?? textFromNested ?? fallbackText.trim();
+  const number =
+    typeof payload.number === "string" && payload.number.trim()
+      ? payload.number.trim()
+      : "";
+
+  return buildCanonicalEvolutionSendTextPayload({ number, text });
+}
+
+export function isEvolutionMissingTextError(responseBody: string | undefined): boolean {
+  if (!responseBody) {
+    return false;
+  }
+
+  const normalized = responseBody.toLowerCase();
+  return (
+    normalized.includes('requires property "text"') ||
+    normalized.includes("requires property 'text'") ||
+    (normalized.includes("text") && normalized.includes("required"))
+  );
+}
+
+/** Build Evolution sendText payload variants for diagnostics. */
 export function buildSendTextPayloadVariants(input: {
   phoneDigits: string;
   text: string;
   remoteJid?: string | null;
 }): SendTextPayloadVariant[] {
+  const messageText = input.text.trim();
   const digits = normalizePhoneDigits(input.phoneDigits);
   const jid =
     input.remoteJid?.includes("@")
@@ -28,30 +83,36 @@ export function buildSendTextPayloadVariants(input: {
 
   const variants: SendTextPayloadVariant[] = [];
 
-  // Production order: digits first, then JID, then nested textMessage variants.
   if (digits) {
     variants.push({
       format: "digits",
-      description: "Digits-only number field (Evolution v2 SendTextDto default)",
-      payload: { number: digits, text: input.text },
+      description: "Evolution SendTextDto: { number: E.164 digits, text }",
+      payload: buildCanonicalEvolutionSendTextPayload({
+        number: digits,
+        text: messageText,
+      }),
     });
   }
 
   if (jid) {
     variants.push({
       format: "jid",
-      description: "Full remoteJid in number field (Evolution reply pattern)",
-      payload: { number: jid, text: input.text },
+      description: "Evolution SendTextDto with full remoteJid in number field",
+      payload: buildCanonicalEvolutionSendTextPayload({
+        number: jid,
+        text: messageText,
+      }),
     });
   }
 
   if (digits) {
     variants.push({
       format: "textMessage",
-      description: "Nested textMessage wrapper with digits",
+      description: "Legacy nested textMessage (includes root text for compatibility)",
       payload: {
         number: digits,
-        textMessage: { text: input.text },
+        text: messageText,
+        textMessage: { text: messageText },
       },
     });
   }
@@ -59,10 +120,11 @@ export function buildSendTextPayloadVariants(input: {
   if (jid) {
     variants.push({
       format: "jid_textMessage",
-      description: "Full JID with nested textMessage wrapper",
+      description: "Legacy JID + nested textMessage (includes root text)",
       payload: {
         number: jid,
-        textMessage: { text: input.text },
+        text: messageText,
+        textMessage: { text: messageText },
       },
     });
   }
@@ -70,7 +132,7 @@ export function buildSendTextPayloadVariants(input: {
   return variants;
 }
 
-/** Ordered formats for production fallback when delivery stays PENDING. */
+/** Production formats — only SendTextDto-compatible payloads with top-level text. */
 export function getProductionSendTextFormatOrder(
   _remoteJid?: string | null
 ): SendTextFormat[] {
@@ -78,10 +140,10 @@ export function getProductionSendTextFormatOrder(
 
   if (envFormat === "digits") return ["digits"];
   if (envFormat === "jid") return ["jid"];
-  if (envFormat === "textmessage") return ["textMessage"];
-  if (envFormat === "jid_textmessage") return ["jid_textMessage"];
+  if (envFormat === "textmessage") return ["textMessage", "digits"];
+  if (envFormat === "jid_textmessage") return ["jid_textMessage", "jid", "digits"];
 
-  return ["digits", "jid", "textMessage", "jid_textMessage"];
+  return ["digits", "jid"];
 }
 
 export function resolvePreferredSendTextFormat(
@@ -100,7 +162,10 @@ export function resolvePreferredSendTextFormat(
     return envFormat;
   }
 
-  // auto: digits first; production fallback tries jid next when PENDING persists.
+  if (remoteJid?.includes("@")) {
+    return "jid";
+  }
+
   return "digits";
 }
 
@@ -114,12 +179,19 @@ export function selectSendTextPayloadVariant(input: {
   const preferred = input.format ?? resolvePreferredSendTextFormat(input.remoteJid);
   const match = variants.find((variant) => variant.format === preferred);
 
-  return match ?? variants[0] ?? {
-    format: "digits",
-    description: "Fallback digits payload",
-    payload: {
-      number: normalizePhoneDigits(input.phoneDigits),
-      text: input.text,
-    },
+  const selected =
+    match ??
+    variants[0] ?? {
+      format: "digits" as const,
+      description: "Fallback digits payload",
+      payload: buildCanonicalEvolutionSendTextPayload({
+        number: normalizePhoneDigits(input.phoneDigits),
+        text: input.text.trim(),
+      }),
+    };
+
+  return {
+    ...selected,
+    payload: normalizeEvolutionSendTextPayload(selected.payload, input.text),
   };
 }

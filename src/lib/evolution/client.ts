@@ -25,6 +25,8 @@ import {
 import {
   buildSendTextPayloadVariants,
   getProductionSendTextFormatOrder,
+  isEvolutionMissingTextError,
+  normalizeEvolutionSendTextPayload,
   selectSendTextPayloadVariant,
   type SendTextFormat,
 } from "@/lib/evolution/send-text-payload";
@@ -209,14 +211,31 @@ async function postEvolutionJson(
     destinationNumber: string;
     payloadFormat?: SendTextFormat;
     instanceState?: string | null;
+    fallbackText?: string;
   }
 ): Promise<EvolutionSendResult> {
+  const normalizedPayload =
+    context.kind === "text"
+      ? normalizeEvolutionSendTextPayload(
+          payload,
+          context.fallbackText ?? String(payload.text ?? "")
+        )
+      : payload;
+
+  console.log("[EVOLUTION SEND FINAL PAYLOAD]", {
+    endpoint,
+    payloadFormat: context.payloadFormat ?? null,
+    destinationNumber: context.destinationNumber,
+    payload: normalizedPayload,
+    payloadJson: JSON.stringify(normalizedPayload),
+  });
+
   console.log("[EVOLUTION SEND REQUEST]", {
     endpoint,
     payloadFormat: context.payloadFormat ?? null,
     instanceState: context.instanceState ?? null,
     destinationNumber: context.destinationNumber,
-    payload,
+    payload: normalizedPayload,
   });
 
   const response = await fetch(endpoint, {
@@ -225,7 +244,7 @@ async function postEvolutionJson(
       "Content-Type": "application/json",
       apikey: apiKey,
     },
-    body: JSON.stringify(payload),
+    body: JSON.stringify(normalizedPayload),
   });
 
   const responseBody = await readResponseBody(response);
@@ -245,7 +264,7 @@ async function postEvolutionJson(
     deliveryKey: parsed.deliveryKey ?? undefined,
     deliveryStatus: parsed.deliveryStatus ?? undefined,
     payloadFormat: context.payloadFormat,
-    payload,
+    payload: normalizedPayload,
     accepted: outcome.accepted,
     pendingOnly: outcome.pendingOnly,
     deliveryConfirmed: outcome.deliveryConfirmed,
@@ -259,7 +278,7 @@ async function postEvolutionJson(
       endpoint,
       status: response.status,
       responseBody,
-      payload,
+      payload: normalizedPayload,
       parsed,
       destinationNumber: context.destinationNumber,
       payloadFormat: context.payloadFormat,
@@ -290,7 +309,7 @@ async function postEvolutionJson(
       endpoint,
       status: response.status,
       responseBody,
-      payload,
+      payload: normalizedPayload,
       parsed,
       destinationNumber: context.destinationNumber,
       payloadFormat: context.payloadFormat,
@@ -303,7 +322,7 @@ async function postEvolutionJson(
     phase: outcome.pendingOnly ? "send_pending" : "send_response",
     targetPhone: context.destinationNumber,
     normalizedPhone: normalizePhoneDigits(context.destinationNumber),
-    payload,
+    payload: normalizedPayload,
     payloadFormat: context.payloadFormat,
     endpoint,
     httpStatus: response.status,
@@ -440,6 +459,7 @@ async function executeTextSendAttempt(input: {
     destinationNumber,
     payloadFormat: selected.format,
     instanceState: input.connectionState ?? null,
+    fallbackText: input.text,
   });
 }
 
@@ -622,6 +642,55 @@ export async function sendWhatsAppTextSafe(
       }
 
       if (!result.success) {
+        if (
+          isEvolutionMissingTextError(result.responseBody) &&
+          format !== "digits" &&
+          !options.disableFallback
+        ) {
+          console.warn("[WHATSAPP OUTBOUND FALLBACK]", {
+            reason: "Evolution rejected payload without top-level text",
+            retryFormat: "digits",
+            previousFormat: format,
+          });
+
+          result = await executeTextSendAttempt({
+            config,
+            phoneDigits,
+            text: trimmed,
+            remoteJid: options.remoteJid,
+            format: "digits",
+            connectionState: connection?.state ?? null,
+          });
+
+          result = await verifyAndEnhanceTextResult({
+            result,
+            phoneDigits,
+            remoteJid: options.remoteJid,
+            instanceName: config.instanceName,
+            disableDeliveryVerification: options.disableDeliveryVerification,
+          });
+
+          attempts.push({
+            format: "digits",
+            endpoint: result.endpoint,
+            status: result.status,
+            pendingOnly: result.pendingOnly,
+            sentToWhatsApp: result.sentToWhatsApp,
+            evolutionMessageId: result.evolutionMessageId,
+          });
+
+          lastResult = {
+            ...result,
+            attempts,
+            fallbackUsed: true,
+          };
+
+          if (result.sentToWhatsApp || result.success) {
+            recordTextOutcome(phoneDigits, result.destinationNumber ?? phoneDigits, lastResult);
+            return lastResult;
+          }
+        }
+
         continue;
       }
 
@@ -934,6 +1003,9 @@ export async function sendWhatsAppMedia(
 
 export {
   buildSendTextPayloadVariants,
+  buildCanonicalEvolutionSendTextPayload,
   getProductionSendTextFormatOrder,
+  isEvolutionMissingTextError,
+  normalizeEvolutionSendTextPayload,
   type SendTextFormat,
 } from "@/lib/evolution/send-text-payload";

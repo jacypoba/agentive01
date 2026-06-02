@@ -160,7 +160,7 @@ export async function GET(request: Request) {
       "Use ?phone= to target any number. WHATSAPP_HEALTH_TEST_NUMBER is the fallback.",
       "Use ?fallback=0 or ?format= to send only one payload shape.",
       "Use ?dryRun=1 to inspect payloads without sending.",
-      "Production webhook replies use fallback order: digits → jid → textMessage → jid_textMessage when PENDING persists.",
+      "Production webhook replies use SendTextDto payloads: { number, text } (digits → jid).",
     ],
   });
 }
