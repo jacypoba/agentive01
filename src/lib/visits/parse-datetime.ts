@@ -1,4 +1,4 @@
-import { getLanguageLocale, type SupportedLanguage } from "@/lib/i18n/types";
+import { getLanguageLocale, completeLanguageRecord, type SupportedLanguage } from "@/lib/i18n/types";
 
 const WEEKDAYS_PT: Record<string, number> = {
   domingo: 0,
@@ -49,12 +49,13 @@ function applyTime(date: Date, hours: number, minutes: number): Date {
   return result;
 }
 
-const TIME_CONNECTORS: Record<SupportedLanguage, string> = {
+const TIME_CONNECTORS = completeLanguageRecord({
   pt: "às",
   en: "at",
   it: "alle",
   es: "a las",
-};
+  fr: "à",
+});
 
 function formatDisplayText(date: Date, language: SupportedLanguage = "pt"): string {
   const locale = getLanguageLocale(language);

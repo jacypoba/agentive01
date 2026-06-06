@@ -1,5 +1,5 @@
 import { citiesMatch, normalizeCity, propertyTypesMatch } from "@/lib/properties/normalize-search";
-import type { SupportedLanguage } from "@/lib/i18n/types";
+import { completeLanguageRecord, type SupportedLanguage } from "@/lib/i18n/types";
 import type { Property, PropertySearchCriteria } from "@/types/database";
 
 export type CityAlternativeSummary = {
@@ -132,27 +132,30 @@ function joinCityList(language: SupportedLanguage, cities: string[]): string {
     return cities[0]!;
   }
   if (cities.length === 2) {
-    const pair: Record<SupportedLanguage, string> = {
+    const pair = completeLanguageRecord({
       pt: " e ",
       it: " e ",
       en: " and ",
       es: " y ",
-    };
+      fr: " et ",
+    });
     return `${cities[0]}${pair[language]}${cities[1]}`;
   }
 
-  const separator: Record<SupportedLanguage, string> = {
+  const separator = completeLanguageRecord({
     pt: ", ",
     it: ", ",
     en: ", ",
     es: ", ",
-  };
-  const lastJoin: Record<SupportedLanguage, string> = {
+    fr: ", ",
+  });
+  const lastJoin = completeLanguageRecord({
     pt: " e ",
     it: " e ",
     en: " and ",
     es: " y ",
-  };
+    fr: " et ",
+  });
   return `${cities.slice(0, -1).join(separator[language])}${lastJoin[language]}${cities.at(-1)}`;
 }
 
@@ -168,21 +171,23 @@ function formatOptionsPhrase(
 
   const area = primaryAreas[0] ?? summary.availableAreas[0];
   if (!area) {
-    const onlyCity: Record<SupportedLanguage, string> = {
+    const onlyCity = completeLanguageRecord({
       pt: `Tenho opções em ${cityPhrase}.`,
       it: `Ho opzioni a ${cityPhrase}.`,
       en: `I have options in ${cityPhrase}.`,
       es: `Tengo opciones en ${cityPhrase}.`,
-    };
+      fr: `J'ai des options à ${cityPhrase}.`,
+    });
     return onlyCity[language];
   }
 
-  const withArea: Record<SupportedLanguage, string> = {
+  const withArea = completeLanguageRecord({
     pt: `Tenho opções em ${primaryCity}, incluindo a zona ${area}.`,
     it: `Ho opzioni a ${primaryCity}, inclusa la zona ${area}.`,
     en: `I have options in ${primaryCity}, including the ${area} area.`,
     es: `Tengo opciones en ${primaryCity}, incluida la zona ${area}.`,
-  };
+    fr: `J'ai des options à ${primaryCity}, y compris le quartier ${area}.`,
+  });
   return withArea[language];
 }
 
@@ -190,21 +195,23 @@ export function buildCityAlternativeFallbackText(
   language: SupportedLanguage,
   summary: CityAlternativeSummary
 ): string {
-  const intro: Record<SupportedLanguage, string> = {
+  const intro = completeLanguageRecord({
     pt: `Neste momento não tenho imóveis disponíveis em ${summary.requestedCity}. `,
     it: `Al momento non ho immobili disponibili a ${summary.requestedCity}. `,
     en: `Right now I don't have listings available in ${summary.requestedCity}. `,
     es: `De momento no tengo inmuebles disponibles en ${summary.requestedCity}. `,
-  };
+    fr: `Pour le moment je n'ai pas de biens disponibles à ${summary.requestedCity}. `,
+  });
 
   const options = formatOptionsPhrase(language, summary);
 
-  const closing: Record<SupportedLanguage, string> = {
+  const closing = completeLanguageRecord({
     pt: " Quer que eu te mostre essas alternativas?",
     it: " Vuoi che ti mostri queste alternative?",
     en: " Would you like me to show those alternatives?",
     es: " ¿Quieres que te muestre esas alternativas?",
-  };
+    fr: " Voulez-vous que je vous montre ces alternatives ?",
+  });
 
   return `${intro[language]}${options}${closing[language]}`;
 }

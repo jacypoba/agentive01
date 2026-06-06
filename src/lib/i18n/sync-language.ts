@@ -1,20 +1,31 @@
-import { detectLanguageFromText } from "@/lib/i18n/detect-language";
-import { resolveConversationLanguage } from "@/lib/i18n/resolve-language";
+import { isStabilityPatchV1Enabled } from "@/lib/ai/stability-patch";
+import {
+  resolveConversationLanguageDebug,
+  type LanguageResolutionReason,
+} from "@/lib/i18n/resolve-language";
 import { DEFAULT_LANGUAGE, normalizeLanguage, type SupportedLanguage } from "@/lib/i18n/types";
 import type { Conversation, Database, Lead } from "@/types/database";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 type Client = SupabaseClient<Database>;
 
+const PERSIST_REASONS = new Set<LanguageResolutionReason>([
+  "explicit",
+  "confident_switch",
+  "strong_signals",
+  "first_message_language",
+]);
+
 /** Language for this reply — latest inbound message first, stored preference if ambiguous. */
 export function resolveReplyLanguage(
   latestMessage: string,
-  lead: Pick<Lead, "preferred_language">
+  lead: Pick<Lead, "preferred_language" | "id">
 ): SupportedLanguage {
-  return resolveConversationLanguage({
+  return resolveConversationLanguageDebug({
     latestMessage,
     leadPreferred: lead.preferred_language,
-  });
+    leadId: lead.id,
+  }).finalLanguage;
 }
 
 export function resolveLanguageForLead(
@@ -31,7 +42,18 @@ export async function syncLeadPreferredLanguage(
   latestMessage: string,
   history: Conversation[]
 ): Promise<Lead> {
-  const language = resolveLanguageForLead(lead, latestMessage, history);
+  void history;
+
+  const debug = resolveConversationLanguageDebug({
+    latestMessage,
+    leadPreferred: lead.preferred_language,
+    leadId: lead.id,
+  });
+  const language = debug.finalLanguage;
+
+  if (isStabilityPatchV1Enabled() && !PERSIST_REASONS.has(debug.reason)) {
+    return lead;
+  }
 
   if (language === normalizeLanguage(lead.preferred_language)) {
     return lead;
@@ -56,6 +78,7 @@ export async function syncLeadPreferredLanguage(
   console.log("[Language] Updated preferred_language", {
     leadId: lead.id,
     language,
+    reason: debug.reason,
   });
 
   return data;

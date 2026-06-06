@@ -1,5 +1,6 @@
 import { detectLanguageWithConfidence } from "@/lib/i18n/detect-language";
 import {
+  completeLanguageRecord,
   getLanguageLabel,
   type SupportedLanguage,
 } from "@/lib/i18n/types";
@@ -33,6 +34,9 @@ const ENGLISH_LEAK_WHEN_NOT_EN: Partial<Record<SupportedLanguage, RegExp[]>> = {
     /\b(got it|looking for|budget|show me|let me know|happy to help|i'll check)\b/i,
   ],
   es: [
+    /\b(got it|looking for|budget|show me|let me know|happy to help|i'll check)\b/i,
+  ],
+  fr: [
     /\b(got it|looking for|budget|show me|let me know|happy to help|i'll check)\b/i,
   ],
 };
@@ -118,19 +122,21 @@ export function buildStrictReplyLanguageDirective(
   ].join("\n");
 }
 
-export const REPLY_LANGUAGE_CORRECTION: Record<SupportedLanguage, string> = {
+export const REPLY_LANGUAGE_CORRECTION = completeLanguageRecord({
   pt: "Reescreve a resposta anterior só em português de Portugal. Proibido inglês, 'Got it', 'Okay' ou 'Boa' genéricos. Tom de consultor imobiliário premium no WhatsApp — concreto e natural.",
   en: "Rewrite your previous reply in English only. No generic 'Got it' or 'Okay' openers. Premium WhatsApp real-estate consultant tone — specific and human.",
   it: "Riscrivi la risposta precedente solo in italiano. Niente 'Got it' o 'Okay' generici. Tono consulente immobiliare premium su WhatsApp — concreto e naturale.",
   es: "Reescribe la respuesta anterior solo en español. Prohibido 'Got it' u 'Okay' genéricos. Tono consultor inmobiliario premium en WhatsApp — concreto y natural.",
-};
+  fr: "Réécris la réponse précédente uniquement en français. Pas d'ouverture générique 'Got it' ou 'Okay'. Ton de consultant immobilier premium sur WhatsApp — concret et naturel.",
+});
 
-export const CONSULTANT_LANGUAGE_FALLBACK: Record<SupportedLanguage, string> = {
+export const CONSULTANT_LANGUAGE_FALLBACK = completeLanguageRecord({
   pt: "Claro — já vejo opções dentro desse perfil. Prefere alguma zona em específico?",
   en: "Sure — I'll look at options in that range. Any preferred area?",
   it: "Certo — guardo cosa c'è in quella fascia. Zona preferita?",
   es: "Claro — miro opciones en ese rango. ¿Alguna zona preferida?",
-};
+  fr: "Bien sûr — je regarde les options dans ce profil. Une zone en particulier ?",
+});
 
 export function getConsultantLanguageFallback(
   language: SupportedLanguage

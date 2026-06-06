@@ -5,7 +5,7 @@ import {
   type SupportedLanguage,
 } from "@/lib/i18n/types";
 
-type LanguageScore = Record<SupportedLanguage, number>;
+export type LanguageScore = Record<SupportedLanguage, number>;
 
 const STRONG_LANGUAGE_PATTERNS: Record<SupportedLanguage, RegExp[]> = {
   pt: [
@@ -14,13 +14,19 @@ const STRONG_LANGUAGE_PATTERNS: Record<SupportedLanguage, RegExp[]> = {
   ],
   en: [
     /\b(thank|thanks|hello|hi\b|hey\b|looking for|please|viewing|schedule|bedroom|property|tomorrow|which|show me|show options|what you have|any options)\b/i,
+    /\b(i['']m looking|i am looking|would like|interested in|buying|renting|bedrooms|under|up to|maximum)\b/i,
   ],
   it: [
-    /\b(grazie|ciao|buongiorno|buonasera|cerco|cercare|voglio|domani|quale|mattina|pomeriggio|fino a|mostrami|fammi vedere|fami vedere|perfetto)\b/i,
+    /\b(grazie|ciao|buongiorno|buonasera|cerco|cercare|voglio|domani|quale|mattina|pomeriggio|mostrami|fammi vedere|fami vedere|perfetto)\b/i,
+    /\bfino\s+a\b/i,
   ],
   es: [
     /\b(gracias|hola|buenos días|buenas tardes|busco|buscar|quiero|mañana|manana|cuál|cual|presupuesto|hasta|habitacion|habitación|qué opciones|que opciones|muéstrame|muestrame|perfecto|agendada|quedó|quedo)\b/i,
     /[ñ¿¡]/i,
+  ],
+  fr: [
+    /\b(merci|bonjour|bonsoir|je cherche|appartement|maison|acheter|immobilier|propri[eé]t[eé]|demain|parfait)\b/i,
+    /[àâçéèêëîïôùûü]/i,
   ],
 };
 
@@ -31,23 +37,31 @@ const WEAK_LANGUAGE_PATTERNS: Record<SupportedLanguage, RegExp[]> = {
   en: [/\b(apartment|house|visit|want|budget|morning|afternoon|options|listings)\b/i],
   it: [/\b(appartamento|casa|visita|camera|milano|budget)\b/i],
   es: [/\b(apartamento|casa|visita|horario|tarde)\b/i],
+  fr: [/\b(appartement|maison|visite|budget|paris)\b/i],
 };
 
-function emptyScores(): LanguageScore {
-  return { pt: 0, en: 0, it: 0, es: 0 };
+export function emptyLanguageScores(): LanguageScore {
+  return { pt: 0, en: 0, it: 0, es: 0, fr: 0 };
 }
 
-function scoreText(text: string): LanguageScore {
-  const scores = emptyScores();
+type ScoredText = {
+  scores: LanguageScore;
+  strongSignalCount: LanguageScore;
+};
+
+function scoreText(text: string): ScoredText {
+  const scores = emptyLanguageScores();
+  const strongSignalCount = emptyLanguageScores();
   const normalized = text.trim();
   if (!normalized) {
-    return scores;
+    return { scores, strongSignalCount };
   }
 
   for (const language of Object.keys(STRONG_LANGUAGE_PATTERNS) as SupportedLanguage[]) {
     for (const pattern of STRONG_LANGUAGE_PATTERNS[language]) {
       if (pattern.test(normalized)) {
         scores[language] += 3;
+        strongSignalCount[language] += 1;
       }
     }
   }
@@ -60,14 +74,14 @@ function scoreText(text: string): LanguageScore {
     }
   }
 
-  return scores;
+  return { scores, strongSignalCount };
 }
 
 function pickHighestScore(scores: LanguageScore): SupportedLanguage {
   let best: SupportedLanguage = DEFAULT_LANGUAGE;
   let bestScore = -1;
 
-  for (const language of ["es", "it", "en", "pt"] as SupportedLanguage[]) {
+  for (const language of ["fr", "es", "it", "en", "pt"] as SupportedLanguage[]) {
     if (scores[language] > bestScore) {
       best = language;
       bestScore = scores[language];
@@ -81,6 +95,7 @@ export type LanguageDetectionResult = {
   language: SupportedLanguage;
   confident: boolean;
   scores: LanguageScore;
+  strongSignalCount: LanguageScore;
 };
 
 export function detectLanguageWithConfidence(
@@ -92,12 +107,13 @@ export function detectLanguageWithConfidence(
     return {
       language: fallback,
       confident: false,
-      scores: emptyScores(),
+      scores: emptyLanguageScores(),
+      strongSignalCount: emptyLanguageScores(),
     };
   }
 
-  const scores = scoreText(trimmed);
-  const ranked = (["pt", "en", "it", "es"] as SupportedLanguage[])
+  const { scores, strongSignalCount } = scoreText(trimmed);
+  const ranked = (["pt", "en", "it", "es", "fr"] as SupportedLanguage[])
     .map((language) => ({ language, score: scores[language] }))
     .sort((a, b) => b.score - a.score);
 
@@ -105,7 +121,7 @@ export function detectLanguageWithConfidence(
   const second = ranked[1]!;
 
   if (top.score === 0) {
-    return { language: fallback, confident: false, scores };
+    return { language: fallback, confident: false, scores, strongSignalCount };
   }
 
   const confident =
@@ -117,6 +133,7 @@ export function detectLanguageWithConfidence(
     language: top.language,
     confident,
     scores,
+    strongSignalCount,
   };
 }
 

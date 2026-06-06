@@ -1,5 +1,6 @@
+import { isAiQualityV2Enabled } from "@/lib/ai/quality-v2";
 import type { FollowUpContextSnapshot, FollowUpType } from "@/types/database";
-import type { SupportedLanguage } from "@/lib/i18n/types";
+import { completeLanguageRecord, type SupportedLanguage } from "@/lib/i18n/types";
 
 function hashPick(seed: string, count: number): number {
   let hash = 0;
@@ -9,14 +10,14 @@ function hashPick(seed: string, count: number): number {
   return count > 0 ? hash % count : 0;
 }
 
-export const CLOSING_MARKERS: Record<SupportedLanguage, string[]> = {
+export const CLOSING_MARKERS = completeLanguageRecord({
   pt: ["fico por aqui", "é só chamar", "se precisar de mais alguma coisa"],
   en: ["i'll be here", "just reach out", "if you need anything"],
   it: ["resto a disposizione", "scrivimi pure", "se ti serve altro"],
   es: ["quedo atento", "escríbeme", "si necesitas algo"],
-};
+});
 
-export const CLOSING_REPLIES: Record<SupportedLanguage, string[]> = {
+export const CLOSING_REPLIES = completeLanguageRecord({
   pt: [
     "Perfeito 👌 Fico por aqui então. Se precisar de mais alguma coisa, é só chamar.",
     "Combinado 👌 Qualquer coisa, estou por aqui.",
@@ -37,9 +38,9 @@ export const CLOSING_REPLIES: Record<SupportedLanguage, string[]> = {
     "De acuerdo 👌 Escríbeme cuando quieras.",
     "Genial — aquí estoy si te hace falta.",
   ],
-};
+});
 
-export const EXHAUSTED_MATCH_LINES: Record<SupportedLanguage, string[]> = {
+export const EXHAUSTED_MATCH_LINES = completeLanguageRecord({
   pt: [
     "Por agora estas são as melhores dentro do perfil. Se entrar algo novo, aviso.",
     "Neste perfil já partilhei o que tenho de melhor — aviso se surgir novidade.",
@@ -60,9 +61,9 @@ export const EXHAUSTED_MATCH_LINES: Record<SupportedLanguage, string[]> = {
     "Con este perfil ya compartí lo mejor que tengo ahora mismo.",
     "De momento esto es lo que encaja mejor — te escribo si aparece algo nuevo.",
   ],
-};
+});
 
-export const RESHOW_CATALOG_INTROS: Record<SupportedLanguage, string[]> = {
+export const RESHOW_CATALOG_INTROS = completeLanguageRecord({
   pt: [
     "Claro — volto a enviar 👇",
     "Estas foram as opções 👇",
@@ -83,17 +84,17 @@ export const RESHOW_CATALOG_INTROS: Record<SupportedLanguage, string[]> = {
     "Aquí están otra vez las opciones 👇",
     "Sin problema — te las mando de nuevo 👇",
   ],
-};
+});
 
-export const RESHOW_SINGLE_INTROS: Record<SupportedLanguage, string[]> = {
+export const RESHOW_SINGLE_INTROS = completeLanguageRecord({
   pt: ["Claro — esta era a opção 👇", "Volto a enviar 👇"],
   en: ["Sure — this was the option 👇", "Sending it again 👇"],
   it: ["Certo — era questa l'opzione 👇", "Te la rimando 👇"],
   es: ["Claro — era esta opción 👇", "Te la reenvío 👇"],
-};
+});
 
 /** First property recommendation — warm premium welcome before cards. */
-export const FIRST_RECOMMENDATION_CATALOG_INTROS: Record<SupportedLanguage, string[]> = {
+export const FIRST_RECOMMENDATION_CATALOG_INTROS = completeLanguageRecord({
   pt: [
     "Perfeito 👌 Separei algumas opções que encaixam bem no que procura:",
     "Já percebi o perfil 😊 Estas podem fazer sentido para si:",
@@ -118,9 +119,9 @@ export const FIRST_RECOMMENDATION_CATALOG_INTROS: Record<SupportedLanguage, stri
     "Genial — he encontrado unas opciones que cuadran con tu perfil:",
     "Muy bien 👌 Mira si alguna de estas te encaja:",
   ],
-};
+});
 
-export const FIRST_RECOMMENDATION_SINGLE_INTROS: Record<SupportedLanguage, string[]> = {
+export const FIRST_RECOMMENDATION_SINGLE_INTROS = completeLanguageRecord({
   pt: [
     "Perfeito 👌 Tenho uma opção que encaixa bem no que procura:",
     "Já percebi o perfil 😊 Esta pode fazer sentido para si:",
@@ -141,10 +142,10 @@ export const FIRST_RECOMMENDATION_SINGLE_INTROS: Record<SupportedLanguage, strin
     "Entendido 😊 Esta podría encajarte:",
     "Genial — esta cuadra bastante bien con tu perfil:",
   ],
-};
+});
 
 /** Follow-up batches — short, no repeated welcome. */
-export const MORE_OPTIONS_CATALOG_INTROS: Record<SupportedLanguage, string[]> = {
+export const MORE_OPTIONS_CATALOG_INTROS = completeLanguageRecord({
   pt: [
     "Tenho mais algumas 👇",
     "Estas também encaixam no perfil:",
@@ -165,26 +166,178 @@ export const MORE_OPTIONS_CATALOG_INTROS: Record<SupportedLanguage, string[]> = 
     "Estas también encajan:",
     "Más opciones que merecen la pena:",
   ],
-};
+});
 
-export const MORE_OPTIONS_SINGLE_INTROS: Record<SupportedLanguage, string[]> = {
+export const MORE_OPTIONS_SINGLE_INTROS = completeLanguageRecord({
   pt: ["Tenho mais uma opção 👇", "Esta também pode encaixar:"],
   en: ["I have one more option 👇", "This one could work too:"],
   it: ["Ne ho un'altra 👇", "Anche questa potrebbe andare:"],
   es: ["Tengo otra opción 👇", "Esta también podría encajar:"],
-};
+});
 
-export const LISTING_LABELS: Record<SupportedLanguage, string> = {
+/** Phase 1 (AI_QUALITY_V2): warmer intros without robotic openers. */
+const FIRST_RECOMMENDATION_CATALOG_INTROS_V2 = completeLanguageRecord({
+  pt: [
+    "Separei algumas opções que encaixam no que procura 👇",
+    "Estas podem fazer sentido para o seu perfil 👇",
+    "Encontrei algumas que batem certo com o que pediu 👇",
+    "Vale a pena ver estas 👇",
+  ],
+  en: [
+    "I picked a few options that fit what you're looking for 👇",
+    "These might work for your brief 👇",
+    "A few places that line up with what you asked 👇",
+    "Worth a look 👇",
+  ],
+  it: [
+    "Ho selezionato alcune opzioni in linea con quello che cerchi 👇",
+    "Queste potrebbero fare al caso tuo 👇",
+    "Alcune opzioni che potrebbero interessarti 👇",
+    "Dà un'occhiata a queste 👇",
+  ],
+  es: [
+    "He separado algunas opciones que encajan contigo 👇",
+    "Estas podrían encajar con lo que buscas 👇",
+    "Unas opciones que cuadran con tu perfil 👇",
+    "Mira si alguna te encaja 👇",
+  ],
+});
+
+const FIRST_RECOMMENDATION_SINGLE_INTROS_V2 = completeLanguageRecord({
+  pt: [
+    "Tenho uma opção que encaixa no que procura 👇",
+    "Esta pode fazer sentido para si 👇",
+    "Esta parece bater certo com o que pediu 👇",
+  ],
+  en: [
+    "I found one option that fits what you're looking for 👇",
+    "This might be a good fit 👇",
+    "This one lines up with your brief 👇",
+  ],
+  it: [
+    "Ho un'opzione che potrebbe interessarti 👇",
+    "Questa potrebbe fare al caso tuo 👇",
+    "Questa sembra in linea con quello che cerchi 👇",
+  ],
+  es: [
+    "Tengo una opción que encaja con lo que buscas 👇",
+    "Esta podría encajarte 👇",
+    "Esta cuadra bastante bien con tu perfil 👇",
+  ],
+});
+
+const MORE_OPTIONS_CATALOG_INTROS_V2 = completeLanguageRecord({
+  pt: [
+    "Mais algumas no mesmo perfil 👇",
+    "Estas também podem encaixar 👇",
+    "Vale a pena ver estas também 👇",
+  ],
+  en: [
+    "A few more in the same profile 👇",
+    "These also fit the brief 👇",
+    "More worth a look 👇",
+  ],
+  it: [
+    "Altre nello stesso profilo 👇",
+    "Anche queste potrebbero interessarti 👇",
+    "Altre da vedere 👇",
+  ],
+  es: [
+    "Algunas más en el mismo perfil 👇",
+    "Estas también encajan 👇",
+    "Más que merecen la pena 👇",
+  ],
+});
+
+const MORE_OPTIONS_SINGLE_INTROS_V2 = completeLanguageRecord({
+  pt: ["Mais uma no mesmo perfil 👇", "Esta também pode encaixar 👇"],
+  en: ["One more in the same profile 👇", "This one could work too 👇"],
+  it: ["Un'altra nello stesso profilo 👇", "Anche questa potrebbe andare 👇"],
+  es: ["Otra en el mismo perfil 👇", "Esta también podría encajar 👇"],
+});
+
+const RESHOW_CATALOG_INTROS_V2 = completeLanguageRecord({
+  pt: [
+    "Claro — volto a enviar 👇",
+    "Aqui estão outra vez 👇",
+    "Sem problema — mando outra vez 👇",
+  ],
+  en: [
+    "Sure — sending them again 👇",
+    "Here they are again 👇",
+    "No problem — resending now 👇",
+  ],
+  it: [
+    "Certo — te le rimando 👇",
+    "Ecco di nuovo 👇",
+    "Nessun problema — te le reinvio 👇",
+  ],
+  es: [
+    "Claro — te las reenvío 👇",
+    "Aquí están otra vez 👇",
+    "Sin problema — te las mando de nuevo 👇",
+  ],
+});
+
+const RESHOW_SINGLE_INTROS_V2 = completeLanguageRecord({
+  pt: ["Volto a enviar 👇", "Aqui está outra vez 👇"],
+  en: ["Sending it again 👇", "Here it is again 👇"],
+  it: ["Te la rimando 👇", "Ecco di nuovo 👇"],
+  es: ["Te la reenvío 👇", "Aquí está otra vez 👇"],
+});
+
+export function getFirstRecommendationCatalogIntros(
+  language: SupportedLanguage
+): string[] {
+  return isAiQualityV2Enabled()
+    ? FIRST_RECOMMENDATION_CATALOG_INTROS_V2[language]
+    : FIRST_RECOMMENDATION_CATALOG_INTROS[language];
+}
+
+export function getFirstRecommendationSingleIntros(
+  language: SupportedLanguage
+): string[] {
+  return isAiQualityV2Enabled()
+    ? FIRST_RECOMMENDATION_SINGLE_INTROS_V2[language]
+    : FIRST_RECOMMENDATION_SINGLE_INTROS[language];
+}
+
+export function getMoreOptionsCatalogIntros(
+  language: SupportedLanguage
+): string[] {
+  return isAiQualityV2Enabled()
+    ? MORE_OPTIONS_CATALOG_INTROS_V2[language]
+    : MORE_OPTIONS_CATALOG_INTROS[language];
+}
+
+export function getMoreOptionsSingleIntros(
+  language: SupportedLanguage
+): string[] {
+  return isAiQualityV2Enabled()
+    ? MORE_OPTIONS_SINGLE_INTROS_V2[language]
+    : MORE_OPTIONS_SINGLE_INTROS[language];
+}
+
+export function getReshowCatalogIntros(language: SupportedLanguage): string[] {
+  return isAiQualityV2Enabled()
+    ? RESHOW_CATALOG_INTROS_V2[language]
+    : RESHOW_CATALOG_INTROS[language];
+}
+
+export function getReshowSingleIntros(language: SupportedLanguage): string[] {
+  return isAiQualityV2Enabled()
+    ? RESHOW_SINGLE_INTROS_V2[language]
+    : RESHOW_SINGLE_INTROS[language];
+}
+
+export const LISTING_LABELS = completeLanguageRecord({
   pt: "🔗 Ver detalhes",
   en: "🔗 View details",
   it: "🔗 Vedi dettagli",
   es: "🔗 Ver detalles",
-};
+});
 
-export const PROPERTY_CARD_LABELS: Record<
-  SupportedLanguage,
-  { bedroom: string; bedrooms: string; bathroom: string; bathrooms: string }
-> = {
+export const PROPERTY_CARD_LABELS = completeLanguageRecord({
   pt: {
     bedroom: "quarto",
     bedrooms: "quartos",
@@ -209,12 +362,12 @@ export const PROPERTY_CARD_LABELS: Record<
     bathroom: "baño",
     bathrooms: "baños",
   },
-};
+});
 
-export const VISIT_CONFIRMED: Record<
-  SupportedLanguage,
-  { withWhen: (when: string) => string; generic: string }
-> = {
+export const VISIT_CONFIRMED = completeLanguageRecord<{
+  withWhen: (when: string) => string;
+  generic: string;
+}>({
   pt: {
     withWhen: (when) => `Perfeito 👌 Ficou marcado para ${when}.`,
     generic: "Perfeito 👌 Visita confirmada.",
@@ -231,12 +384,9 @@ export const VISIT_CONFIRMED: Record<
     withWhen: (when) => `Perfecto 👌 Quedó agendada para ${when}.`,
     generic: "Perfecto 👌 Visita confirmada.",
   },
-};
+});
 
-export const VISIT_CANCELLED: Record<
-  SupportedLanguage,
-  (slotClause: string) => string
-> = {
+export const VISIT_CANCELLED = completeLanguageRecord<(slotClause: string) => string>({
   pt: (slot) =>
     `Esse horário${slot} já não dá infelizmente 🙏 Tens outra data que te dê jeito?`,
   en: (slot) =>
@@ -245,35 +395,35 @@ export const VISIT_CANCELLED: Record<
     `Quell'orario${slot} purtroppo non va più 🙏 Hai un'altra data comoda?`,
   es: (slot) =>
     `Ese horario${slot} ya no funciona 🙏 ¿Tienes otra fecha que te venga bien?`,
-};
+});
 
-export const VISIT_CONFLICT_FALLBACK_SLOT: Record<SupportedLanguage, string> = {
+export const VISIT_CONFLICT_FALLBACK_SLOT = completeLanguageRecord({
   pt: "outro horário na mesma semana",
   en: "another time the same week",
   it: "un altro orario nella stessa settimana",
   es: "otro horario en la misma semana",
-};
+});
 
-export const VISIT_CONFLICT: Record<SupportedLanguage, (suggested: string) => string> = {
+export const VISIT_CONFLICT = completeLanguageRecord({
   pt: (suggested) => `Esse horário já não dá 🙏 Consegues ${suggested}?`,
   en: (suggested) => `That slot is taken 🙏 Could you do ${suggested}?`,
   it: (suggested) => `Quell'orario è occupato 🙏 Ti va ${suggested}?`,
   es: (suggested) => `Ese horario ya está ocupado 🙏 ¿Te va ${suggested}?`,
-};
+});
 
-const FOLLOW_UP_AREA: Record<SupportedLanguage, string> = {
+const FOLLOW_UP_AREA = completeLanguageRecord({
   pt: "essa zona",
   en: "that area",
   it: "quella zona",
   es: "esa zona",
-};
+});
 
-const FOLLOW_UP_PROPERTY: Record<SupportedLanguage, string> = {
+const FOLLOW_UP_PROPERTY = completeLanguageRecord({
   pt: "o imóvel",
   en: "the property",
   it: "l'immobile",
   es: "el inmueble",
-};
+});
 
 function areaLabel(language: SupportedLanguage, ctx: FollowUpContextSnapshot): string {
   return ctx.city?.trim() || FOLLOW_UP_AREA[language];
@@ -290,10 +440,10 @@ function propertyLabel(
   );
 }
 
-const FOLLOW_UP_VARIANTS: Record<
-  SupportedLanguage,
-  Record<FollowUpType, ((ctx: FollowUpContextSnapshot) => string)[]>
-> = {
+type FollowUpVariantFn = (ctx: FollowUpContextSnapshot) => string;
+type FollowUpVariantMap = Record<FollowUpType, FollowUpVariantFn[]>;
+
+const FOLLOW_UP_VARIANTS = completeLanguageRecord<FollowUpVariantMap>({
   pt: {
     property_recommended: [
       (ctx) =>
@@ -388,7 +538,7 @@ const FOLLOW_UP_VARIANTS: Record<
       (ctx) => `Hay una novedad en ${areaLabel("es", ctx)} que puede interesarte. ¿Quieres verla?`,
     ],
   },
-};
+});
 
 export function getClosingReplies(language: SupportedLanguage): string[] {
   return CLOSING_REPLIES[language];
@@ -409,8 +559,8 @@ export function buildReshowIntroText(
 ): string {
   const variants =
     propertyCount === 1
-      ? RESHOW_SINGLE_INTROS[language]
-      : RESHOW_CATALOG_INTROS[language];
+      ? getReshowSingleIntros(language)
+      : getReshowCatalogIntros(language);
   return variants[hashPick(seed, variants.length)];
 }
 
@@ -425,7 +575,7 @@ export function generateLocalizedFollowUpMessage(
   return variants[index](context);
 }
 
-export const BANNED_WITHOUT_FRESH_QUERY: Record<SupportedLanguage, RegExp[]> = {
+export const BANNED_WITHOUT_FRESH_QUERY = completeLanguageRecord({
   pt: [
     /por agora estas são as melhores/i,
     /se entrar algo novo, aviso/i,
@@ -446,16 +596,16 @@ export const BANNED_WITHOUT_FRESH_QUERY: Record<SupportedLanguage, RegExp[]> = {
     /entra algo nuevo/i,
     /no tengo más opciones/i,
   ],
-};
+});
 
-export const BANNED_ON_THANKS: Record<SupportedLanguage, RegExp[]> = {
+export const BANNED_ON_THANKS = completeLanguageRecord({
   pt: [/se entrar algo novo/i, /por agora estas são as melhores/i, /visita/i],
   en: [/something new comes in/i, /best matches/i, /visit/i],
   it: [/qualcosa di nuovo/i, /migliori opzioni/i, /visita/i],
   es: [/algo nuevo/i, /mejores opciones/i, /visita/i],
-};
+});
 
-export const BANNED_DEFERRAL: Record<SupportedLanguage, RegExp[]> = {
+export const BANNED_DEFERRAL = completeLanguageRecord({
   pt: [
     /vou verificar/i,
     /deixa-me ver/i,
@@ -486,9 +636,9 @@ export const BANNED_DEFERRAL: Record<SupportedLanguage, RegExp[]> = {
     /te confirmo/i,
     /te aviso/i,
   ],
-};
+});
 
-export const NO_MATCH_LINES: Record<SupportedLanguage, string[]> = {
+export const NO_MATCH_LINES = completeLanguageRecord({
   pt: [
     "Neste perfil não encontrei nada de momento — se alargarmos zona ou orçamento, vejo já.",
     "Por agora nada encaixa neste perfil. Quer ajustar algum critério?",
@@ -505,7 +655,7 @@ export const NO_MATCH_LINES: Record<SupportedLanguage, string[]> = {
     "Por ahora no hay nada que encaje con este perfil — si ampliamos zona o presupuesto, lo miro.",
     "De momento no encuentro matches exactos con estos criterios.",
   ],
-};
+});
 
 export function getNoMatchLine(
   language: SupportedLanguage,
@@ -519,33 +669,14 @@ export function getNoMatchLine(
   return lines[hash % lines.length];
 }
 
-export const AI_LANGUAGE_INSTRUCTION: Record<SupportedLanguage, string> = {
+export const AI_LANGUAGE_INSTRUCTION = completeLanguageRecord({
   pt: "Responda SEMPRE em português de Portugal — 100% da mensagem, sem exceções. Tom natural de consultor imobiliário premium. PROIBIDO misturar espanhol, italiano ou inglês. Nunca use palavras como perfecto, gracias, thanks, ciao ou grazie.",
   en: "ALWAYS reply in English — the entire message, no exceptions. Natural premium real estate consultant tone. NEVER mix Portuguese, Spanish, or Italian. Do not use words like perfeito, gracias, ciao, or obrigado.",
   it: "Rispondi SEMPRE in italiano — l'intero messaggio, senza eccezioni. Tono naturale da consulente immobiliare premium. VIETATO mescolare portoghese, spagnolo o inglese. Non usare parole come perfecto, gracias, thanks o obrigado.",
   es: "Responde SIEMPRE en español — todo el mensaje, sin excepciones. Tono natural de consultor inmobiliario premium. PROHIBIDO mezclar portugués, italiano o inglés. No uses palabras como perfeito, obrigado, thanks o ciao.",
-};
+});
 
-export const LEAD_CONTEXT_LABELS: Record<
-  SupportedLanguage,
-  {
-    name: string;
-    interest: string;
-    phone: string;
-    status: string;
-    budget: string;
-    area: string;
-    type: string;
-    timeline: string;
-    visitHistory: string;
-    visitWhen: string;
-    memoryNote: string;
-    noHistory: string;
-    client: string;
-    assistant: string;
-    agent: string;
-  }
-> = {
+export const LEAD_CONTEXT_LABELS = completeLanguageRecord({
   pt: {
     name: "Nome do cliente",
     interest: "Interesse inicial",
@@ -618,41 +749,41 @@ export const LEAD_CONTEXT_LABELS: Record<
     assistant: "Asistente",
     agent: "Agente",
   },
-};
+});
 
-export const CATALOG_COMPARISON_PROMPTS: Record<SupportedLanguage, string> = {
+export const CATALOG_COMPARISON_PROMPTS = completeLanguageRecord({
   pt: `Escreve 1–2 linhas curtas em português de Portugal. Referencia as opções como "A primeira", "A segunda". Sem perguntas.`,
   en: `Write 1–2 short lines in English. Reference listings as "The first one", "The second one". No questions.`,
   it: `Scrivi 1–2 righe brevi in italiano. Riferisci le opzioni come "La prima", "La seconda". Nessuna domanda.`,
   es: `Escribe 1–2 líneas cortas en español. Referencia las opciones como "La primera", "La segunda". Sin preguntas.`,
-};
+});
 
 export function getRecentClientContextLabel(language: SupportedLanguage): string {
-  const labels: Record<SupportedLanguage, string> = {
+  const labels = completeLanguageRecord({
     pt: "Sem mensagens recentes do cliente.",
     en: "No recent client messages.",
     it: "Nessun messaggio recente del cliente.",
     es: "Sin mensajes recientes del cliente.",
-  };
+});
   return labels[language];
 }
 
 export function getRecentClientContextHeader(language: SupportedLanguage): string {
-  const labels: Record<SupportedLanguage, string> = {
+  const labels = completeLanguageRecord({
     pt: "Últimas mensagens do cliente:",
     en: "Recent client messages:",
     it: "Ultimi messaggi del cliente:",
     es: "Últimos mensajes del cliente:",
-  };
+});
   return labels[language];
 }
 
-const COMPARISON_ORDINALS: Record<SupportedLanguage, string[]> = {
+const COMPARISON_ORDINALS = completeLanguageRecord({
   pt: ["A primeira", "A segunda", "A terceira", "A quarta"],
   en: ["The first one", "The second one", "The third one", "The fourth one"],
   it: ["La prima", "La seconda", "La terza", "La quarta"],
   es: ["La primera", "La segunda", "La tercera", "La cuarta"],
-};
+});
 
 export function getComparisonOrdinal(
   language: SupportedLanguage,
@@ -662,19 +793,7 @@ export function getComparisonOrdinal(
   return ordinals[index] ?? `${index + 1}`;
 }
 
-export const CATALOG_CONTEXT_LABELS: Record<
-  SupportedLanguage,
-  {
-    listingsHeader: string;
-    preferencesHeader: string;
-    noPreferences: string;
-    budget: string;
-    area: string;
-    type: string;
-    bedrooms: string;
-    bathrooms: string;
-  }
-> = {
+export const CATALOG_CONTEXT_LABELS = completeLanguageRecord({
   pt: {
     listingsHeader: "Listagens enviadas (por ordem):",
     preferencesHeader: "Preferências do cliente (CRM + conversa):",
@@ -715,7 +834,7 @@ export const CATALOG_CONTEXT_LABELS: Record<
     bedrooms: "habitaciones",
     bathrooms: "baños",
   },
-};
+});
 
 type HeuristicComparisonKey =
   | "balanced_space"
@@ -737,10 +856,13 @@ export function getHeuristicComparisonLine(
   key: HeuristicComparisonKey,
   ordinal: string
 ): string {
-  const lines: Record<
-    SupportedLanguage,
-    Record<HeuristicComparisonKey, (ordinal: string) => string>
-  > = {
+  const lines = HEURISTIC_COMPARISON_LINES[language];
+  return lines[key](ordinal);
+}
+
+const HEURISTIC_COMPARISON_LINES = completeLanguageRecord<
+  Record<HeuristicComparisonKey, (ordinal: string) => string>
+>({
     pt: {
       balanced_space: (o) => `${o} parece mais equilibrada pelo espaço interior.`,
       balanced_price: (o) => `${o} parece mais equilibrada pelo preço.`,
@@ -805,7 +927,4 @@ export function getHeuristicComparisonLine(
       fits_profile: (o) => `${o} encaja bien en el perfil.`,
       solid_alternative: (o) => `${o} es una alternativa sólida.`,
     },
-  };
-
-  return lines[language][key](ordinal);
-}
+});
