@@ -11,6 +11,12 @@ import {
   sanitizeGuardedReply,
 } from "@/lib/ai/guardrails";
 import { pickNoMatchIntroReply } from "@/lib/ai/no-match-reply";
+import {
+  buildCityAlternativeFallbackText,
+  logCityAlternativeFallback,
+  type CityAlternativeSummary,
+} from "@/lib/properties/city-alternatives";
+import { findCityAlternativesForCriteria } from "@/lib/properties/find-city-alternatives";
 import { generateAIReply } from "@/lib/ai/generate-reply";
 import { generateCatalogComparison } from "@/lib/ai/generate-catalog-comparison";
 import {
@@ -218,6 +224,7 @@ async function resolvePropertiesToRecommend(
           criteria,
           isReshow: true,
           freshQueryMade: false,
+          cityAlternatives: null,
         };
       }
     }
@@ -229,12 +236,26 @@ async function resolvePropertiesToRecommend(
     criteria != null
   );
 
+  let cityAlternatives: CityAlternativeSummary | null = null;
+  if (
+    criteria?.city &&
+    matchingProperties.length === 0 &&
+    criteria != null
+  ) {
+    cityAlternatives = await findCityAlternativesForCriteria(
+      supabase,
+      requireLeadWorkspaceId(memoryLead),
+      criteria
+    );
+  }
+
   return {
     propertiesToRecommend: availability.toSend,
     availability,
     criteria,
     isReshow: false,
     freshQueryMade: freshQuery && criteria != null,
+    cityAlternatives,
   };
 }
 
@@ -247,7 +268,8 @@ async function buildIntroReply(
   isReshow: boolean,
   freshQueryMade: boolean,
   language: SupportedLanguage,
-  workspaceSettings: WorkspaceAISettings | null
+  workspaceSettings: WorkspaceAISettings | null,
+  cityAlternatives: CityAlternativeSummary | null = null
 ): Promise<string> {
   if (isReshow && propertiesToRecommend.length > 0) {
     return buildReshowIntroText(
@@ -278,6 +300,11 @@ async function buildIntroReply(
     (classified.intent === "property_search" ||
       classified.intent === "ask_more_options")
   ) {
+    if (cityAlternatives && cityAlternatives.availableCities.length > 0) {
+      logCityAlternativeFallback(cityAlternatives, memoryLead.id, language);
+      return buildCityAlternativeFallbackText(language, cityAlternatives);
+    }
+
     return pickNoMatchIntroReply(language, history, memoryLead.id);
   }
 
@@ -399,6 +426,8 @@ export async function processClientMessageWithAI(
   let isReshow = false;
   let freshQueryMade = false;
 
+  let cityAlternatives: CityAlternativeSummary | null = null;
+
   if (shouldQueryProperties(classified)) {
     const searchDebug = derivePropertySearchCriteriaDebug(
       memoryLead,
@@ -417,6 +446,8 @@ export async function processClientMessageWithAI(
     criteria = resolved.criteria;
     isReshow = resolved.isReshow;
     freshQueryMade = resolved.freshQueryMade;
+
+    cityAlternatives = resolved.cityAlternatives;
 
     console.log("[WhatsApp debug] Multilingual search", {
       leadId: lead.id,
@@ -451,7 +482,8 @@ export async function processClientMessageWithAI(
     isReshow,
     freshQueryMade,
     language,
-    workspaceSettings
+    workspaceSettings,
+    cityAlternatives
   );
 
   if (aiReply) {
