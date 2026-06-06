@@ -176,6 +176,7 @@ export function resolveConversationLanguageStrategy(
 
   if (isAmbiguousLatestMessage(trimmed)) {
     const scored = trimmed ? scoreTextLanguage(trimmed) : scoreTextLanguage("");
+    const detected = rankLanguagesByScore(scored.scores)[0]?.language ?? fallback;
     return buildResult(
       input,
       stored ?? DEFAULT_LANGUAGE,
@@ -184,7 +185,7 @@ export function resolveConversationLanguageStrategy(
       scored.evidence,
       scored.scores,
       scored.strongScores,
-      scored.scores.pt > 0 ? scored.scores.pt : fallback
+      detected
     );
   }
 
