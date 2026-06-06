@@ -17,6 +17,10 @@ import {
   type CityAlternativeSummary,
 } from "@/lib/properties/city-alternatives";
 import { findCityAlternativesForCriteria } from "@/lib/properties/find-city-alternatives";
+import {
+  evaluatePropertyRecommendationGate,
+  logPropertyRecommendationGate,
+} from "@/lib/properties/recommendation-gate";
 import { generateAIReply } from "@/lib/ai/generate-reply";
 import { generateCatalogComparison } from "@/lib/ai/generate-catalog-comparison";
 import {
@@ -428,6 +432,9 @@ export async function processClientMessageWithAI(
   let freshQueryMade = false;
 
   let cityAlternatives: CityAlternativeSummary | null = null;
+  let recommendationGate: ReturnType<
+    typeof evaluatePropertyRecommendationGate
+  > | null = null;
 
   if (shouldQueryProperties(classified)) {
     const searchDebug = derivePropertySearchCriteriaDebug(
@@ -449,6 +456,25 @@ export async function processClientMessageWithAI(
     freshQueryMade = resolved.freshQueryMade;
 
     cityAlternatives = resolved.cityAlternatives;
+
+    recommendationGate = evaluatePropertyRecommendationGate({
+      leadId: lead.id,
+      lead: memoryLead,
+      history,
+      searchDebug,
+      classified,
+      language,
+      hasPropertiesToSend: propertiesToRecommend.length > 0,
+      isReshow,
+    });
+    logPropertyRecommendationGate(lead.id, recommendationGate);
+
+    if (
+      !recommendationGate.shouldSendRecommendations &&
+      propertiesToRecommend.length > 0
+    ) {
+      propertiesToRecommend = [];
+    }
 
     console.log("[WhatsApp debug] Multilingual search", {
       leadId: lead.id,
@@ -474,18 +500,29 @@ export async function processClientMessageWithAI(
     language,
   };
 
-  const aiReply = await buildIntroReply(
-    languageLead,
-    history,
-    propertiesToRecommend,
-    availability,
-    classified,
-    isReshow,
-    freshQueryMade,
-    language,
-    workspaceSettings,
-    cityAlternatives
-  );
+  const gatedQualifyingReply =
+    shouldQueryProperties(classified) &&
+    propertiesToRecommend.length === 0 &&
+    recommendationGate != null &&
+    !recommendationGate.shouldSendRecommendations &&
+    recommendationGate.qualifyingReply
+      ? recommendationGate.qualifyingReply
+      : null;
+
+  const aiReply =
+    gatedQualifyingReply ??
+    (await buildIntroReply(
+      languageLead,
+      history,
+      propertiesToRecommend,
+      availability,
+      classified,
+      isReshow,
+      freshQueryMade,
+      language,
+      workspaceSettings,
+      cityAlternatives
+    ));
 
   if (aiReply) {
     await appendUniqueTextReply(
