@@ -8,11 +8,11 @@ import {
   logLanguageResolverEvidence,
   resolveConversationLanguageStrategy,
   type LanguageResolutionConfidence,
-  type LanguageResolutionEvidence,
   type LanguageResolutionReason as StrategyReason,
   type LanguageResolutionResult,
   type ResolveConversationLanguageInput,
 } from "@/lib/i18n/language-resolver";
+import type { LanguageResolutionEvidence } from "@/lib/i18n/language-scorer";
 import {
   DEFAULT_LANGUAGE,
   normalizeLanguage,
