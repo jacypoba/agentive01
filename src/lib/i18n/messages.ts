@@ -404,7 +404,7 @@ export const VISIT_CONFLICT_FALLBACK_SLOT = completeLanguageRecord({
   es: "otro horario en la misma semana",
 });
 
-export const VISIT_CONFLICT = completeLanguageRecord({
+export const VISIT_CONFLICT = completeLanguageRecord<(suggested: string) => string>({
   pt: (suggested) => `Esse horário já não dá 🙏 Consegues ${suggested}?`,
   en: (suggested) => `That slot is taken 🙏 Could you do ${suggested}?`,
   it: (suggested) => `Quell'orario è occupato 🙏 Ti va ${suggested}?`,
