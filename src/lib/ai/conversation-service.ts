@@ -48,6 +48,7 @@ import {
   buildReshowIntroText,
   formatPropertyCard,
   formatPropertyListingRecord,
+  formatPropertyWhatsAppPackageText,
   getLastShownPropertyBatchIds,
   isCatalogBatch,
 } from "@/lib/properties/property-cards";
@@ -501,7 +502,7 @@ export async function processClientMessageWithAI(
 
   if (isCatalogBatch(propertiesToRecommend)) {
     const detailsTexts = propertiesToRecommend.map((property) =>
-      formatPropertyCard(property, language)
+      formatPropertyWhatsAppPackageText(property, language)
     );
 
     if (!isReshow) {
@@ -542,8 +543,6 @@ export async function processClientMessageWithAI(
     }
   } else if (propertiesToRecommend.length === 1) {
     const property = propertiesToRecommend[0];
-    const detailsText = formatPropertyCard(property, language);
-
     if (!isReshow) {
       const propertyMessages = await persistPropertyRecommendation(
         supabase,
@@ -555,7 +554,10 @@ export async function processClientMessageWithAI(
     }
 
     outboundMessages.push(
-      ...buildPropertyOutboundMessages(property, detailsText)
+      ...buildPropertyOutboundMessages(
+        property,
+        formatPropertyWhatsAppPackageText(property, language)
+      )
     );
   }
 

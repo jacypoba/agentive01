@@ -5,9 +5,11 @@ import {
 import {
   formatCatalogSpacer,
   formatPropertyImageCaption,
+  formatPropertyListingLine,
   hasPropertyImage,
   hasPropertyListing,
 } from "@/lib/properties/property-cards";
+import type { SupportedLanguage } from "@/lib/i18n/types";
 import type { Property } from "@/types/database";
 
 export type OutboundWhatsAppMessage =
@@ -29,6 +31,7 @@ export type OutboundWhatsAppMessage =
       kind: "property_listing";
       property: Property;
       url: string;
+      label?: string;
     }
   | {
       kind: "catalog_spacer";
@@ -47,11 +50,22 @@ export type OutboundSendReport = {
   failures: OutboundSendFailure[];
 };
 
+export type OutboundWhatsAppSendDeps = {
+  sendMedia: typeof sendWhatsAppMediaSafe;
+  sendText: typeof sendWhatsAppTextSafe;
+};
+
+const defaultOutboundSendDeps: OutboundWhatsAppSendDeps = {
+  sendMedia: sendWhatsAppMediaSafe,
+  sendText: sendWhatsAppTextSafe,
+};
+
 export async function sendOutboundWhatsAppMessages(
   phoneDigits: string,
   messages: OutboundWhatsAppMessage[],
   instance?: string,
-  remoteJid?: string
+  remoteJid?: string,
+  deps: OutboundWhatsAppSendDeps = defaultOutboundSendDeps
 ): Promise<OutboundSendReport> {
   const report: OutboundSendReport = {
     attempted: 0,
@@ -64,20 +78,30 @@ export async function sendOutboundWhatsAppMessages(
 
   for (const message of messages) {
     if (message.kind === "catalog_spacer") {
-      await deliverText(phoneDigits, formatCatalogSpacer(), instance, report, "catalog_spacer", undefined, remoteJid);
+      await deliverText(
+        phoneDigits,
+        formatCatalogSpacer(),
+        instance,
+        report,
+        "catalog_spacer",
+        undefined,
+        remoteJid,
+        deps
+      );
       continue;
     }
 
     if (message.kind === "property_image") {
-      const delivered = await deliverPropertyPackage(
+      const textDeliveredViaFallback = await deliverPropertyImage(
         phoneDigits,
         message.property,
         message.fallbackText,
         instance,
         report,
-        remoteJid
+        remoteJid,
+        deps
       );
-      if (delivered) {
+      if (textDeliveredViaFallback) {
         deliveredPropertyText.add(message.property.id);
       }
       continue;
@@ -94,7 +118,8 @@ export async function sendOutboundWhatsAppMessages(
         report,
         "property_details",
         message.property.id,
-        remoteJid
+        remoteJid,
+        deps
       );
       if (delivered) {
         deliveredPropertyText.add(message.property.id);
@@ -106,11 +131,23 @@ export async function sendOutboundWhatsAppMessages(
       if (deliveredPropertyText.has(message.property.id)) {
         continue;
       }
-      await deliverLink(phoneDigits, message.url, instance, report, message.property.id, remoteJid);
+      const linkText =
+        message.label?.trim() ||
+        formatPropertyListingLine("en", message.url);
+      await deliverText(
+        phoneDigits,
+        linkText,
+        instance,
+        report,
+        "property_listing",
+        message.property.id,
+        remoteJid,
+        deps
+      );
       continue;
     }
 
-    await deliverText(phoneDigits, message.text, instance, report, "text", undefined, remoteJid);
+    await deliverText(phoneDigits, message.text, instance, report, "text", undefined, remoteJid, deps);
   }
 
   if (report.failed > 0) {
@@ -120,23 +157,23 @@ export async function sendOutboundWhatsAppMessages(
   return report;
 }
 
-async function deliverPropertyPackage(
+/** Sends property image only; returns true if fallback text was delivered (image failed). */
+async function deliverPropertyImage(
   phoneDigits: string,
   property: Property,
   fallbackText: string,
   instance: string | undefined,
   report: OutboundSendReport,
-  remoteJid?: string
+  remoteJid: string | undefined,
+  deps: OutboundWhatsAppSendDeps
 ): Promise<boolean> {
   const imageUrl = property.image_url?.trim() ?? "";
-  const listingUrl = property.listing_url?.trim() ?? "";
-  const textCard = buildPropertyTextFallback(fallbackText, listingUrl);
-  const plainSummary = buildPlainPropertySummary(property);
+  const textCard = fallbackText.trim() || buildPlainPropertySummary(property);
 
   if (imageUrl && isValidOutboundUrl(imageUrl)) {
     report.attempted += 1;
     const caption = formatPropertyImageCaption(property);
-    const mediaResult = await sendWhatsAppMediaSafe(
+    const mediaResult = await deps.sendMedia(
       phoneDigits,
       {
         mediatype: "image",
@@ -150,12 +187,7 @@ async function deliverPropertyPackage(
 
     if (mediaResult.sentToWhatsApp) {
       report.sent += 1;
-
-      if (listingUrl && isValidOutboundUrl(listingUrl)) {
-        await deliverLink(phoneDigits, listingUrl, instance, report, property.id, remoteJid);
-      }
-
-      return true;
+      return false;
     }
 
     report.failed += 1;
@@ -176,11 +208,12 @@ async function deliverPropertyPackage(
     });
   }
 
-  if (await deliverText(phoneDigits, textCard, instance, report, "property_details", property.id, remoteJid)) {
+  if (await deliverText(phoneDigits, textCard, instance, report, "property_details", property.id, remoteJid, deps)) {
     return true;
   }
 
-  return deliverText(phoneDigits, plainSummary, instance, report, "property_package", property.id, remoteJid);
+  await deliverText(phoneDigits, buildPlainPropertySummary(property), instance, report, "property_package", property.id, remoteJid, deps);
+  return true;
 }
 
 async function deliverText(
@@ -189,8 +222,9 @@ async function deliverText(
   instance: string | undefined,
   report: OutboundSendReport,
   kind: OutboundSendFailure["kind"],
-  propertyId?: string,
-  remoteJid?: string
+  propertyId: string | undefined,
+  remoteJid: string | undefined,
+  deps: OutboundWhatsAppSendDeps
 ): Promise<boolean> {
   const trimmed = text.trim();
   if (!trimmed) {
@@ -198,7 +232,7 @@ async function deliverText(
   }
 
   report.attempted += 1;
-  const result = await sendWhatsAppTextSafe(phoneDigits, trimmed, { instance, remoteJid });
+  const result = await deps.sendText(phoneDigits, trimmed, { instance, remoteJid });
 
   if (result.sentToWhatsApp) {
     report.sent += 1;
@@ -219,94 +253,32 @@ async function deliverText(
   return false;
 }
 
-async function deliverLink(
-  phoneDigits: string,
-  url: string,
-  instance: string | undefined,
-  report: OutboundSendReport,
-  propertyId?: string,
-  remoteJid?: string
-): Promise<boolean> {
-  const trimmed = url.trim();
-  if (!trimmed || !isValidOutboundUrl(trimmed)) {
-    report.failed += 1;
-    report.failures.push({
-      kind: "property_listing",
-      propertyId,
-      error: "Invalid listing URL.",
-    });
-    return false;
-  }
-
-  console.log("[WHATSAPP OUTBOUND LINK]", {
-    propertyId,
-    url: trimmed,
-  });
-
-  report.attempted += 1;
-  const result = await sendWhatsAppTextSafe(phoneDigits, trimmed, { instance, remoteJid });
-
-  if (result.sentToWhatsApp) {
-    report.sent += 1;
-    console.log("[WHATSAPP OUTBOUND SUCCESS]", { kind: "link", propertyId });
-    return true;
-  }
-
-  report.failed += 1;
-  report.failures.push({
-    kind: "property_listing",
-    propertyId,
-    error:
-      result.error ??
-      result.warning ??
-      (result.pendingOnly
-        ? "Evolution accepted the link but WhatsApp delivery is PENDING."
-        : "Link send failed."),
-  });
-  console.error("[WHATSAPP OUTBOUND FAILURE]", {
-    kind: "link",
-    propertyId,
-    reason: result.error ?? result.warning,
-  });
-  return false;
-}
-
 export function buildPropertyOutboundMessages(
   property: Property,
   detailsText: string
 ): OutboundWhatsAppMessage[] {
+  const packageText = detailsText.trim();
   const messages: OutboundWhatsAppMessage[] = [];
 
   if (hasPropertyImage(property) && isValidOutboundUrl(property.image_url?.trim() ?? "")) {
     messages.push({
       kind: "property_image",
       property,
-      fallbackText: detailsText,
+      fallbackText: packageText,
     });
-  } else {
     messages.push({
       kind: "property_details",
-      text: buildPropertyTextFallback(
-        detailsText,
-        property.listing_url?.trim() ?? ""
-      ),
+      text: packageText,
       property,
     });
+    return messages;
   }
 
-  const listingUrl = property.listing_url?.trim();
-  if (
-    hasPropertyListing(property) &&
-    listingUrl &&
-    isValidOutboundUrl(listingUrl) &&
-    hasPropertyImage(property)
-  ) {
-    messages.push({
-      kind: "property_listing",
-      property,
-      url: listingUrl,
-    });
-  }
+  messages.push({
+    kind: "property_details",
+    text: packageText,
+    property,
+  });
 
   return messages;
 }
@@ -330,15 +302,24 @@ export function buildCatalogOutboundMessages(
   return messages;
 }
 
-function buildPropertyTextFallback(detailsText: string, listingUrl: string): string {
-  const parts = [detailsText.trim()];
+export function buildPropertyDetailsWithListing(
+  detailsText: string,
+  listingUrl: string,
+  language: SupportedLanguage = "pt"
+): string {
+  const trimmedDetails = detailsText.trim();
   const url = listingUrl.trim();
 
-  if (url && isValidOutboundUrl(url) && !detailsText.includes(url)) {
-    parts.push("", url);
+  if (!url || !isValidOutboundUrl(url) || trimmedDetails.includes(url)) {
+    return trimmedDetails;
   }
 
-  return parts.filter(Boolean).join("\n");
+  const listingLine = formatPropertyListingLine(language, url);
+  if (trimmedDetails.includes(listingLine)) {
+    return trimmedDetails;
+  }
+
+  return `${trimmedDetails}\n${listingLine}`;
 }
 
 function buildPlainPropertySummary(property: Property): string {
@@ -350,7 +331,7 @@ function buildPlainPropertySummary(property: Property): string {
   const lines = [`${property.title}`, location ? `📍 ${location}` : null];
 
   if (listing && isValidOutboundUrl(listing)) {
-    lines.push(listing);
+    lines.push(formatPropertyListingLine("en", listing));
   }
 
   return lines.filter(Boolean).join("\n");

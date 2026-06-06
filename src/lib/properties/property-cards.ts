@@ -73,6 +73,45 @@ export function formatPropertyListingLabel(language: SupportedLanguage = "pt"): 
   return getListingMarker(normalizeLanguage(language));
 }
 
+/** Contextual listing line for WhatsApp — avoids naked URLs. */
+export function formatPropertyListingLine(
+  language: SupportedLanguage,
+  listingUrl: string
+): string {
+  const url = listingUrl.trim();
+  if (!url) {
+    return "";
+  }
+  return `${getListingMarker(normalizeLanguage(language))}: ${url}`;
+}
+
+/** Property card text for WhatsApp outbound, including listing URL when present. */
+export function formatPropertyWhatsAppPackageText(
+  property: Property,
+  language: SupportedLanguage = "pt"
+): string {
+  const lang = normalizeLanguage(language);
+  const card = formatPropertyCard(property, lang);
+  const listingUrl = property.listing_url?.trim();
+
+  if (!listingUrl || !hasPropertyListing(property)) {
+    return card;
+  }
+
+  if (card.includes(listingUrl)) {
+    return card;
+  }
+
+  const marker = getListingMarker(lang);
+  const listingLine = formatPropertyListingLine(lang, listingUrl);
+
+  if (card.endsWith(marker)) {
+    return `${card.slice(0, card.length - marker.length).trimEnd()}\n${listingLine}`;
+  }
+
+  return `${card}\n${listingLine}`;
+}
+
 function buildPropertyDetailLines(
   property: Property,
   language: SupportedLanguage
