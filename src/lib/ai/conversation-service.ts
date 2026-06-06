@@ -10,6 +10,7 @@ import {
   logIntentDecision,
   sanitizeGuardedReply,
 } from "@/lib/ai/guardrails";
+import { pickNoMatchIntroReply } from "@/lib/ai/no-match-reply";
 import { generateAIReply } from "@/lib/ai/generate-reply";
 import { generateCatalogComparison } from "@/lib/ai/generate-catalog-comparison";
 import {
@@ -26,7 +27,7 @@ import {
 import { getPropertiesByIds } from "@/lib/data/properties";
 import { getOrCreateWorkspaceSettings } from "@/lib/data/workspace-settings";
 import { cancelFollowUpsOnClientReply } from "@/lib/follow-ups/scheduler";
-import { getExhaustedMatchLines, getNoMatchLine } from "@/lib/i18n/messages";
+import { getExhaustedMatchLines } from "@/lib/i18n/messages";
 import { resolveReplyLanguage, syncLeadPreferredLanguage } from "@/lib/i18n/sync-language";
 import { derivePropertySearchCriteriaDebug } from "@/lib/properties/search-criteria";
 import type { SupportedLanguage } from "@/lib/i18n/types";
@@ -277,7 +278,7 @@ async function buildIntroReply(
     (classified.intent === "property_search" ||
       classified.intent === "ask_more_options")
   ) {
-    return getNoMatchLine(language, `${memoryLead.id}:no-match`);
+    return pickNoMatchIntroReply(language, history, memoryLead.id);
   }
 
   if (propertiesToRecommend.length > 0) {
