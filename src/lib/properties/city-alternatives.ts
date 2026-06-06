@@ -1,7 +1,7 @@
 import { citiesMatch, normalizeCity, propertyTypesMatch } from "@/lib/properties/normalize-search";
 import {
-  pickConversationalOpener,
   polishConversationalReply,
+  withConversationalOpener,
 } from "@/lib/ai/conversation-quality-v1";
 import { completeLanguageRecord, type SupportedLanguage } from "@/lib/i18n/types";
 import type { Property, PropertySearchCriteria } from "@/types/database";
@@ -200,7 +200,6 @@ export function buildCityAlternativeFallbackText(
   summary: CityAlternativeSummary
 ): string {
   const seed = `${summary.requestedCity}:city-fallback`;
-  const opener = pickConversationalOpener(language, seed);
 
   const unavailable = completeLanguageRecord({
     pt: `neste momento não tenho nada em ${summary.requestedCity}`,
@@ -220,8 +219,13 @@ export function buildCityAlternativeFallbackText(
     fr: " Je vous les montre ?",
   });
 
-  const raw = `${opener} — ${unavailable[language]}. ${options}${closing[language]}`;
-  return polishConversationalReply(raw, language);
+  const opened = withConversationalOpener(
+    unavailable[language],
+    language,
+    seed
+  );
+  const raw = `${opened}. ${options}${closing[language]}`;
+  return polishConversationalReply(raw, language, seed);
 }
 
 export function logCityAlternativeFallback(

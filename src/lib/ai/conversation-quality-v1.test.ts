@@ -5,11 +5,12 @@ import {
   isClearlyQuestion,
   normalizeConversationalPunctuation,
   pickConversationalOpener,
+  pickOpenerStyle,
   polishConversationalReply,
   reduceQuestionChaining,
+  withConversationalOpener,
 } from "@/lib/ai/conversation-quality-v1";
 import { finalizeWhatsAppText } from "@/lib/ai/complete-response";
-import { NO_MATCH_LINES } from "@/lib/i18n/messages";
 import { pickNoMatchIntroReply } from "@/lib/ai/no-match-reply";
 import { buildCityAlternativeFallbackText } from "@/lib/properties/city-alternatives";
 import type { CityAlternativeSummary } from "@/lib/properties/city-alternatives";
@@ -64,8 +65,8 @@ describe("normalizeConversationalPunctuation", () => {
 
   it("adds . to short statements without terminal punctuation", () => {
     assert.equal(
-      normalizeConversationalPunctuation("Claro — volto a enviar", "pt"),
-      "Claro — volto a enviar."
+      normalizeConversationalPunctuation("Claro, volto a enviar", "pt"),
+      "Claro, volto a enviar."
     );
   });
 });
@@ -88,21 +89,117 @@ describe("finalizeWhatsAppText question preservation", () => {
   });
 });
 
+describe("withConversationalOpener V1.1", () => {
+  it("never uses em dash between opener and body", () => {
+    for (let i = 0; i < 30; i += 1) {
+      const text = withConversationalOpener(
+        "al momento non ho nulla a Firenze",
+        "it",
+        `seed-${i}`
+      );
+      assert.equal(text.includes("—"), false);
+      assert.equal(text.includes("–"), false);
+    }
+  });
+
+  it("supports comma, period, and no-opener styles", () => {
+    const styles = new Set<string>();
+    for (let i = 0; i < 100; i += 1) {
+      styles.add(pickOpenerStyle(`variation-${i}`));
+    }
+    assert.equal(styles.has("none"), true);
+    assert.equal(styles.has("comma"), true);
+    assert.equal(styles.has("period"), true);
+  });
+
+  it("formats comma style naturally", () => {
+    const commaSeed = Array.from({ length: 100 }, (_, index) => `comma-${index}`).find(
+      (seed) => pickOpenerStyle(seed) === "comma"
+    );
+    assert.ok(commaSeed);
+
+    const text = withConversationalOpener(
+      "al momento non ho nulla a Firenze",
+      "it",
+      commaSeed!
+    );
+    assert.match(text, /^[^,]+, al momento/i);
+  });
+
+  it("formats period style naturally", () => {
+    const periodSeed = Array.from({ length: 100 }, (_, index) => `period-${index}`).find(
+      (seed) => pickOpenerStyle(seed) === "period"
+    );
+    assert.ok(periodSeed);
+
+    const text = withConversationalOpener(
+      "al momento non ho nulla a Firenze",
+      "it",
+      periodSeed!
+    );
+    assert.match(text, /^[^.]+\. Al momento/i);
+  });
+
+  it("allows no opener with capitalized body", () => {
+    const noneSeed = Array.from({ length: 100 }, (_, index) => `none-${index}`).find(
+      (seed) => pickOpenerStyle(seed) === "none"
+    );
+    assert.ok(noneSeed);
+
+    const text = withConversationalOpener(
+      "al momento non ho nulla a Firenze",
+      "it",
+      noneSeed!
+    );
+    assert.equal(text, "Al momento non ho nulla a Firenze");
+  });
+
+  it("rewrites legacy em dash openers via polish", () => {
+    const polished = polishConversationalReply(
+      "Capisco — al momento non ho nulla a Firenze",
+      "it",
+      "legacy-test"
+    );
+    assert.equal(polished.includes("—"), false);
+  });
+});
+
 describe("city fallback punctuation", () => {
   for (const language of ["pt", "it", "en", "es", "fr"] as SupportedLanguage[]) {
     it(`ends ${language} city fallback with ?`, () => {
       const text = buildCityAlternativeFallbackText(language, firenzeSummary);
       assert.match(text, /\?$/);
       assert.match(text, /Milano/i);
+      assert.equal(text.includes("—"), false);
     });
   }
 
-  it("Italian fallback mentions Firenze and Navigli with conversational opener", () => {
+  it("Italian fallback mentions Firenze and Navigli without em dash", () => {
     const text = buildCityAlternativeFallbackText("it", firenzeSummary);
-    assert.match(text, /^(Capisco|Certo|Perfetto)/);
+    assert.equal(text.includes("—"), false);
     assert.match(text, /Firenze/i);
     assert.match(text, /Navigli/i);
     assert.equal(text.endsWith("?"), true);
+  });
+
+  it("varies opener style across cities", () => {
+    const samples = Array.from({ length: 40 }, (_, index) =>
+      buildCityAlternativeFallbackText("it", {
+        ...firenzeSummary,
+        requestedCity: `City-${index}`,
+      })
+    );
+    const withComma = samples.filter((text) => /^[^.]+\, /i.test(text));
+    const withPeriod = samples.filter((text) => /^[^,]+\. /i.test(text));
+    const withoutOpener = samples.filter(
+      (text) =>
+        !CONVERSATIONAL_OPENERS.it.some((opener) =>
+          text.startsWith(`${opener},`) || text.startsWith(`${opener}.`)
+        )
+    );
+    assert.ok(withComma.length > 0);
+    assert.ok(withPeriod.length > 0);
+    assert.ok(withoutOpener.length > 0);
   });
 });
 
@@ -110,17 +207,13 @@ describe("multilingual conversational templates", () => {
   const languages: SupportedLanguage[] = ["pt", "en", "it", "es", "fr"];
 
   for (const language of languages) {
-    it(`NO_MATCH_LINES ${language} use approved openers on first variant`, () => {
-      const first = NO_MATCH_LINES[language][0]!;
-      const openers = CONVERSATIONAL_OPENERS[language];
-      const startsWithOpener = openers.some((opener) =>
-        first.startsWith(opener)
-      );
-      assert.equal(startsWithOpener, true);
+    it(`pickNoMatchIntroReply ${language} avoids em dash`, () => {
+      const reply = pickNoMatchIntroReply(language, [], `lead-${language}`);
+      assert.equal(reply.includes("—"), false);
     });
 
     it(`pickNoMatchIntroReply ${language} ends questions with ?`, () => {
-      const reply = pickNoMatchIntroReply(language, [], `lead-${language}`);
+      const reply = pickNoMatchIntroReply(language, [], `lead-q-${language}`);
       if (isClearlyQuestion(reply, language)) {
         assert.match(reply, /\?$/);
       }
@@ -134,9 +227,13 @@ describe("multilingual conversational templates", () => {
     assert.ok(CONVERSATIONAL_OPENERS.pt.includes(b));
   });
 
-  it("polishConversationalReply fixes no-match variant punctuation", () => {
-    const raw = NO_MATCH_LINES.pt[1]!;
-    const polished = polishConversationalReply(raw, "pt");
+  it("polishConversationalReply fixes no-match question punctuation", () => {
+    const polished = polishConversationalReply(
+      "por agora nada encaixa. Quer ajustar algum critério",
+      "pt",
+      "no-match-q"
+    );
     assert.equal(polished.endsWith("?"), true);
+    assert.equal(polished.includes("—"), false);
   });
 });

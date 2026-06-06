@@ -640,24 +640,24 @@ export const BANNED_DEFERRAL = completeLanguageRecord({
 
 export const NO_MATCH_LINES = completeLanguageRecord({
   pt: [
-    "Entendo — neste perfil não encontrei nada de momento. Se alargarmos zona ou orçamento, vejo já.",
-    "Por agora nada encaixa. Quer ajustar algum critério?",
+    "neste perfil não encontrei nada de momento. Se alargarmos zona ou orçamento, vejo já.",
+    "por agora nada encaixa. Quer ajustar algum critério?",
   ],
   en: [
-    "I understand — nothing matched this profile right now. Happy to widen the search if you'd like.",
-    "No exact matches for this brief at the moment. Would you like to adjust any criteria?",
+    "nothing matched this profile right now. Happy to widen the search if you'd like.",
+    "no exact matches for this brief at the moment. Would you like to adjust any criteria?",
   ],
   it: [
-    "Capisco — al momento non ho nulla in questo profilo. Se vuoi allargare zona o budget, guardo subito.",
-    "Per ora nessun match preciso. Vuoi modificare qualche criterio?",
+    "al momento non ho nulla in questo profilo. Se vuoi allargare zona o budget, guardo subito.",
+    "per ora nessun match preciso. Vuoi modificare qualche criterio?",
   ],
   es: [
-    "Entiendo — por ahora no hay nada que encaje con este perfil. Si ampliamos zona o presupuesto, lo miro.",
-    "De momento no encuentro matches exactos. ¿Quieres ajustar algún criterio?",
+    "por ahora no hay nada que encaje con este perfil. Si ampliamos zona o presupuesto, lo miro.",
+    "de momento no encuentro matches exactos. ¿Quieres ajustar algún criterio?",
   ],
   fr: [
-    "Je comprends — pour l'instant rien ne correspond à ce profil. Je peux élargir la zone ou le budget si vous voulez.",
-    "Aucun match précis pour le moment. Souhaitez-vous ajuster un critère ?",
+    "pour l'instant rien ne correspond à ce profil. Je peux élargir la zone ou le budget si vous voulez.",
+    "aucun match précis pour le moment. Souhaitez-vous ajuster un critère ?",
   ],
 });
 

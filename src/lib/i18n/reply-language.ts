@@ -131,11 +131,11 @@ export const REPLY_LANGUAGE_CORRECTION = completeLanguageRecord({
 });
 
 export const CONSULTANT_LANGUAGE_FALLBACK = completeLanguageRecord({
-  pt: "Claro — já vejo opções dentro desse perfil. Prefere alguma zona em específico?",
-  en: "Sure — I'll look at options in that range. Any preferred area?",
-  it: "Certo — guardo cosa c'è in quella fascia. Zona preferita?",
-  es: "Claro — miro opciones en ese rango. ¿Alguna zona preferida?",
-  fr: "Bien sûr — je regarde les options dans ce profil. Une zone en particulier ?",
+  pt: "já vejo opções dentro desse perfil. Prefere alguma zona em específico?",
+  en: "I'll look at options in that range. Any preferred area?",
+  it: "guardo cosa c'è in quella fascia. Zona preferita?",
+  es: "miro opciones en ese rango. ¿Alguna zona preferida?",
+  fr: "je regarde les options dans ce profil. Une zone en particulier ?",
 });
 
 export function getConsultantLanguageFallback(

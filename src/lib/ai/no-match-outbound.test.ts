@@ -67,7 +67,8 @@ describe("pickNoMatchIntroReply / no-match outbound", () => {
     const { texts, reply } = buildOutboundTextMessages(history);
 
     assert.equal(texts.length, 1);
-    assert.ok(NO_MATCH_LINES.pt.includes(reply));
+    assert.match(reply, /encaixa|perfil|encontrei|critério|zona/i);
+    assert.equal(reply.includes("—"), false);
     assert.equal(wouldAppendTextOutbound(reply, history), true);
   });
 
@@ -83,7 +84,8 @@ describe("pickNoMatchIntroReply / no-match outbound", () => {
 
     assert.equal(texts.length, 1);
     assert.notEqual(reply, first);
-    assert.ok(NO_MATCH_LINES.pt.includes(reply));
+    assert.match(reply, /encaixa|perfil|encontrei|critério|zona/i);
+    assert.equal(reply.includes("—"), false);
   });
 
   it("never returns empty outbound for property_search 0-match replies (3 turns)", () => {

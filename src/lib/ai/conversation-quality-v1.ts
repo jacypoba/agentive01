@@ -8,6 +8,8 @@ export const CONVERSATIONAL_OPENERS = completeLanguageRecord({
   fr: ["Je comprends", "Bien sûr", "Parfait"],
 });
 
+export type OpenerStyle = "none" | "comma" | "period";
+
 const QUESTION_INDICATORS = completeLanguageRecord({
   pt: [
     /\b(quer|prefere|pode|consegues|gostaria|há|tem|alguma|algum)\b/i,
@@ -39,12 +41,41 @@ function hashSeed(seed: string): number {
   return hash;
 }
 
+export function pickOpenerStyle(seed: string): OpenerStyle {
+  const bucket = hashSeed(`${seed}:style`) % 10;
+  if (bucket < 4) {
+    return "none";
+  }
+  if (bucket < 7) {
+    return "period";
+  }
+  return "comma";
+}
+
 export function pickConversationalOpener(
   language: SupportedLanguage,
   seed: string
 ): string {
   const openers = CONVERSATIONAL_OPENERS[language];
-  return openers[hashSeed(seed) % openers.length]!;
+  return openers[hashSeed(`${seed}:opener`) % openers.length]!;
+}
+
+function capitalizeFirst(text: string): string {
+  if (!text) {
+    return text;
+  }
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+function lowercaseFirst(text: string): string {
+  if (!text) {
+    return text;
+  }
+  return text.charAt(0).toLowerCase() + text.slice(1);
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 export function isClearlyQuestion(
@@ -126,22 +157,42 @@ export function reduceQuestionChaining(
   return text;
 }
 
-export function polishConversationalReply(
-  text: string,
-  language: SupportedLanguage
-): string {
-  const chained = reduceQuestionChaining(text, language);
-  return normalizeConversationalPunctuation(chained, language);
-}
-
 export function startsWithConversationalOpener(
   text: string,
   language: SupportedLanguage
 ): boolean {
-  const lower = text.trim().toLowerCase();
-  return CONVERSATIONAL_OPENERS[language].some((opener) =>
-    lower.startsWith(opener.toLowerCase())
-  );
+  const trimmed = text.trim();
+  const lower = trimmed.toLowerCase();
+  return CONVERSATIONAL_OPENERS[language].some((opener) => {
+    const openerLower = opener.toLowerCase();
+    return (
+      lower.startsWith(`${openerLower},`) ||
+      lower.startsWith(`${openerLower}.`) ||
+      lower.startsWith(`${openerLower} —`) ||
+      lower.startsWith(`${openerLower} –`) ||
+      lower.startsWith(`${openerLower} -`)
+    );
+  });
+}
+
+/** Rewrite legacy "Opener — body" into comma/period/none style. */
+export function normalizeLegacyEmDashOpeners(
+  text: string,
+  language: SupportedLanguage,
+  seed: string
+): string {
+  const trimmed = text.trim();
+  for (const opener of CONVERSATIONAL_OPENERS[language]) {
+    const pattern = new RegExp(
+      `^${escapeRegExp(opener)}\\s*[—–-]\\s*`,
+      "iu"
+    );
+    if (pattern.test(trimmed)) {
+      const body = trimmed.replace(pattern, "").trim();
+      return withConversationalOpener(body, language, `${seed}:legacy`);
+    }
+  }
+  return trimmed;
 }
 
 export function withConversationalOpener(
@@ -149,13 +200,35 @@ export function withConversationalOpener(
   language: SupportedLanguage,
   seed: string
 ): string {
-  if (startsWithConversationalOpener(text, language)) {
-    return text;
+  const body = text.trim();
+  if (!body) {
+    return body;
+  }
+
+  if (startsWithConversationalOpener(body, language)) {
+    return body;
+  }
+
+  const style = pickOpenerStyle(seed);
+  if (style === "none") {
+    return capitalizeFirst(body);
   }
 
   const opener = pickConversationalOpener(language, seed);
-  const body = text.trim();
-  const lowerFirst =
-    body.charAt(0).toLowerCase() + body.slice(1);
-  return `${opener} — ${lowerFirst}`;
+
+  if (style === "comma") {
+    return `${opener}, ${lowercaseFirst(body)}`;
+  }
+
+  return `${opener}. ${capitalizeFirst(body)}`;
+}
+
+export function polishConversationalReply(
+  text: string,
+  language: SupportedLanguage,
+  seed = "polish"
+): string {
+  const withoutLegacyDash = normalizeLegacyEmDashOpeners(text, language, seed);
+  const chained = reduceQuestionChaining(withoutLegacyDash, language);
+  return normalizeConversationalPunctuation(chained, language);
 }
