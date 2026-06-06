@@ -13,6 +13,7 @@ import {
   getClosingReplies,
 } from "@/lib/i18n/messages";
 import { enforceReplyLanguage } from "@/lib/i18n/language-purity";
+import { polishConversationalReply } from "@/lib/ai/conversation-quality-v1";
 import { finalizeWhatsAppText } from "@/lib/ai/complete-response";
 import { getLeadLanguage } from "@/lib/i18n/sync-language";
 import type { SupportedLanguage } from "@/lib/i18n/types";
@@ -129,7 +130,7 @@ export function sanitizeGuardedReply(
     return null;
   }
 
-  return finalized;
+  return polishConversationalReply(finalized, context.language);
 }
 
 export function logIntentDecision(

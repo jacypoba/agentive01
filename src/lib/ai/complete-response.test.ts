@@ -64,4 +64,11 @@ describe("finalizeWhatsAppText", () => {
   it("adds punctuation when missing", () => {
     assert.equal(finalizeWhatsAppText("Boa escolha"), "Boa escolha.");
   });
+
+  it("preserves question marks on complete questions", () => {
+    assert.equal(
+      finalizeWhatsAppText("Would you like me to show them?"),
+      "Would you like me to show them?"
+    );
+  });
 });

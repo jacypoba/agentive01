@@ -89,7 +89,7 @@ describe("buildCityAlternativeFallbackText", () => {
     assert.match(text, /Firenze/i);
     assert.match(text, /Milano/i);
     assert.match(text, /Navigli/i);
-    assert.match(text, /alternativas/i);
+    assert.match(text, /\?$/);
   });
 
   it("produces Italian fallback for Firenze with Milano alternatives", () => {
@@ -103,7 +103,7 @@ describe("buildCityAlternativeFallbackText", () => {
     assert.match(text, /Firenze/i);
     assert.match(text, /Milano/i);
     assert.match(text, /Navigli/i);
-    assert.match(text, /alternative/i);
+    assert.match(text, /\?$/);
   });
 });
 

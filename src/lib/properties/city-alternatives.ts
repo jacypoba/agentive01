@@ -1,4 +1,8 @@
 import { citiesMatch, normalizeCity, propertyTypesMatch } from "@/lib/properties/normalize-search";
+import {
+  pickConversationalOpener,
+  polishConversationalReply,
+} from "@/lib/ai/conversation-quality-v1";
 import { completeLanguageRecord, type SupportedLanguage } from "@/lib/i18n/types";
 import type { Property, PropertySearchCriteria } from "@/types/database";
 
@@ -195,25 +199,29 @@ export function buildCityAlternativeFallbackText(
   language: SupportedLanguage,
   summary: CityAlternativeSummary
 ): string {
-  const intro = completeLanguageRecord({
-    pt: `Neste momento não tenho imóveis disponíveis em ${summary.requestedCity}. `,
-    it: `Al momento non ho immobili disponibili a ${summary.requestedCity}. `,
-    en: `Right now I don't have listings available in ${summary.requestedCity}. `,
-    es: `De momento no tengo inmuebles disponibles en ${summary.requestedCity}. `,
-    fr: `Pour le moment je n'ai pas de biens disponibles à ${summary.requestedCity}. `,
+  const seed = `${summary.requestedCity}:city-fallback`;
+  const opener = pickConversationalOpener(language, seed);
+
+  const unavailable = completeLanguageRecord({
+    pt: `neste momento não tenho nada em ${summary.requestedCity}`,
+    it: `al momento non ho nulla a ${summary.requestedCity}`,
+    en: `I don't have anything in ${summary.requestedCity} right now`,
+    es: `de momento no tengo nada en ${summary.requestedCity}`,
+    fr: `je n'ai rien à ${summary.requestedCity} pour le moment`,
   });
 
   const options = formatOptionsPhrase(language, summary);
 
   const closing = completeLanguageRecord({
-    pt: " Quer que eu te mostre essas alternativas?",
-    it: " Vuoi che ti mostri queste alternative?",
-    en: " Would you like me to show those alternatives?",
-    es: " ¿Quieres que te muestre esas alternativas?",
-    fr: " Voulez-vous que je vous montre ces alternatives ?",
+    pt: " Quer que eu te mostre?",
+    it: " Vuoi che te le mostri?",
+    en: " Would you like me to show them?",
+    es: " ¿Te las muestro?",
+    fr: " Je vous les montre ?",
   });
 
-  return `${intro[language]}${options}${closing[language]}`;
+  const raw = `${opener} — ${unavailable[language]}. ${options}${closing[language]}`;
+  return polishConversationalReply(raw, language);
 }
 
 export function logCityAlternativeFallback(

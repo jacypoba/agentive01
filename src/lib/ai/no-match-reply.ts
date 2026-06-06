@@ -1,3 +1,4 @@
+import { polishConversationalReply } from "@/lib/ai/conversation-quality-v1";
 import {
   isNearDuplicateReply,
   pickUnusedVariant,
@@ -20,13 +21,13 @@ export function pickNoMatchIntroReply(
   const variant = pickUnusedVariant(NO_MATCH_LINES[language], history, seed);
 
   if (variant.trim() && !isNearDuplicateReply(variant, history)) {
-    return variant;
+    return polishConversationalReply(variant, language);
   }
 
   const fallback = getConsultantLanguageFallback(language);
   if (fallback.trim() && !isNearDuplicateReply(fallback, history)) {
-    return fallback;
+    return polishConversationalReply(fallback, language);
   }
 
-  return variant.trim() || fallback;
+  return polishConversationalReply(variant.trim() || fallback, language);
 }

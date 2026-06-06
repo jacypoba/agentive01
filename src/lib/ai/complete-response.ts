@@ -93,7 +93,6 @@ export function finalizeWhatsAppLines(
   const maxLineLength = options.maxLineLength ?? 100;
 
   const cleaned = text
-    .replace(/\?+$/gm, ".")
     .replace(/^[•·]\s*/gm, "")
     .replace(/\n{3,}/g, "\n")
     .trim();

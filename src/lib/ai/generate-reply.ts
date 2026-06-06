@@ -1,5 +1,6 @@
 import OpenAI from "openai";
 import { dedupeAiReply } from "@/lib/ai/dedupe-reply";
+import { polishConversationalReply } from "@/lib/ai/conversation-quality-v1";
 import {
   finalizeWhatsAppText,
   wasCutByTokenLimit,
@@ -7,7 +8,7 @@ import {
 import { MEMORY_MESSAGE_LIMIT } from "@/lib/ai/conversation-memory";
 import type { MessageIntent } from "@/lib/ai/intent-classifier";
 import { buildQualificationDirective } from "@/lib/ai/qualification";
-import { REAL_ESTATE_ASSISTANT_PROMPT } from "@/lib/ai/prompts";
+import { getRealEstateAssistantPrompt } from "@/lib/ai/prompts";
 import {
   buildWorkspaceAssistantContext,
   type WorkspacePromptOptions,
@@ -159,11 +160,13 @@ function buildSystemContent(
   );
   const propertyDirective = buildPropertyRecommendationDirective(
     propertiesToRecommend,
-    availability
+    availability,
+    language
   );
   const availabilityDirective = buildAvailabilityDirective(
     availability,
-    clientAskedForMore
+    clientAskedForMore,
+    language
   );
 
   const strictLanguage = buildStrictReplyLanguageDirective(
@@ -179,7 +182,7 @@ function buildSystemContent(
     strictLanguage,
     "",
     "---",
-    REAL_ESTATE_ASSISTANT_PROMPT,
+    getRealEstateAssistantPrompt(),
     "",
     ...(workspaceContext ? ["---", workspaceContext, "---"] : []),
     `${LEAD_CONTEXT_LABELS[language].name.split(" ")[0]} profile (CRM):`,
@@ -264,7 +267,7 @@ function polishReply(
 
   const validation = validateReplyLanguage(finalized, language);
   if (validation.valid) {
-    return finalized;
+    return polishConversationalReply(finalized, language);
   }
 
   const enforced = enforceReplyLanguage(finalized, language);
@@ -276,7 +279,7 @@ function polishReply(
     });
   }
 
-  return enforced.text;
+  return polishConversationalReply(enforced.text, language);
 }
 
 async function callModel(

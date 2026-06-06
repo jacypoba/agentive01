@@ -103,7 +103,7 @@ export const FIRST_RECOMMENDATION_CATALOG_INTROS = completeLanguageRecord({
   ],
   en: [
     "Perfect 👌 I picked a few options that fit what you're looking for:",
-    "Got it 😊 These might be a good fit:",
+    "Sure — these might be a good fit:",
     "Nice — I pulled a few places that match your brief:",
     "Great 👌 Take a look at these — they line up with what you asked:",
   ],
@@ -129,7 +129,7 @@ export const FIRST_RECOMMENDATION_SINGLE_INTROS = completeLanguageRecord({
   ],
   en: [
     "Perfect 👌 I found one option that fits what you're looking for:",
-    "Got it 😊 This might be a good fit:",
+    "Sure — this might be a good fit:",
     "Nice — this one lines up with your brief:",
   ],
   it: [
@@ -640,20 +640,24 @@ export const BANNED_DEFERRAL = completeLanguageRecord({
 
 export const NO_MATCH_LINES = completeLanguageRecord({
   pt: [
-    "Neste perfil não encontrei nada de momento — se alargarmos zona ou orçamento, vejo já.",
-    "Por agora nada encaixa neste perfil. Quer ajustar algum critério?",
+    "Entendo — neste perfil não encontrei nada de momento. Se alargarmos zona ou orçamento, vejo já.",
+    "Por agora nada encaixa. Quer ajustar algum critério?",
   ],
   en: [
-    "Nothing matched this profile right now — happy to widen the search if you want.",
-    "No exact matches for this brief at the moment.",
+    "I understand — nothing matched this profile right now. Happy to widen the search if you'd like.",
+    "No exact matches for this brief at the moment. Would you like to adjust any criteria?",
   ],
   it: [
-    "Al momento non ho nulla in questo profilo — se vuoi allargare zona o budget, guardo subito.",
-    "Per ora nessun match preciso con questi criteri.",
+    "Capisco — al momento non ho nulla in questo profilo. Se vuoi allargare zona o budget, guardo subito.",
+    "Per ora nessun match preciso. Vuoi modificare qualche criterio?",
   ],
   es: [
-    "Por ahora no hay nada que encaje con este perfil — si ampliamos zona o presupuesto, lo miro.",
-    "De momento no encuentro matches exactos con estos criterios.",
+    "Entiendo — por ahora no hay nada que encaje con este perfil. Si ampliamos zona o presupuesto, lo miro.",
+    "De momento no encuentro matches exactos. ¿Quieres ajustar algún criterio?",
+  ],
+  fr: [
+    "Je comprends — pour l'instant rien ne correspond à ce profil. Je peux élargir la zone ou le budget si vous voulez.",
+    "Aucun match précis pour le moment. Souhaitez-vous ajuster un critère ?",
   ],
 });
 
