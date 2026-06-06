@@ -10,7 +10,10 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 type Client = SupabaseClient<Database>;
 
 const PERSIST_REASONS = new Set<LanguageResolutionReason>([
+  "explicit_request",
   "explicit",
+  "clear_current_message",
+  "strong_current_message",
   "confident_switch",
   "strong_signals",
   "first_message_language",
@@ -19,21 +22,23 @@ const PERSIST_REASONS = new Set<LanguageResolutionReason>([
 /** Language for this reply — latest inbound message first, stored preference if ambiguous. */
 export function resolveReplyLanguage(
   latestMessage: string,
-  lead: Pick<Lead, "preferred_language" | "id">
+  lead: Pick<Lead, "preferred_language" | "id">,
+  history: Conversation[] = []
 ): SupportedLanguage {
   return resolveConversationLanguageDebug({
     latestMessage,
     leadPreferred: lead.preferred_language,
     leadId: lead.id,
+    conversationHistory: history,
   }).finalLanguage;
 }
 
 export function resolveLanguageForLead(
   lead: Lead,
   latestMessage: string,
-  _history: Conversation[]
+  history: Conversation[]
 ): SupportedLanguage {
-  return resolveReplyLanguage(latestMessage, lead);
+  return resolveReplyLanguage(latestMessage, lead, history);
 }
 
 export async function syncLeadPreferredLanguage(
@@ -42,12 +47,11 @@ export async function syncLeadPreferredLanguage(
   latestMessage: string,
   history: Conversation[]
 ): Promise<Lead> {
-  void history;
-
   const debug = resolveConversationLanguageDebug({
     latestMessage,
     leadPreferred: lead.preferred_language,
     leadId: lead.id,
+    conversationHistory: history,
   });
   const language = debug.finalLanguage;
 

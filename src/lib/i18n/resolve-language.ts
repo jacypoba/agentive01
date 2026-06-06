@@ -4,13 +4,21 @@ import {
   emptyLanguageScores,
   type LanguageDetectionResult,
 } from "@/lib/i18n/detect-language";
-import { detectFirstMessageLanguage } from "@/lib/i18n/first-message-language";
+import {
+  logLanguageResolverEvidence,
+  resolveConversationLanguageStrategy,
+  type LanguageResolutionConfidence,
+  type LanguageResolutionEvidence,
+  type LanguageResolutionReason as StrategyReason,
+  type LanguageResolutionResult,
+  type ResolveConversationLanguageInput,
+} from "@/lib/i18n/language-resolver";
 import {
   DEFAULT_LANGUAGE,
-  isSupportedLanguage,
   normalizeLanguage,
   type SupportedLanguage,
 } from "@/lib/i18n/types";
+import type { Conversation } from "@/types/database";
 
 const EXPLICIT_LANGUAGE_SWITCH: { language: SupportedLanguage; pattern: RegExp }[] = [
   { language: "en", pattern: /\b(in english|speak english|english please|reply in english)\b/i },
@@ -35,19 +43,15 @@ const EXPLICIT_LANGUAGE_SWITCH: { language: SupportedLanguage; pattern: RegExp }
   },
 ];
 
-const AMBIGUOUS_ONLY = /^(ok|okay|k|sim|s[ií]|no|n[aã]o|yes|yep|yeah|👍|👌|🙂|😊|\.+|!+|\?+)+$/iu;
-
-const GREETING_ONLY =
-  /^(ol[aá]|hi|hello|hey|ciao|hola|buongiorno|buonasera|bom dia|boa tarde|boa noite)[\s!.?👋🙂😊]*$/iu;
-
+/** Strategy reasons (STABILITY_PATCH_V1) plus legacy patch-off reasons. */
 export type LanguageResolutionReason =
+  | StrategyReason
   | "explicit"
   | "ambiguous"
   | "sticky"
   | "confident_switch"
   | "strong_signals"
-  | "first_message_language"
-  | "default_new_lead";
+  | "first_message_language";
 
 export type LanguageResolutionDebug = {
   detectedLanguage: SupportedLanguage;
@@ -56,22 +60,13 @@ export type LanguageResolutionDebug = {
   storedLanguage: string | null;
   finalLanguage: SupportedLanguage;
   reason: LanguageResolutionReason;
+  confidence: LanguageResolutionConfidence;
+  evidence: LanguageResolutionEvidence;
+  scores: Record<SupportedLanguage, number>;
+  strongScores: Record<SupportedLanguage, number>;
 };
 
-function getStoredLanguage(
-  leadPreferred?: string | null
-): SupportedLanguage | null {
-  if (leadPreferred == null || !isSupportedLanguage(leadPreferred)) {
-    return null;
-  }
-  return leadPreferred;
-}
-
-function isGreetingOnlyMessage(text: string): boolean {
-  return GREETING_ONLY.test(text.trim());
-}
-
-function buildDebugFromDetection(
+function buildLegacyDebugFromDetection(
   detection: LanguageDetectionResult,
   storedRaw: string | null,
   finalLanguage: SupportedLanguage,
@@ -84,90 +79,32 @@ function buildDebugFromDetection(
     storedLanguage: storedRaw,
     finalLanguage,
     reason,
+    confidence: detection.confident ? "high" : "medium",
+    evidence: {
+      pt: [],
+      en: [],
+      it: [],
+      es: [],
+      fr: [],
+    },
+    scores: detection.scores,
+    strongScores: detection.strongSignalCount,
   };
 }
 
-function resolveStickyConversationLanguage(input: {
-  latestMessage: string;
-  leadPreferred?: string | null;
-}): LanguageResolutionDebug {
-  const storedRaw = input.leadPreferred ?? null;
-  const stored = getStoredLanguage(input.leadPreferred);
-  const trimmed = input.latestMessage.trim();
-  const fallback = stored ?? DEFAULT_LANGUAGE;
-
-  const explicit = detectExplicitLanguageSwitch(trimmed);
-  if (explicit) {
-    const detection = detectLanguageWithConfidence(trimmed, fallback);
-    return buildDebugFromDetection(detection, storedRaw, explicit, "explicit");
-  }
-
-  if (
-    !trimmed ||
-    isAmbiguousMessage(trimmed) ||
-    isGreetingOnlyMessage(trimmed)
-  ) {
-    const detection = trimmed
-      ? detectLanguageWithConfidence(trimmed, fallback)
-      : {
-          language: fallback,
-          confident: false,
-          scores: emptyLanguageScores(),
-          strongSignalCount: emptyLanguageScores(),
-        };
-    return buildDebugFromDetection(
-      detection,
-      storedRaw,
-      stored ?? DEFAULT_LANGUAGE,
-      "ambiguous"
-    );
-  }
-
-  if (!stored) {
-    const firstMessageLanguage = detectFirstMessageLanguage(trimmed);
-    if (firstMessageLanguage) {
-      const detection = detectLanguageWithConfidence(trimmed, firstMessageLanguage);
-      return buildDebugFromDetection(
-        detection,
-        storedRaw,
-        firstMessageLanguage,
-        "first_message_language"
-      );
-    }
-  }
-
-  const detection = detectLanguageWithConfidence(trimmed, fallback);
-  const top = detection.language;
-  const topStrong = detection.strongSignalCount[top] ?? 0;
-  const canSwitch = detection.confident || topStrong >= 2;
-
-  if (stored) {
-    const storedScore = detection.scores[stored] ?? 0;
-    const topScore = detection.scores[top] ?? 0;
-
-    if (top !== stored && canSwitch && topScore > storedScore) {
-      const reason: LanguageResolutionReason = detection.confident
-        ? "confident_switch"
-        : "strong_signals";
-      return buildDebugFromDetection(detection, storedRaw, top, reason);
-    }
-
-    return buildDebugFromDetection(detection, storedRaw, stored, "sticky");
-  }
-
-  if (canSwitch) {
-    const reason: LanguageResolutionReason = detection.confident
-      ? "confident_switch"
-      : "strong_signals";
-    return buildDebugFromDetection(detection, storedRaw, top, reason);
-  }
-
-  return buildDebugFromDetection(
-    detection,
-    storedRaw,
-    DEFAULT_LANGUAGE,
-    "default_new_lead"
-  );
+function buildDebugFromStrategy(result: LanguageResolutionResult): LanguageResolutionDebug {
+  return {
+    detectedLanguage: result.detectedLanguage,
+    strongSignalCount: result.strongScores,
+    confident: result.confidence !== "low",
+    storedLanguage: result.storedLanguage,
+    finalLanguage: result.finalLanguage,
+    reason: result.reason,
+    confidence: result.confidence,
+    evidence: result.evidence,
+    scores: result.scores,
+    strongScores: result.strongScores,
+  };
 }
 
 function resolveLegacyConversationLanguage(input: {
@@ -181,7 +118,7 @@ function resolveLegacyConversationLanguage(input: {
   const explicit = detectExplicitLanguageSwitch(trimmed);
   if (explicit) {
     const detection = detectLanguageWithConfidence(trimmed, stored);
-    return buildDebugFromDetection(detection, storedRaw, explicit, "explicit");
+    return buildLegacyDebugFromDetection(detection, storedRaw, explicit, "explicit");
   }
 
   if (!trimmed || isAmbiguousMessage(trimmed)) {
@@ -193,7 +130,7 @@ function resolveLegacyConversationLanguage(input: {
           scores: emptyLanguageScores(),
           strongSignalCount: emptyLanguageScores(),
         };
-    return buildDebugFromDetection(detection, storedRaw, stored, "ambiguous");
+    return buildLegacyDebugFromDetection(detection, storedRaw, stored, "ambiguous");
   }
 
   const detection = detectLanguageWithConfidence(trimmed, stored);
@@ -201,7 +138,7 @@ function resolveLegacyConversationLanguage(input: {
     const reason: LanguageResolutionReason = detection.confident
       ? "confident_switch"
       : "strong_signals";
-    return buildDebugFromDetection(
+    return buildLegacyDebugFromDetection(
       detection,
       storedRaw,
       detection.language,
@@ -209,57 +146,56 @@ function resolveLegacyConversationLanguage(input: {
     );
   }
 
-  return buildDebugFromDetection(detection, storedRaw, stored, "sticky");
+  return buildLegacyDebugFromDetection(detection, storedRaw, stored, "sticky");
 }
 
-/**
- * Single source of truth for outbound WhatsApp language.
- * Uses ONLY the latest user message (+ explicit switch requests).
- * Falls back to lead preferred_language when the latest message is ambiguous.
- */
-function logLanguageDecision(
-  input: { latestMessage: string; leadId?: string },
-  debug: LanguageResolutionDebug
-): void {
-  console.log("[Stability patch] Language decision", {
-    leadId: input.leadId ?? null,
-    latestMessagePreview: input.latestMessage.trim().slice(0, 80),
-    detectedLanguage: debug.detectedLanguage,
-    strongSignalCount: debug.strongSignalCount,
-    confident: debug.confident,
-    storedLanguage: debug.storedLanguage,
-    finalLanguage: debug.finalLanguage,
-    reason: debug.reason,
+export function logLanguageFinalCheck(input: {
+  incomingText: string;
+  storedLanguage: string | null;
+  detectedLanguage: SupportedLanguage;
+  finalLanguage: SupportedLanguage;
+  replyPreview: string | null;
+}): void {
+  console.log("[Language final check]", {
+    incomingText: input.incomingText.trim().slice(0, 120),
+    storedLanguage: input.storedLanguage,
+    detectedLanguage: input.detectedLanguage,
+    finalLanguage: input.finalLanguage,
+    replyPreview: input.replyPreview?.slice(0, 120) ?? null,
   });
-
-  if (debug.reason === "first_message_language") {
-    console.log("[Language V3] First message detection", {
-      leadId: input.leadId ?? null,
-      detectedLanguage: debug.finalLanguage,
-      reason: "first_message_language",
-    });
-  }
 }
 
 export function resolveConversationLanguageDebug(input: {
   latestMessage: string;
   leadPreferred?: string | null;
   leadId?: string;
+  conversationHistory?: Conversation[];
+  explicitLanguageRequest?: SupportedLanguage | null;
 }): LanguageResolutionDebug {
-  const debug = isStabilityPatchV1Enabled()
-    ? resolveStickyConversationLanguage(input)
-    : resolveLegacyConversationLanguage(input);
-
-  if (isStabilityPatchV1Enabled()) {
-    logLanguageDecision(input, debug);
+  if (!isStabilityPatchV1Enabled()) {
+    return resolveLegacyConversationLanguage(input);
   }
 
-  return debug;
+  const strategyInput: ResolveConversationLanguageInput = {
+    latestMessage: input.latestMessage,
+    storedLanguage: input.leadPreferred ?? null,
+    conversationHistory: input.conversationHistory,
+    explicitLanguageRequest:
+      input.explicitLanguageRequest ??
+      detectExplicitLanguageSwitch(input.latestMessage),
+  };
+
+  const result = resolveConversationLanguageStrategy(strategyInput);
+  logLanguageResolverEvidence(strategyInput, result);
+
+  return buildDebugFromStrategy(result);
 }
 
 export function resolveConversationLanguage(input: {
   latestMessage: string;
   leadPreferred?: string | null;
+  conversationHistory?: Conversation[];
+  explicitLanguageRequest?: SupportedLanguage | null;
 }): SupportedLanguage {
   return resolveConversationLanguageDebug(input).finalLanguage;
 }
@@ -291,7 +227,11 @@ export function isAmbiguousMessage(text: string): boolean {
     return true;
   }
 
-  if (AMBIGUOUS_ONLY.test(trimmed)) {
+  if (
+    /^(ok|okay|k|sim|s[ií]|no|n[aã]o|yes|yep|yeah|merci|gracias|grazie|obrigad[oa]?|thanks|thank you|thx|👍|👌|🙂|😊|\.+|!+|\?+)+$/iu.test(
+      trimmed
+    )
+  ) {
     return true;
   }
 
@@ -299,4 +239,4 @@ export function isAmbiguousMessage(text: string): boolean {
   return letters.length === 0;
 }
 
-export type { LanguageDetectionResult };
+export type { LanguageDetectionResult, LanguageResolutionEvidence };

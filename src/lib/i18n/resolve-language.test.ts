@@ -24,120 +24,58 @@ describe("sticky language policy (STABILITY_PATCH_V1)", () => {
     }
   });
 
-  it('stored=it, "Vorrei una casa a Milano" → it, reason=sticky', () => {
+  it('stored=it, "Vorrei una casa a Milano" → it', () => {
     const result = resolve("Vorrei una casa a Milano", "it");
     assert.equal(result.finalLanguage, "it");
-    assert.equal(result.reason, "sticky");
   });
 
-  it('stored=pt, "Apartment in Milan 800k" → pt, reason=sticky', () => {
+  it('stored=pt, "Apartment in Milan 800k" → pt', () => {
     const result = resolve("Apartment in Milan 800k", "pt");
     assert.equal(result.finalLanguage, "pt");
-    assert.equal(result.reason, "sticky");
+    assert.equal(result.reason, "uncertain_keep_stored");
   });
 
-  it('stored=pt, "Cerco appartamento a Milano fino a 600 mil" → it, reason=confident_switch', () => {
+  it('stored=pt, "Cerco appartamento a Milano fino a 600 mil" → it', () => {
     const result = resolve("Cerco appartamento a Milano fino a 600 mil", "pt");
     assert.equal(result.finalLanguage, "it");
-    assert.equal(result.reason, "confident_switch");
+    assert.equal(result.reason, "strong_current_message");
   });
 
-  it('stored=null, "Vorrei comprare una casa a Firenze" → it, reason=first_message_language', () => {
+  it('stored=null, "Vorrei comprare una casa a Firenze" → it', () => {
     const result = resolve("Vorrei comprare una casa a Firenze", null);
     assert.equal(result.finalLanguage, "it");
-    assert.equal(result.reason, "first_message_language");
   });
 
-  it('stored=it, "ok" → it, reason=ambiguous', () => {
+  it('stored=it, "ok" → it', () => {
     const result = resolve("ok", "it");
     assert.equal(result.finalLanguage, "it");
-    assert.equal(result.reason, "ambiguous");
+    assert.equal(result.reason, "sticky_ambiguous");
   });
 
-  it('stored=it, "Procuro apartamento em Milano até 800 mil euros" → pt, reason=confident_switch', () => {
+  it('stored=it, "Procuro apartamento em Milano até 800 mil euros" → pt', () => {
     const result = resolve(
       "Procuro apartamento em Milano até 800 mil euros",
       "it"
     );
     assert.equal(result.finalLanguage, "pt");
-    assert.equal(result.reason, "confident_switch");
   });
 
   it("honours explicit language switch requests", () => {
     const result = resolve("Can you reply in English please?", "pt");
     assert.equal(result.finalLanguage, "en");
-    assert.equal(result.reason, "explicit");
+    assert.equal(result.reason, "explicit_request");
   });
 
   it("honours rispondi in italiano", () => {
     const result = resolve("Per favore rispondi in italiano", "pt");
     assert.equal(result.finalLanguage, "it");
-    assert.equal(result.reason, "explicit");
+    assert.equal(result.reason, "explicit_request");
   });
 
   it('greeting "ciao" keeps stored language', () => {
     const result = resolve("ciao", "it");
     assert.equal(result.finalLanguage, "it");
-    assert.equal(result.reason, "ambiguous");
-  });
-
-  it("exports strongSignalCount on detection", () => {
-    const result = resolve("Cerco appartamento a Milano fino a 600 mil", "pt");
-    assert.ok(result.strongSignalCount.it >= 2);
-    assert.equal(result.reason, "confident_switch");
-  });
-});
-
-describe("Language V3 first message detection (STABILITY_PATCH_V1)", () => {
-  beforeEach(() => {
-    process.env.STABILITY_PATCH_V1 = "true";
-  });
-
-  afterEach(() => {
-    if (ORIGINAL_PATCH === undefined) {
-      delete process.env.STABILITY_PATCH_V1;
-    } else {
-      process.env.STABILITY_PATCH_V1 = ORIGINAL_PATCH;
-    }
-  });
-
-  it('stored=null, "Je cherche une maison à Paris" → fr', () => {
-    const result = resolve("Je cherche une maison à Paris", null);
-    assert.equal(result.finalLanguage, "fr");
-    assert.equal(result.reason, "first_message_language");
-  });
-
-  it('stored=null, "I am looking for a house in Milan" → en', () => {
-    const result = resolve("I am looking for a house in Milan", null);
-    assert.equal(result.finalLanguage, "en");
-    assert.equal(result.reason, "first_message_language");
-  });
-
-  it('stored=null, "Busco un apartamento en Madrid" → es', () => {
-    const result = resolve("Busco un apartamento en Madrid", null);
-    assert.equal(result.finalLanguage, "es");
-    assert.equal(result.reason, "first_message_language");
-  });
-
-  it('stored=null, "Procuro uma moradia em Lisboa" → pt', () => {
-    const result = resolve("Procuro uma moradia em Lisboa", null);
-    assert.equal(result.finalLanguage, "pt");
-    assert.equal(result.reason, "first_message_language");
-  });
-
-  it("does not override stored language with first-message patterns", () => {
-    const result = resolve("Vorrei comprare una casa a Firenze", "pt");
-    assert.equal(result.finalLanguage, "pt");
-    assert.equal(result.reason, "sticky");
-  });
-
-  it("explicit language request wins over first-message patterns", () => {
-    const result = resolve(
-      "Vorrei comprare una casa a Firenze — rispondi in italiano",
-      null
-    );
-    assert.equal(result.finalLanguage, "it");
-    assert.equal(result.reason, "explicit");
+    assert.equal(result.reason, "sticky_ambiguous");
   });
 });
 

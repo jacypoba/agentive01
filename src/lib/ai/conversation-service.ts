@@ -38,7 +38,11 @@ import { getPropertiesByIds } from "@/lib/data/properties";
 import { getOrCreateWorkspaceSettings } from "@/lib/data/workspace-settings";
 import { cancelFollowUpsOnClientReply } from "@/lib/follow-ups/scheduler";
 import { getExhaustedMatchLines } from "@/lib/i18n/messages";
-import { resolveReplyLanguage, syncLeadPreferredLanguage } from "@/lib/i18n/sync-language";
+import { syncLeadPreferredLanguage } from "@/lib/i18n/sync-language";
+import {
+  logLanguageFinalCheck,
+  resolveConversationLanguageDebug,
+} from "@/lib/i18n/resolve-language";
 import { derivePropertySearchCriteriaDebug } from "@/lib/properties/search-criteria";
 import type { SupportedLanguage } from "@/lib/i18n/types";
 import { findPropertyRecommendations } from "@/lib/properties/find-recommendations";
@@ -369,7 +373,13 @@ export async function processClientMessageWithAI(
     lead
   );
 
-  const language = resolveReplyLanguage(message, memoryLead);
+  const languageDebug = resolveConversationLanguageDebug({
+    latestMessage: message,
+    leadPreferred: memoryLead.preferred_language,
+    leadId: memoryLead.id,
+    conversationHistory: history,
+  });
+  const language = languageDebug.finalLanguage;
   const languageLead = await syncLeadPreferredLanguage(
     supabase,
     memoryLead,
@@ -415,6 +425,14 @@ export async function processClientMessageWithAI(
     }
 
     const updatedLead = await finalizeLead(supabase, lead, history);
+
+    logLanguageFinalCheck({
+      incomingText: message,
+      storedLanguage: memoryLead.preferred_language,
+      detectedLanguage: languageDebug.detectedLanguage,
+      finalLanguage: language,
+      replyPreview: aiMessages[0]?.message ?? null,
+    });
 
     return {
       userMessage,
@@ -604,6 +622,14 @@ export async function processClientMessageWithAI(
   );
 
   const updatedLead = await finalizeLead(supabase, lead, history);
+
+  logLanguageFinalCheck({
+    incomingText: message,
+    storedLanguage: memoryLead.preferred_language,
+    detectedLanguage: languageDebug.detectedLanguage,
+    finalLanguage: language,
+    replyPreview: aiMessages[0]?.message ?? null,
+  });
 
   return {
     userMessage,
