@@ -81,6 +81,7 @@ describe("buildNormalizedPropertySearch", () => {
       city: "Milano",
       propertyType: "moradia",
       maxBudget: 800_000,
+      neighborhood: undefined,
     });
   });
 });
@@ -97,6 +98,7 @@ describe("normalizeSearchCriteria", () => {
         city: "Milano",
         propertyType: "moradia",
         maxBudget: 800_000,
+        neighborhood: undefined,
       }
     );
   });

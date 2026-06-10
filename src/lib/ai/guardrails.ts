@@ -74,7 +74,8 @@ export function violatesReplyGuardrails(
   if (
     context.propertiesSent ||
     context.intent === "property_search" ||
-    context.intent === "ask_more_options"
+    context.intent === "ask_more_options" ||
+    context.intent === "accept_pending_offer"
   ) {
     if (
       BANNED_DEFERRAL[context.language].some((pattern) => pattern.test(trimmed))

@@ -185,6 +185,14 @@ function propertyMatchesCriteria(
     return false;
   }
 
+  if (criteria.neighborhood?.trim()) {
+    const target = criteria.neighborhood.trim();
+    const neighborhood = property.neighborhood?.trim() ?? "";
+    if (!neighborhood || !citiesMatch(target, neighborhood)) {
+      return false;
+    }
+  }
+
   return true;
 }
 

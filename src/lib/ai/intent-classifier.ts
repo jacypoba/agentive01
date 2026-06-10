@@ -1,5 +1,9 @@
 import type { Conversation, Lead } from "@/types/database";
 import {
+  getActivePendingPropertyOffer,
+  isPendingOfferAcceptanceMessage,
+} from "@/lib/ai/pending-property-offer";
+import {
   clientAskedForMoreOptions,
   clientAskedToReshowOptions,
   clientAskedToSeeOptions,
@@ -10,6 +14,7 @@ import {
 export type MessageIntent =
   | "property_search"
   | "ask_more_options"
+  | "accept_pending_offer"
   | "visit_request"
   | "thanks_or_closing"
   | "general_question"
@@ -106,9 +111,20 @@ function isGeneralQuestion(text: string): boolean {
  */
 export function classifyMessageIntent(
   history: Conversation[],
-  _lead?: Lead
+  lead?: Lead
 ): ClassifiedIntent {
   const latestMessage = getLatestClientText(history);
+
+  const pendingOffer = lead ? getActivePendingPropertyOffer(lead) : null;
+  if (pendingOffer && isPendingOfferAcceptanceMessage(latestMessage)) {
+    return {
+      intent: "accept_pending_offer",
+      wantsReshow: false,
+      wantsMore: false,
+      latestMessage,
+    };
+  }
+
   const wantsReshow = clientAskedToReshowOptions(history);
   const wantsMore = clientAskedForMoreOptions(history);
   const askedToSee = clientAskedToSeeOptions(history);
@@ -170,7 +186,9 @@ export function classifyMessageIntent(
 
 export function shouldQueryProperties(intent: ClassifiedIntent): boolean {
   return (
-    intent.intent === "property_search" || intent.intent === "ask_more_options"
+    intent.intent === "property_search" ||
+    intent.intent === "ask_more_options" ||
+    intent.intent === "accept_pending_offer"
   );
 }
 
@@ -179,6 +197,10 @@ export function shouldUseReshowBatch(intent: ClassifiedIntent): boolean {
 }
 
 export function shouldRunFreshPropertyQuery(intent: ClassifiedIntent): boolean {
+  if (intent.intent === "accept_pending_offer") {
+    return false;
+  }
+
   return (
     intent.intent === "property_search" ||
     (intent.intent === "ask_more_options" &&

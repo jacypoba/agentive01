@@ -241,6 +241,7 @@ export function normalizeSearchCriteria(
     propertyType:
       normalizePropertyType(criteria.propertyType) ?? criteria.propertyType,
     maxBudget: criteria.maxBudget,
+    neighborhood: criteria.neighborhood?.trim() || undefined,
   };
 }
 

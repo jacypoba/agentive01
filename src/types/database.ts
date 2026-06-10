@@ -124,7 +124,21 @@ export type Lead = {
   visit_requested: boolean;
   visit_datetime_text: string | null;
   preferred_language: string | null;
+  pending_property_offer: PendingPropertyOffer | null;
   created_at: string;
+};
+
+export type PendingPropertyOfferStatus = "pending" | "completed";
+
+export type PendingPropertyOffer = {
+  offeredCity: string;
+  offeredAreas: string[];
+  source: "city_fallback";
+  createdAt: string;
+  status: PendingPropertyOfferStatus;
+  requestedCity?: string;
+  propertyType?: string;
+  maxBudget?: number | null;
 };
 
 export type LeadQualificationFields = {
@@ -202,6 +216,7 @@ export type LeadUpdate = {
   visit_requested?: boolean;
   visit_datetime_text?: string | null;
   preferred_language?: string | null;
+  pending_property_offer?: PendingPropertyOffer | null;
 };
 
 export type ConversationInsert = {
@@ -440,6 +455,7 @@ export type PropertySearchCriteria = {
   city: string;
   propertyType: string;
   maxBudget?: number | null;
+  neighborhood?: string | null;
 };
 
 export type CalendarVisitBuckets = {

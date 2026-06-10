@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import type { Conversation } from "@/types/database";
+import type { Conversation, Lead } from "@/types/database";
 import { violatesReplyGuardrails } from "@/lib/ai/guardrails";
 import {
   classifyMessageIntent,
@@ -13,8 +13,40 @@ function clientMessage(text: string): Conversation {
   return {
     id: `msg-${text.slice(0, 8)}`,
     lead_id: "lead-1",
+    workspace_id: "ws-1",
     message: text,
     sender: "client",
+    created_at: new Date().toISOString(),
+  };
+}
+
+function leadWithPendingOffer(): Lead {
+  return {
+    id: "lead-1",
+    user_id: "user-1",
+    workspace_id: "ws-1",
+    client_name: "Test",
+    phone: null,
+    phone_normalized: null,
+    interest: null,
+    status: "new",
+    budget: null,
+    preferred_area: "Roma",
+    property_type: "moradia",
+    timeline: null,
+    intent_status: "unknown",
+    visit_requested: false,
+    visit_datetime_text: null,
+    preferred_language: "pt",
+    pending_property_offer: {
+      offeredCity: "Milano",
+      offeredAreas: ["Navigli"],
+      source: "city_fallback",
+      createdAt: new Date().toISOString(),
+      status: "pending",
+      requestedCity: "Roma",
+      propertyType: "moradia",
+    },
     created_at: new Date().toISOString(),
   };
 }
@@ -100,6 +132,13 @@ describe("classifyMessageIntent", () => {
     const result = classifyMessageIntent(historyFrom(["mostrami"]));
     assert.equal(result.intent, "ask_more_options");
     assert.equal(result.wantsMore, true);
+  });
+
+  it('classifies "sim" as accept_pending_offer when a pending city offer exists', () => {
+    const result = classifyMessageIntent(historyFrom(["sim"]), leadWithPendingOffer());
+    assert.equal(result.intent, "accept_pending_offer");
+    assert.equal(shouldQueryProperties(result), true);
+    assert.equal(shouldRunFreshPropertyQuery(result), false);
   });
 });
 

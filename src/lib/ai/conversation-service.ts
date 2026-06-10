@@ -12,6 +12,16 @@ import {
 } from "@/lib/ai/guardrails";
 import { pickNoMatchIntroReply } from "@/lib/ai/no-match-reply";
 import {
+  buildPendingOfferFromCityAlternative,
+  completePendingPropertyOffer,
+  findPropertiesForPendingOffer,
+  getActivePendingPropertyOffer,
+  logPendingOfferAccepted,
+  logPendingOfferCompleted,
+  logPendingOfferCreated,
+  savePendingPropertyOffer,
+} from "@/lib/ai/pending-property-offer";
+import {
   buildCityAlternativeFallbackText,
   logCityAlternativeFallback,
   type CityAlternativeSummary,
@@ -268,6 +278,47 @@ async function resolvePropertiesToRecommend(
   };
 }
 
+async function resolvePropertiesFromPendingOffer(
+  supabase: Client,
+  memoryLead: Lead,
+  history: Conversation[]
+) {
+  const offer = getActivePendingPropertyOffer(memoryLead);
+  if (!offer) {
+    return {
+      propertiesToRecommend: [] as Property[],
+      availability: {
+        ...EMPTY_AVAILABILITY,
+        criteriaMissing: true,
+      },
+      criteria: null,
+      isReshow: false,
+      freshQueryMade: false,
+      cityAlternatives: null,
+    };
+  }
+
+  logPendingOfferAccepted(memoryLead.id, offer);
+
+  const { properties: matchingProperties, criteria } =
+    await findPropertiesForPendingOffer(supabase, memoryLead, offer);
+
+  const availability = analyzePropertyAvailability(
+    matchingProperties,
+    history,
+    criteria != null
+  );
+
+  return {
+    propertiesToRecommend: availability.toSend,
+    availability,
+    criteria,
+    isReshow: false,
+    freshQueryMade: false,
+    cityAlternatives: null,
+  };
+}
+
 async function buildIntroReply(
   memoryLead: Lead,
   history: Conversation[],
@@ -299,6 +350,16 @@ async function buildIntroReply(
       history,
       `${memoryLead.id}:exhausted`
     );
+  }
+
+  if (
+    propertiesToRecommend.length === 0 &&
+    availability.noMatchesInDatabase &&
+    availability.matchingTotal === 0 &&
+    !availability.criteriaMissing &&
+    classified.intent === "accept_pending_offer"
+  ) {
+    return pickNoMatchIntroReply(language, history, memoryLead.id);
   }
 
   if (
@@ -461,12 +522,19 @@ export async function processClientMessageWithAI(
       { preferLatestMessage: shouldRunFreshPropertyQuery(classified) }
     );
 
-    const resolved = await resolvePropertiesToRecommend(
-      supabase,
-      memoryLead,
-      history,
-      classified
-    );
+    const resolved =
+      classified.intent === "accept_pending_offer"
+        ? await resolvePropertiesFromPendingOffer(
+            supabase,
+            memoryLead,
+            history
+          )
+        : await resolvePropertiesToRecommend(
+            supabase,
+            memoryLead,
+            history,
+            classified
+          );
     propertiesToRecommend = resolved.propertiesToRecommend;
     availability = resolved.availability;
     criteria = resolved.criteria;
@@ -474,6 +542,31 @@ export async function processClientMessageWithAI(
     freshQueryMade = resolved.freshQueryMade;
 
     cityAlternatives = resolved.cityAlternatives;
+
+    if (
+      classified.intent !== "accept_pending_offer" &&
+      cityAlternatives &&
+      cityAlternatives.availableCities.length > 0 &&
+      propertiesToRecommend.length === 0 &&
+      availability.noMatchesInDatabase &&
+      availability.matchingTotal === 0 &&
+      !availability.criteriaMissing &&
+      (classified.intent === "property_search" ||
+        classified.intent === "ask_more_options") &&
+      criteria
+    ) {
+      const pendingOffer = buildPendingOfferFromCityAlternative(
+        cityAlternatives,
+        criteria
+      );
+      await savePendingPropertyOffer(
+        supabase,
+        workspaceId,
+        lead.id,
+        pendingOffer
+      );
+      logPendingOfferCreated(lead.id, pendingOffer);
+    }
 
     recommendationGate = evaluatePropertyRecommendationGate({
       leadId: lead.id,
@@ -576,6 +669,22 @@ export async function processClientMessageWithAI(
       ...buildCatalogOutboundMessages(propertiesToRecommend, detailsTexts)
     );
 
+    if (
+      classified.intent === "accept_pending_offer" &&
+      propertiesToRecommend.length > 0
+    ) {
+      const activeOffer = getActivePendingPropertyOffer(memoryLead);
+      if (activeOffer) {
+        await completePendingPropertyOffer(
+          supabase,
+          workspaceId,
+          lead.id,
+          activeOffer
+        );
+        logPendingOfferCompleted(lead.id, activeOffer);
+      }
+    }
+
     if (!isReshow) {
       const closingText = await generateCatalogComparison(
         languageLead,
@@ -614,6 +723,19 @@ export async function processClientMessageWithAI(
         formatPropertyWhatsAppPackageText(property, language)
       )
     );
+
+    if (classified.intent === "accept_pending_offer") {
+      const activeOffer = getActivePendingPropertyOffer(memoryLead);
+      if (activeOffer) {
+        await completePendingPropertyOffer(
+          supabase,
+          workspaceId,
+          lead.id,
+          activeOffer
+        );
+        logPendingOfferCompleted(lead.id, activeOffer);
+      }
+    }
   }
 
   console.log(
