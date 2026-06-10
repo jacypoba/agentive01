@@ -56,6 +56,7 @@ export function buildPreviewLead(
     visit_requested: false,
     visit_datetime_text: null,
     preferred_language: settings.defaultLanguage,
+    pending_property_offer: null,
     created_at: new Date().toISOString(),
   };
 }

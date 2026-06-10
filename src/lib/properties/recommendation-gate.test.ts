@@ -28,6 +28,7 @@ function makeLead(overrides: Partial<Lead> = {}): Lead {
     visit_requested: false,
     visit_datetime_text: null,
     preferred_language: "it",
+    pending_property_offer: null,
     created_at: new Date().toISOString(),
     ...overrides,
   };
