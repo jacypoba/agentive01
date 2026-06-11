@@ -54,7 +54,7 @@ import {
   resolveConversationLanguageDebug,
 } from "@/lib/i18n/resolve-language";
 import { derivePropertySearchCriteriaDebug } from "@/lib/properties/search-criteria";
-import { runConversationDecisionShadowTurn } from "@/lib/ai/conversation-decision";
+import { runConversationDecisionShadowTurn, tryApplyPhaseBCityOverride } from "@/lib/ai/conversation-decision";
 import type { SupportedLanguage } from "@/lib/i18n/types";
 import { findPropertyRecommendations } from "@/lib/properties/find-recommendations";
 import { buildRecommendationIntroText } from "@/lib/properties/recommendation-intros";
@@ -442,7 +442,7 @@ export async function processClientMessageWithAI(
     conversationHistory: history,
   });
   const language = languageDebug.finalLanguage;
-  const languageLead = await syncLeadPreferredLanguage(
+  let languageLead = await syncLeadPreferredLanguage(
     supabase,
     memoryLead,
     message,
@@ -531,35 +531,70 @@ export async function processClientMessageWithAI(
   let searchDebugForShadow: ReturnType<
     typeof derivePropertySearchCriteriaDebug
   > | null = null;
+  let phaseBCityOverrideApplied = false;
+  let memoryLeadForTurn = memoryLead;
 
   if (shouldQueryProperties(classified)) {
     const searchDebug = derivePropertySearchCriteriaDebug(
-      memoryLead,
+      memoryLeadForTurn,
       history,
       { preferLatestMessage: shouldRunFreshPropertyQuery(classified) }
     );
     searchDebugForShadow = searchDebug;
 
-    const resolved =
-      classified.intent === "accept_pending_offer"
-        ? await resolvePropertiesFromPendingOffer(
+    const pendingOffer = getActivePendingPropertyOffer(memoryLeadForTurn);
+    const phaseBResult =
+      pendingOffer != null
+        ? await tryApplyPhaseBCityOverride(
             supabase,
-            memoryLead,
-            history
-          )
-        : await resolvePropertiesToRecommend(
-            supabase,
-            memoryLead,
+            memoryLeadForTurn,
             history,
-            classified
-          );
-    propertiesToRecommend = resolved.propertiesToRecommend;
-    availability = resolved.availability;
-    criteria = resolved.criteria;
-    isReshow = resolved.isReshow;
-    freshQueryMade = resolved.freshQueryMade;
+            message,
+            classified,
+            pendingOffer,
+            language
+          )
+        : null;
 
-    cityAlternatives = resolved.cityAlternatives;
+    if (phaseBResult) {
+      propertiesToRecommend = phaseBResult.propertiesToRecommend;
+      availability = phaseBResult.availability;
+      criteria = phaseBResult.criteria;
+      isReshow = phaseBResult.isReshow;
+      freshQueryMade = phaseBResult.freshQueryMade;
+      cityAlternatives = phaseBResult.cityAlternatives;
+      phaseBCityOverrideApplied = true;
+
+      memoryLeadForTurn = await completePendingPropertyOffer(
+        supabase,
+        workspaceId,
+        lead.id,
+        pendingOffer!
+      );
+      languageLead = memoryLeadForTurn;
+      logPendingOfferCompleted(lead.id, pendingOffer!);
+    } else {
+      const resolved =
+        classified.intent === "accept_pending_offer"
+          ? await resolvePropertiesFromPendingOffer(
+              supabase,
+              memoryLeadForTurn,
+              history
+            )
+          : await resolvePropertiesToRecommend(
+              supabase,
+              memoryLeadForTurn,
+              history,
+              classified
+            );
+      propertiesToRecommend = resolved.propertiesToRecommend;
+      availability = resolved.availability;
+      criteria = resolved.criteria;
+      isReshow = resolved.isReshow;
+      freshQueryMade = resolved.freshQueryMade;
+
+      cityAlternatives = resolved.cityAlternatives;
+    }
 
     if (
       classified.intent !== "accept_pending_offer" &&
@@ -588,7 +623,7 @@ export async function processClientMessageWithAI(
 
     recommendationGate = evaluatePropertyRecommendationGate({
       leadId: lead.id,
-      lead: memoryLead,
+      lead: memoryLeadForTurn,
       history,
       searchDebug,
       classified,
@@ -626,7 +661,7 @@ export async function processClientMessageWithAI(
     leadId: lead.id,
     latestMessage: message,
     history,
-    lead: languageLead,
+    lead: memoryLeadForTurn,
     language,
     classified,
     searchDebug: searchDebugForShadow,
@@ -703,9 +738,10 @@ export async function processClientMessageWithAI(
 
     if (
       classified.intent === "accept_pending_offer" &&
-      propertiesToRecommend.length > 0
+      propertiesToRecommend.length > 0 &&
+      !phaseBCityOverrideApplied
     ) {
-      const activeOffer = getActivePendingPropertyOffer(memoryLead);
+      const activeOffer = getActivePendingPropertyOffer(memoryLeadForTurn);
       if (activeOffer) {
         await completePendingPropertyOffer(
           supabase,
@@ -756,8 +792,11 @@ export async function processClientMessageWithAI(
       )
     );
 
-    if (classified.intent === "accept_pending_offer") {
-      const activeOffer = getActivePendingPropertyOffer(memoryLead);
+    if (
+      classified.intent === "accept_pending_offer" &&
+      !phaseBCityOverrideApplied
+    ) {
+      const activeOffer = getActivePendingPropertyOffer(memoryLeadForTurn);
       if (activeOffer) {
         await completePendingPropertyOffer(
           supabase,

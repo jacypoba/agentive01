@@ -18,6 +18,16 @@ export {
 } from "./build-shadow";
 
 export {
+  decisionCriteriaToSearchCriteria,
+  filterPropertiesForDecisionCity,
+  isConversationDecisionEnginePhaseBEnabled,
+  logConversationDecisionPhaseBApplied,
+  shouldApplyPhaseBCityOverride,
+  tryApplyPhaseBCityOverride,
+  type PhaseBPropertyResolution,
+} from "./apply-phase-b";
+
+export {
   buildCurrentFlowCriteria,
   buildShadowDiff,
   logConversationDecisionShadow,
