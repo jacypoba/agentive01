@@ -58,6 +58,23 @@ function isBroadSearch(criteria: DecisionSearchCriteria): boolean {
   );
 }
 
+function isPropertyCityPivot(resolved: ResolvedCriteriaShadow): boolean {
+  return (
+    resolved.contextUse.userOverrodePendingOffer || resolved.pendingOfferRejected
+  );
+}
+
+function skipBroadQualification(
+  criteria: DecisionSearchCriteria,
+  resolved: ResolvedCriteriaShadow,
+  pendingOfferAccepted: boolean
+): boolean {
+  return (
+    pendingOfferAccepted ||
+    (isPropertyCityPivot(resolved) && criteria.city != null)
+  );
+}
+
 export type SelectedActionShadow = {
   action: ConversationAction;
   reason: string;
@@ -98,7 +115,8 @@ export function selectActionShadow(
   if (
     GENERAL_QUESTION_PATTERN.test(latestMessage) &&
     !isPropertySearchMessage(latestMessage) &&
-    !pendingOfferAccepted
+    !pendingOfferAccepted &&
+    !isPropertyCityPivot(resolved)
   ) {
     return {
       action: "answer_general_question",
@@ -116,7 +134,10 @@ export function selectActionShadow(
 
   if (hasSearchIntent || criteria.city) {
     if (inventorySummary.matchCount > 0) {
-      if (isBroadSearch(criteria) && !pendingOfferAccepted) {
+      if (
+        isBroadSearch(criteria) &&
+        !skipBroadQualification(criteria, resolved, pendingOfferAccepted)
+      ) {
         return {
           action: "ask_clarifying_question",
           reason: "broad_search_needs_qualification",
@@ -161,7 +182,10 @@ export function selectActionShadow(
       pendingOfferAccepted ||
       contextUse.userOverrodePendingOffer
     ) {
-      if (isBroadSearch(criteria) && !pendingOfferAccepted) {
+      if (
+        isBroadSearch(criteria) &&
+        !skipBroadQualification(criteria, resolved, pendingOfferAccepted)
+      ) {
         return {
           action: "ask_clarifying_question",
           reason: "broad_search_no_inventory",
@@ -206,6 +230,65 @@ export function selectActionShadow(
     reason: "no_clear_property_intent",
     confidence: "low",
     replyInstruction: { kind: "llm", topic: "general" },
+    missingCriteria,
+  };
+}
+
+/** Pivot-aware action selection for Phase B2 cutover. */
+export function selectActionShadowForPivot(
+  latestMessage: string,
+  resolved: ResolvedCriteriaShadow,
+  inventorySummary: InventorySummary
+): SelectedActionShadow {
+  const { criteria, pendingOfferAccepted } = resolved;
+  const missingCriteria = computeMissingCriteria(criteria, latestMessage);
+
+  if (!criteria.propertyType?.trim()) {
+    return {
+      action: "ask_clarifying_question",
+      reason: "pivot_missing_property_type",
+      confidence: "high",
+      replyInstruction: {
+        kind: "deterministic",
+        template: "qualifying_question",
+      },
+      missingCriteria,
+    };
+  }
+
+  if (inventorySummary.matchCount > 0) {
+    return {
+      action: "show_properties",
+      reason: pendingOfferAccepted
+        ? "pending_offer_accepted_with_inventory"
+        : "pivot_city_match_inventory",
+      confidence: "high",
+      replyInstruction: {
+        kind: "deterministic",
+        template: "recommendation_intro",
+      },
+      missingCriteria,
+    };
+  }
+
+  if (inventorySummary.alternativeCities.length > 0) {
+    return {
+      action: "show_city_alternatives",
+      reason: "pivot_zero_match_with_alternative_cities",
+      confidence: "high",
+      replyInstruction: {
+        kind: "deterministic",
+        template: "city_alternative_offer",
+      },
+      missingCriteria,
+    };
+  }
+
+  return {
+    action: "no_match",
+    reason: "pivot_zero_match_no_alternatives",
+    confidence: "high",
+    replyInstruction: { kind: "deterministic", template: "no_match" },
     missingCriteria,
   };
 }

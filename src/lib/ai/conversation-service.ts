@@ -54,7 +54,7 @@ import {
   resolveConversationLanguageDebug,
 } from "@/lib/i18n/resolve-language";
 import { derivePropertySearchCriteriaDebug } from "@/lib/properties/search-criteria";
-import { runConversationDecisionShadowTurn, tryApplyPhaseBCityOverride } from "@/lib/ai/conversation-decision";
+import { runConversationDecisionShadowTurn, tryApplyPhaseBCityOverride, tryApplyPhaseB2PropertyPivot } from "@/lib/ai/conversation-decision";
 import type { SupportedLanguage } from "@/lib/i18n/types";
 import { findPropertyRecommendations } from "@/lib/properties/find-recommendations";
 import { buildRecommendationIntroText } from "@/lib/properties/recommendation-intros";
@@ -532,9 +532,68 @@ export async function processClientMessageWithAI(
     typeof derivePropertySearchCriteriaDebug
   > | null = null;
   let phaseBCityOverrideApplied = false;
+  let phaseB2Applied = false;
+  let phaseB2QualifyingReply: string | null = null;
   let memoryLeadForTurn = memoryLead;
 
-  if (shouldQueryProperties(classified)) {
+  const pendingOfferForTurn = getActivePendingPropertyOffer(memoryLeadForTurn);
+  const phaseB2Result = await tryApplyPhaseB2PropertyPivot(
+    supabase,
+    memoryLeadForTurn,
+    history,
+    message,
+    classified,
+    pendingOfferForTurn,
+    language
+  );
+
+  if (phaseB2Result) {
+    phaseB2Applied = true;
+    propertiesToRecommend = phaseB2Result.propertiesToRecommend;
+    availability = phaseB2Result.availability;
+    criteria = phaseB2Result.criteria;
+    isReshow = phaseB2Result.isReshow;
+    freshQueryMade = phaseB2Result.freshQueryMade;
+    cityAlternatives = phaseB2Result.cityAlternatives;
+    phaseB2QualifyingReply = phaseB2Result.qualifyingReply;
+
+    searchDebugForShadow = derivePropertySearchCriteriaDebug(
+      memoryLeadForTurn,
+      history,
+      { preferLatestMessage: true, relaxed: true }
+    );
+
+    if (phaseB2Result.completePendingOffer && pendingOfferForTurn) {
+      memoryLeadForTurn = await completePendingPropertyOffer(
+        supabase,
+        workspaceId,
+        lead.id,
+        pendingOfferForTurn
+      );
+      languageLead = memoryLeadForTurn;
+      logPendingOfferCompleted(lead.id, pendingOfferForTurn);
+    }
+
+    if (
+      cityAlternatives &&
+      cityAlternatives.availableCities.length > 0 &&
+      propertiesToRecommend.length === 0 &&
+      availability.noMatchesInDatabase &&
+      criteria
+    ) {
+      const pendingOffer = buildPendingOfferFromCityAlternative(
+        cityAlternatives,
+        criteria
+      );
+      await savePendingPropertyOffer(
+        supabase,
+        workspaceId,
+        lead.id,
+        pendingOffer
+      );
+      logPendingOfferCreated(lead.id, pendingOffer);
+    }
+  } else if (shouldQueryProperties(classified)) {
     const searchDebug = derivePropertySearchCriteriaDebug(
       memoryLeadForTurn,
       history,
@@ -679,13 +738,19 @@ export async function processClientMessageWithAI(
   };
 
   const gatedQualifyingReply =
-    shouldQueryProperties(classified) &&
+    phaseB2QualifyingReply ??
+    (shouldQueryProperties(classified) &&
     propertiesToRecommend.length === 0 &&
     recommendationGate != null &&
     !recommendationGate.shouldSendRecommendations &&
     recommendationGate.qualifyingReply
       ? recommendationGate.qualifyingReply
-      : null;
+      : null);
+
+  const introClassified =
+    phaseB2Applied && propertiesToRecommend.length > 0
+      ? { ...classified, intent: "property_search" as const }
+      : classified;
 
   const aiReply =
     gatedQualifyingReply ??
@@ -694,7 +759,7 @@ export async function processClientMessageWithAI(
       history,
       propertiesToRecommend,
       availability,
-      classified,
+      introClassified,
       isReshow,
       freshQueryMade,
       language,

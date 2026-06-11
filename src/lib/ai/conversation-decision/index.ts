@@ -28,6 +28,15 @@ export {
 } from "./apply-phase-b";
 
 export {
+  hasPropertyPivotEvidence,
+  isConversationDecisionEnginePhaseB2Enabled,
+  logConversationDecisionPhaseB2Applied,
+  shouldApplyPhaseB2PropertyPivot,
+  tryApplyPhaseB2PropertyPivot,
+  type PhaseB2PropertyResolution,
+} from "./apply-phase-b2";
+
+export {
   buildCurrentFlowCriteria,
   buildShadowDiff,
   logConversationDecisionShadow,
@@ -40,6 +49,6 @@ export {
   resolveCriteriaShadow,
 } from "./resolve-criteria-shadow";
 
-export { selectActionShadow } from "./select-action-shadow";
+export { selectActionShadow, selectActionShadowForPivot } from "./select-action-shadow";
 
 export { runConversationDecisionShadowTurn } from "./run-shadow";
