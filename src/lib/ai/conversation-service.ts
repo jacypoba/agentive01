@@ -54,6 +54,7 @@ import {
   resolveConversationLanguageDebug,
 } from "@/lib/i18n/resolve-language";
 import { derivePropertySearchCriteriaDebug } from "@/lib/properties/search-criteria";
+import { runConversationDecisionShadowTurn } from "@/lib/ai/conversation-decision";
 import type { SupportedLanguage } from "@/lib/i18n/types";
 import { findPropertyRecommendations } from "@/lib/properties/find-recommendations";
 import { buildRecommendationIntroText } from "@/lib/properties/recommendation-intros";
@@ -487,6 +488,19 @@ export async function processClientMessageWithAI(
 
     const updatedLead = await finalizeLead(supabase, lead, history);
 
+    runConversationDecisionShadowTurn({
+      leadId: lead.id,
+      latestMessage: message,
+      history,
+      lead: languageLead,
+      language,
+      classified,
+      propertiesToRecommendCount: 0,
+      availability: EMPTY_AVAILABILITY,
+      cityAlternatives: null,
+      recommendationGate: null,
+    });
+
     logLanguageFinalCheck({
       incomingText: message,
       storedLanguage: memoryLead.preferred_language,
@@ -514,6 +528,9 @@ export async function processClientMessageWithAI(
   let recommendationGate: ReturnType<
     typeof evaluatePropertyRecommendationGate
   > | null = null;
+  let searchDebugForShadow: ReturnType<
+    typeof derivePropertySearchCriteriaDebug
+  > | null = null;
 
   if (shouldQueryProperties(classified)) {
     const searchDebug = derivePropertySearchCriteriaDebug(
@@ -521,6 +538,7 @@ export async function processClientMessageWithAI(
       history,
       { preferLatestMessage: shouldRunFreshPropertyQuery(classified) }
     );
+    searchDebugForShadow = searchDebug;
 
     const resolved =
       classified.intent === "accept_pending_offer"
@@ -603,6 +621,20 @@ export async function processClientMessageWithAI(
       isReshow,
     });
   }
+
+  runConversationDecisionShadowTurn({
+    leadId: lead.id,
+    latestMessage: message,
+    history,
+    lead: languageLead,
+    language,
+    classified,
+    searchDebug: searchDebugForShadow,
+    propertiesToRecommendCount: propertiesToRecommend.length,
+    availability,
+    cityAlternatives,
+    recommendationGate,
+  });
 
   const guardContext = {
     intent: classified.intent,
