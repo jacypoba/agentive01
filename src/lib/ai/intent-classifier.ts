@@ -38,13 +38,13 @@ const CLOSING_ONLY_PATTERN =
   /^(est[aá]\s+bem|tudo\s+bem|ok|okay|perfeito|perfetto|perfecto|combinado|sem\s+problema|fico\s+por\s+aqui|at[eé]\s+(logo|j[aá]|breve)|adeus|boa\s+(tarde|noite|sorte))[\s,!.👌🙂]*$/i;
 
 const PROPERTY_SEARCH_PATTERN =
-  /\b(procuro|procurar|procura|quero|preciso|interess(?:a|o)|busco|pesquiso|looking for|searching for|cerco|cercare|voglio|quiero|buscar)\b/i;
+  /\b(procuro|procurar|procura|quero|preciso|interess(?:a|o)|busco|pesquiso|looking for|searching for|cerco|cercare|voglio|quiero|buscar|je cherche|je souhaite|je veux|acheter|louer|cherche|souhaite)\b/i;
 
 const PROPERTY_TYPE_IN_MESSAGE =
-  /\b(apartamento|moradia|vivenda|loft|duplex|penthouse|estúdio|estudio|studio|house|apartment|appartamento|flat|villa|home|casa|villetta|vivienda|t[0-4])\b/i;
+  /\b(apartamento|moradia|vivenda|loft|duplex|penthouse|estúdio|estudio|studio|house|apartment|appartamento|flat|villa|home|casa|villetta|vivienda|maison|appartement|t[0-4])\b/i;
 
 const CITY_OR_BUDGET_SIGNAL =
-  /\b(em\s+[a-zà-ú]|in\s+[a-z]|en\s+[a-z]|a\s+[a-z]|lisboa|porto|milano|milan|milão|firenze|florence|roma|cascais|sintra|oeiras|faro|coimbra|braga|até|fino a|hasta|orçamento|budget|presupuesto|€|\d[\d.,\s]*(mil|mila|k|milhões?))\b/i;
+  /\b(em\s+[a-zà-ú]|in\s+[a-z]|en\s+[a-z]|a\s+[a-z]|à\s+[a-zà-ú]|lisboa|porto|milano|milan|milão|firenze|florence|roma|rome|paris|madrid|london|londres|cascais|sintra|oeiras|faro|coimbra|braga|até|fino a|hasta|orçamento|budget|presupuesto|€|\d[\d.,\s]*(mil|mila|k|milhões?))\b/i;
 
 const GENERAL_QUESTION_PATTERN =
   /\?|^(como|quando|onde|quanto|qual|quais|o que|what|how|when|where|why|come|quando|dove|quanto|quale|quali|cosa|qué|que|como|cuando|dónde|donde|cuánto|cuanto|pode|podes|consegue|puoi|puedes)\b/i;

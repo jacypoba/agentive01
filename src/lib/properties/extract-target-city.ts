@@ -80,6 +80,21 @@ const REJECTION_WINDOW_AFTER = 45;
 const PREFERENCE_WINDOW_BEFORE = 55;
 const PREFERENCE_WINDOW_AFTER = 15;
 
+/** Italian/PT/ES budget boundary words — never treat as city after "a/em/in". */
+const NON_CITY_PREPOSITION_TOKENS = new Set([
+  "fino",
+  "ate",
+  "hasta",
+  "up",
+  "to",
+  "around",
+  "near",
+]);
+
+function isNonCityPrepositionToken(candidate: string): boolean {
+  return NON_CITY_PREPOSITION_TOKENS.has(foldKey(candidate));
+}
+
 function dedupeMentions(mentions: CityMention[]): CityMention[] {
   const sorted = [...mentions].sort(
     (a, b) => a.start - b.start || b.end - b.start - (a.end - a.start)
@@ -144,6 +159,7 @@ function findPrepositionMentions(
   while ((match = re.exec(folded)) !== null) {
     const candidate = match[1]?.trim();
     if (!candidate || isPropertyTypeToken(candidate)) continue;
+    if (isNonCityPrepositionToken(candidate)) continue;
 
     const city = normalizeCity(candidate);
     if (!city) continue;

@@ -8,6 +8,7 @@ import {
   shouldRunFreshPropertyQuery,
   shouldUseReshowBatch,
 } from "@/lib/ai/intent-classifier";
+import { isPropertyRelatedTurn } from "@/lib/ai/conversation-decision/is-property-related-turn";
 
 function clientMessage(text: string): Conversation {
   return {
@@ -51,9 +52,49 @@ function leadWithPendingOffer(): Lead {
   };
 }
 
+function baseLead(partial: Partial<Lead> = {}): Lead {
+  return {
+    id: "lead-fr-1",
+    user_id: "user-1",
+    workspace_id: "ws-1",
+    client_name: "Test",
+    phone: null,
+    phone_normalized: null,
+    interest: null,
+    status: "new",
+    budget: null,
+    preferred_area: null,
+    property_type: null,
+    timeline: null,
+    intent_status: "unknown",
+    visit_requested: false,
+    visit_datetime_text: null,
+    preferred_language: "fr",
+    pending_property_offer: null,
+    created_at: new Date().toISOString(),
+    ...partial,
+  };
+}
+
 function historyFrom(messages: string[]): Conversation[] {
   return messages.map(clientMessage);
 }
+
+describe("French property search routing", () => {
+  it('"bonjour, je souhaite acheter une maison à Rome" routes to Property V1', () => {
+    const message = "bonjour, je souhaite acheter une maison à Rome";
+    const history = [clientMessage(message)];
+    const lead = baseLead();
+    const classified = classifyMessageIntent(history, lead);
+
+    assert.equal(classified.intent, "property_search");
+    assert.equal(shouldQueryProperties(classified), true);
+    assert.equal(
+      isPropertyRelatedTurn(message, history, classified, lead, null),
+      true
+    );
+  });
+});
 
 describe("classifyMessageIntent", () => {
   it('classifies "está bem, obrigado" as thanks_or_closing', () => {
@@ -139,6 +180,24 @@ describe("classifyMessageIntent", () => {
     assert.equal(result.intent, "accept_pending_offer");
     assert.equal(shouldQueryProperties(result), true);
     assert.equal(shouldRunFreshPropertyQuery(result), false);
+  });
+
+  describe("French property search", () => {
+    const frenchCases = [
+      "bonjour, je souhaite acheter une maison à Rome",
+      "je cherche une maison à Rome",
+      "je veux acheter une maison à Rome",
+      "je cherche un appartement à Paris",
+      "je souhaite louer un appartement à Milan",
+    ];
+
+    for (const message of frenchCases) {
+      it(`classifies "${message}" as property_search`, () => {
+        const result = classifyMessageIntent(historyFrom([message]));
+        assert.equal(result.intent, "property_search");
+        assert.equal(shouldQueryProperties(result), true);
+      });
+    }
   });
 });
 

@@ -74,4 +74,18 @@ describe("extractCityFromMessage", () => {
       "Milano"
     );
   });
+
+  it('does not treat "fino a" budget phrase as city Fino', () => {
+    assert.equal(
+      extractCityFromMessage("per acquistare, una casa a fino a 800000 euro"),
+      null
+    );
+  });
+
+  it('keeps Milano when message includes "fino a" budget cap', () => {
+    assert.equal(
+      extractCityFromMessage("Cerco casa a Milano fino a 800 mila euro"),
+      "Milano"
+    );
+  });
 });
