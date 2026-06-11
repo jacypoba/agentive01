@@ -52,6 +52,74 @@ describe("Language strategy — messy real messages", () => {
     });
   });
 
+  describe("Portuguese overrides stale stored language", () => {
+    const ptRomaCases = [
+      "olá, estou procurando uma casa em Roma",
+      "ola estou procurando uma casa em Roma",
+      "estou procurando uma casa em Roma",
+      "estou à procura de uma casa em Roma",
+      "procuro uma casa em Roma",
+    ];
+
+    for (const message of ptRomaCases) {
+      it(`stored=it, "${message}" → pt`, () => {
+        const result = resolve(message, "it");
+        assert.equal(result.finalLanguage, "pt");
+        assert.ok(
+          result.reason === "clear_current_message" ||
+            result.reason === "strong_current_message"
+        );
+      });
+    }
+
+    it('stored=it, "ok" → it', () => {
+      const result = resolve("ok", "it");
+      assert.equal(result.finalLanguage, "it");
+      assert.equal(result.reason, "sticky_ambiguous");
+    });
+
+    it('stored=it, "casa Roma" → it', () => {
+      const result = resolve("casa Roma", "it");
+      assert.equal(result.finalLanguage, "it");
+      assert.ok(
+        result.reason === "sticky_ambiguous" ||
+          result.reason === "uncertain_keep_stored"
+      );
+    });
+
+    it('stored=it, "Roma" → it', () => {
+      const result = resolve("Roma", "it");
+      assert.equal(result.finalLanguage, "it");
+      assert.ok(
+        result.reason === "sticky_ambiguous" ||
+          result.reason === "uncertain_keep_stored"
+      );
+    });
+  });
+
+  describe("Cross-language switch from stored", () => {
+    it("stored=pt, Italian clear message switches to it", () => {
+      const result = resolve(
+        "salve, sto cercando una casa a Milano",
+        "pt"
+      );
+      assert.equal(result.finalLanguage, "it");
+      assert.ok(
+        result.reason === "clear_current_message" ||
+          result.reason === "strong_current_message"
+      );
+    });
+
+    it("stored=fr, English clear message switches to en", () => {
+      const result = resolve("hi, I'm looking for a house in London", "fr");
+      assert.equal(result.finalLanguage, "en");
+      assert.ok(
+        result.reason === "clear_current_message" ||
+          result.reason === "strong_current_message"
+      );
+    });
+  });
+
   describe("Portuguese", () => {
     it("help + search in Milano", () => {
       const result = resolve(

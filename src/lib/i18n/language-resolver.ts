@@ -55,7 +55,7 @@ const GREETING_ONLY =
   /^(ol[aá]|hi|hello|hey|ciao|hola|buongiorno|buonasera|bom dia|boa tarde|boa noite|salve|bonjour)[\s!.?👋🙂😊]*$/iu;
 
 const WEAK_ONLY_MESSAGE =
-  /^(?:\s|casa|milano|milan|mil[aá]n|budget|\d[\dk]*)+$/iu;
+  /^(?:\s|casa|milano|milan|mil[aá]n|roma|budget|\d[\dk]*)+$/iu;
 
 function getStoredLanguage(
   storedLanguage?: string | null
@@ -202,12 +202,18 @@ export function resolveConversationLanguageStrategy(
   const topHasStrongEvidence = hasNonWeakStrongEvidence(evidence, top.language);
   const confidence = deriveConfidence(topStrong.score, strongMargin, phraseHits);
 
+  const storedStrongScore = stored ? strongScores[stored] : 0;
+  const storedTotalScore = stored ? scores[stored] : 0;
+  const beatsStoredClearly =
+    topStrong.score - storedStrongScore >= MIN_SCORE_MARGIN &&
+    top.score - storedTotalScore >= MIN_SCORE_MARGIN;
+
   const canSwitchFromStored =
     topHasStrongEvidence &&
     top.language !== stored &&
     phraseHits >= 1 &&
     topStrong.score >= MIN_SWITCH_STRONG_SCORE &&
-    (strongMargin >= 2 || phraseHits >= 2);
+    (strongMargin >= 2 || phraseHits >= 2 || beatsStoredClearly);
 
   if (stored) {
     if (canSwitchFromStored) {
