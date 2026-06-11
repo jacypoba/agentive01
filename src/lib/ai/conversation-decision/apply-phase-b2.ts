@@ -78,11 +78,11 @@ export function hasPropertyPivotEvidence(
 
   const cityDiffersFromOffer =
     Boolean(offeredCity && targetCity) &&
-    fold(targetCity!) !== fold(offeredCity);
+    fold(targetCity!) !== fold(offeredCity!);
 
   const cityDiffersFromRequested =
     Boolean(requestedCity && targetCity) &&
-    fold(targetCity!) !== fold(requestedCity);
+    fold(targetCity!) !== fold(requestedCity!);
 
   const asksAvailabilityInCity = AVAILABILITY_ASK_PATTERN.test(latestMessage);
   const rejectionWithCity =
