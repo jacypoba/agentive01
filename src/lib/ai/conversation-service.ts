@@ -54,6 +54,7 @@ import {
   resolveConversationLanguageDebug,
 } from "@/lib/i18n/resolve-language";
 import { derivePropertySearchCriteriaDebug } from "@/lib/properties/search-criteria";
+import { applyPropertyOutboundSafetyGate } from "@/lib/properties/property-outbound-safety-gate";
 import { runConversationDecisionShadowTurn, tryApplyPhaseBCityOverride, tryApplyPhaseB2PropertyPivot, tryApplyPropertyDecisionV1 } from "@/lib/ai/conversation-decision";
 import type { SupportedLanguage } from "@/lib/i18n/types";
 import { findPropertyRecommendations } from "@/lib/properties/find-recommendations";
@@ -788,6 +789,17 @@ export async function processClientMessageWithAI(
     cityAlternatives,
     recommendationGate,
   });
+
+  const safetyGate = applyPropertyOutboundSafetyGate({
+    leadId: lead.id,
+    properties: propertiesToRecommend,
+    criteria,
+    lead: languageLead,
+    history,
+    availability,
+  });
+  propertiesToRecommend = safetyGate.properties;
+  availability = safetyGate.availability;
 
   const guardContext = {
     intent: classified.intent,

@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { propertyMatchesCriteria } from "@/lib/properties/property-criteria-match";
 import { citiesMatch, propertyTypesMatch } from "@/lib/properties/normalize-search";
 import { resolveWorkspaceIdForInsert } from "@/lib/workspaces/resolve-workspace-id-for-insert";
 import type {
@@ -159,41 +160,6 @@ function normalizeProperty(row: Property): Property {
     ...row,
     price: typeof row.price === "string" ? parseFloat(row.price) : row.price,
   };
-}
-
-function propertyMatchesCriteria(
-  property: Property,
-  criteria: PropertySearchCriteria
-): boolean {
-  if (criteria.city) {
-    const neighborhood = property.neighborhood?.trim() ?? "";
-    const locationMatch =
-      citiesMatch(criteria.city, property.city) ||
-      (neighborhood.length > 0 && citiesMatch(criteria.city, neighborhood));
-    if (!locationMatch) {
-      return false;
-    }
-  }
-
-  if (criteria.propertyType) {
-    if (!propertyTypesMatch(criteria.propertyType, property.property_type)) {
-      return false;
-    }
-  }
-
-  if (criteria.maxBudget != null && property.price > criteria.maxBudget) {
-    return false;
-  }
-
-  if (criteria.neighborhood?.trim()) {
-    const target = criteria.neighborhood.trim();
-    const neighborhood = property.neighborhood?.trim() ?? "";
-    if (!neighborhood || !citiesMatch(target, neighborhood)) {
-      return false;
-    }
-  }
-
-  return true;
 }
 
 function scoreProperty(property: Property, criteria: PropertySearchCriteria): number {
