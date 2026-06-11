@@ -21,37 +21,18 @@ export type {
   PendingPropertyOfferStatus,
 } from "@/types/database";
 
-const MORE_OPTIONS_PATTERN =
-  /\b(mostra outras|outras opções|outras opcões|outras opcoes|tem mais|tens mais|há mais|ha mais|mais opções|mais opcões|more options|altre opzioni|más opciones)\b/i;
+export {
+  classifyPendingOfferResponse,
+  isPendingOfferAcceptanceMessage,
+  logPendingOfferResponseClassified,
+  shouldAcceptPendingOfferResponse,
+} from "@/lib/ai/classify-pending-offer-response";
 
-const AFFIRMATIVE_ONLY =
-  /^(sim|sì|si|yes|yeah|yep|oui|ok|okay|sí|ja|oui[\s,!.👌🙂]*)$/i;
-
-const ACCEPTANCE_PHRASE_PATTERN =
-  /\b(mostra-me|mostrami|fammi vedere|fami vedere|show me|send them|envia|muestrame|muéstrame|quiero ver|quero ver|je veux voir|montre-moi|montre moi)\b/i;
-
-const PROPERTY_SEARCH_PATTERN =
-  /\b(procuro|procurar|procura|quero|preciso|interess(?:a|o)|busco|pesquiso|looking for|searching for|cerco|cercare|voglio|quiero|buscar)\b/i;
-
-const PROPERTY_TYPE_IN_MESSAGE =
-  /\b(apartamento|moradia|vivenda|loft|duplex|penthouse|estúdio|estudio|studio|house|apartment|appartamento|flat|villa|home|casa|villetta|vivienda|t[0-4])\b/i;
-
-const CITY_OR_BUDGET_SIGNAL =
-  /\b(em\s+[a-zà-ú]|in\s+[a-z]|en\s+[a-z]|a\s+[a-z]|lisboa|porto|milano|milan|milão|firenze|florence|roma|cascais|sintra|oeiras|faro|coimbra|braga|até|fino a|hasta|orçamento|budget|presupuesto|€|\d[\d.,\s]*(mil|mila|k|milhões?))\b/i;
-
-function isNewPropertySearchMessage(text: string): boolean {
-  if (!text.trim()) return false;
-
-  const hasSearchVerb = PROPERTY_SEARCH_PATTERN.test(text);
-  const hasType = PROPERTY_TYPE_IN_MESSAGE.test(text);
-  const hasLocationOrBudget = CITY_OR_BUDGET_SIGNAL.test(text);
-
-  if (hasSearchVerb && (hasType || hasLocationOrBudget)) {
-    return true;
-  }
-
-  return hasType && hasLocationOrBudget;
-}
+export type {
+  PendingOfferResponseClassification,
+  PendingOfferResponseDecision,
+  PendingOfferResponseConfidence,
+} from "@/lib/ai/classify-pending-offer-response";
 
 export function parsePendingPropertyOffer(lead: Lead): PendingPropertyOffer | null {
   const raw = lead.pending_property_offer;
@@ -99,27 +80,6 @@ export function getActivePendingPropertyOffer(lead: Lead): PendingPropertyOffer 
     return null;
   }
   return offer;
-}
-
-export function isPendingOfferAcceptanceMessage(text: string): boolean {
-  const trimmed = text.trim();
-  if (!trimmed || trimmed.length > 200) {
-    return false;
-  }
-
-  if (MORE_OPTIONS_PATTERN.test(trimmed)) {
-    return false;
-  }
-
-  if (isNewPropertySearchMessage(trimmed)) {
-    return false;
-  }
-
-  if (AFFIRMATIVE_ONLY.test(trimmed)) {
-    return true;
-  }
-
-  return ACCEPTANCE_PHRASE_PATTERN.test(trimmed);
 }
 
 export function buildPendingOfferFromCityAlternative(

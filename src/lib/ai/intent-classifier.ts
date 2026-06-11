@@ -1,7 +1,11 @@
 import type { Conversation, Lead } from "@/types/database";
 import {
+  classifyPendingOfferResponse,
+  logPendingOfferResponseClassified,
+  shouldAcceptPendingOfferResponse,
+} from "@/lib/ai/classify-pending-offer-response";
+import {
   getActivePendingPropertyOffer,
-  isPendingOfferAcceptanceMessage,
 } from "@/lib/ai/pending-property-offer";
 import {
   clientAskedForMoreOptions,
@@ -116,13 +120,19 @@ export function classifyMessageIntent(
   const latestMessage = getLatestClientText(history);
 
   const pendingOffer = lead ? getActivePendingPropertyOffer(lead) : null;
-  if (pendingOffer && isPendingOfferAcceptanceMessage(latestMessage)) {
-    return {
-      intent: "accept_pending_offer",
-      wantsReshow: false,
-      wantsMore: false,
-      latestMessage,
-    };
+  if (pendingOffer) {
+    const pendingResponse = classifyPendingOfferResponse(latestMessage, pendingOffer);
+    if (lead.id) {
+      logPendingOfferResponseClassified(lead.id, latestMessage, pendingResponse);
+    }
+    if (shouldAcceptPendingOfferResponse(pendingResponse)) {
+      return {
+        intent: "accept_pending_offer",
+        wantsReshow: false,
+        wantsMore: false,
+        latestMessage,
+      };
+    }
   }
 
   const wantsReshow = clientAskedToReshowOptions(history);

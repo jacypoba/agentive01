@@ -9,7 +9,6 @@ import {
   buildPendingOfferFromCityAlternative,
   deriveSearchCriteriaFromPendingOffer,
   getActivePendingPropertyOffer,
-  isPendingOfferAcceptanceMessage,
   parsePendingPropertyOffer,
 } from "@/lib/ai/pending-property-offer";
 import { buildCityAlternativeSummary } from "@/lib/properties/city-alternatives";
@@ -119,41 +118,13 @@ function mockSupabase(properties: Property[]) {
   };
 }
 
-describe("isPendingOfferAcceptanceMessage", () => {
-  const acceptanceMessages = [
-    "sim",
-    "yes",
-    "sì",
-    "oui",
-    "mostra-me",
-    "mostrami",
-    "show me",
-    "send them",
-    "quero ver",
-    "je veux voir",
-    "montre-moi",
-  ];
-
-  for (const text of acceptanceMessages) {
-    it(`accepts "${text}"`, () => {
-      assert.equal(isPendingOfferAcceptanceMessage(text), true);
-    });
-  }
-
-  it("rejects more-options requests", () => {
-    assert.equal(isPendingOfferAcceptanceMessage("mostra outras opções"), false);
-  });
-
-  it("rejects new property search with location", () => {
-    assert.equal(
-      isPendingOfferAcceptanceMessage("procuro apartamento em Lisboa"),
-      false
-    );
-  });
-});
-
 describe("classifyMessageIntent with pending offer", () => {
   const lead = baseLead({ pending_property_offer: pendingMilanoOffer() });
+
+  it('classifies "Sim, por favor" as accept_pending_offer when offer is pending', () => {
+    const result = classifyMessageIntent([clientMessage("Sim, por favor")], lead);
+    assert.equal(result.intent, "accept_pending_offer");
+  });
 
   it('classifies "sim" as accept_pending_offer when offer is pending', () => {
     const result = classifyMessageIntent([clientMessage("sim")], lead);
