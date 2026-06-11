@@ -120,7 +120,7 @@ export function classifyMessageIntent(
   const latestMessage = getLatestClientText(history);
 
   const pendingOffer = lead ? getActivePendingPropertyOffer(lead) : null;
-  if (pendingOffer) {
+  if (pendingOffer && lead) {
     const pendingResponse = classifyPendingOfferResponse(latestMessage, pendingOffer);
     if (lead.id) {
       logPendingOfferResponseClassified(lead.id, latestMessage, pendingResponse);
