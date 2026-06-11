@@ -1,4 +1,7 @@
-import { lastClientMessageMentionsVisit } from "@/lib/ai/qualification";
+import {
+  clientAskedToSeeOptions,
+  lastClientMessageMentionsVisit,
+} from "@/lib/ai/qualification";
 import type { Conversation } from "@/types/database";
 import type {
   ConversationAction,
@@ -67,11 +70,13 @@ function isPropertyCityPivot(resolved: ResolvedCriteriaShadow): boolean {
 function skipBroadQualification(
   criteria: DecisionSearchCriteria,
   resolved: ResolvedCriteriaShadow,
-  pendingOfferAccepted: boolean
+  pendingOfferAccepted: boolean,
+  history: Conversation[]
 ): boolean {
   return (
     pendingOfferAccepted ||
-    (isPropertyCityPivot(resolved) && criteria.city != null)
+    (isPropertyCityPivot(resolved) && criteria.city != null) ||
+    clientAskedToSeeOptions(history)
   );
 }
 
@@ -136,7 +141,7 @@ export function selectActionShadow(
     if (inventorySummary.matchCount > 0) {
       if (
         isBroadSearch(criteria) &&
-        !skipBroadQualification(criteria, resolved, pendingOfferAccepted)
+        !skipBroadQualification(criteria, resolved, pendingOfferAccepted, history)
       ) {
         return {
           action: "ask_clarifying_question",
@@ -184,7 +189,7 @@ export function selectActionShadow(
     ) {
       if (
         isBroadSearch(criteria) &&
-        !skipBroadQualification(criteria, resolved, pendingOfferAccepted)
+        !skipBroadQualification(criteria, resolved, pendingOfferAccepted, history)
       ) {
         return {
           action: "ask_clarifying_question",

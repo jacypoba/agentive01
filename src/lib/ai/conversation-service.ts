@@ -54,7 +54,7 @@ import {
   resolveConversationLanguageDebug,
 } from "@/lib/i18n/resolve-language";
 import { derivePropertySearchCriteriaDebug } from "@/lib/properties/search-criteria";
-import { runConversationDecisionShadowTurn, tryApplyPhaseBCityOverride, tryApplyPhaseB2PropertyPivot } from "@/lib/ai/conversation-decision";
+import { runConversationDecisionShadowTurn, tryApplyPhaseBCityOverride, tryApplyPhaseB2PropertyPivot, tryApplyPropertyDecisionV1 } from "@/lib/ai/conversation-decision";
 import type { SupportedLanguage } from "@/lib/i18n/types";
 import { findPropertyRecommendations } from "@/lib/properties/find-recommendations";
 import { buildRecommendationIntroText } from "@/lib/properties/recommendation-intros";
@@ -533,10 +533,68 @@ export async function processClientMessageWithAI(
   > | null = null;
   let phaseBCityOverrideApplied = false;
   let phaseB2Applied = false;
+  let propertyV1Applied = false;
   let phaseB2QualifyingReply: string | null = null;
+  let propertyV1QualifyingReply: string | null = null;
   let memoryLeadForTurn = memoryLead;
 
   const pendingOfferForTurn = getActivePendingPropertyOffer(memoryLeadForTurn);
+  const propertyV1Result = await tryApplyPropertyDecisionV1(
+    supabase,
+    memoryLeadForTurn,
+    history,
+    message,
+    classified,
+    pendingOfferForTurn,
+    language
+  );
+
+  if (propertyV1Result) {
+    propertyV1Applied = true;
+    propertiesToRecommend = propertyV1Result.propertiesToRecommend;
+    availability = propertyV1Result.availability;
+    criteria = propertyV1Result.criteria;
+    isReshow = propertyV1Result.isReshow;
+    freshQueryMade = propertyV1Result.freshQueryRan;
+    cityAlternatives = propertyV1Result.cityAlternatives;
+    propertyV1QualifyingReply = propertyV1Result.qualifyingReply;
+
+    searchDebugForShadow = derivePropertySearchCriteriaDebug(
+      memoryLeadForTurn,
+      history,
+      { preferLatestMessage: true, relaxed: true }
+    );
+
+    if (propertyV1Result.completePendingOffer && pendingOfferForTurn) {
+      memoryLeadForTurn = await completePendingPropertyOffer(
+        supabase,
+        workspaceId,
+        lead.id,
+        pendingOfferForTurn
+      );
+      languageLead = memoryLeadForTurn;
+      logPendingOfferCompleted(lead.id, pendingOfferForTurn);
+    }
+
+    if (
+      propertyV1Result.createPendingOffer &&
+      cityAlternatives &&
+      cityAlternatives.availableCities.length > 0 &&
+      criteria
+    ) {
+      const pendingOffer = buildPendingOfferFromCityAlternative(
+        cityAlternatives,
+        criteria
+      );
+      await savePendingPropertyOffer(
+        supabase,
+        workspaceId,
+        lead.id,
+        pendingOffer
+      );
+      logPendingOfferCreated(lead.id, pendingOffer);
+    }
+  } else {
   const phaseB2Result = await tryApplyPhaseB2PropertyPivot(
     supabase,
     memoryLeadForTurn,
@@ -715,6 +773,7 @@ export async function processClientMessageWithAI(
       isReshow,
     });
   }
+  }
 
   runConversationDecisionShadowTurn({
     leadId: lead.id,
@@ -738,8 +797,10 @@ export async function processClientMessageWithAI(
   };
 
   const gatedQualifyingReply =
+    propertyV1QualifyingReply ??
     phaseB2QualifyingReply ??
     (shouldQueryProperties(classified) &&
+    !propertyV1Applied &&
     propertiesToRecommend.length === 0 &&
     recommendationGate != null &&
     !recommendationGate.shouldSendRecommendations &&
@@ -748,7 +809,7 @@ export async function processClientMessageWithAI(
       : null);
 
   const introClassified =
-    phaseB2Applied && propertiesToRecommend.length > 0
+    (propertyV1Applied || phaseB2Applied) && propertiesToRecommend.length > 0
       ? { ...classified, intent: "property_search" as const }
       : classified;
 

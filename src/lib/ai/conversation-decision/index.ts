@@ -37,6 +37,25 @@ export {
 } from "./apply-phase-b2";
 
 export {
+  buildPropertyConversationDecision,
+  type BuiltPropertyDecision,
+} from "./build-property-decision";
+
+export {
+  executePropertyDecision,
+  logPropertyDecisionV1Applied,
+  type PropertyDecisionV1Execution,
+} from "./execute-property-decision";
+
+export { isPropertyRelatedTurn } from "./is-property-related-turn";
+
+export {
+  isConversationDecisionEnginePropertyV1Enabled,
+  tryApplyPropertyDecisionV1,
+  type PropertyDecisionV1Result,
+} from "./apply-property-v1";
+
+export {
   buildCurrentFlowCriteria,
   buildShadowDiff,
   logConversationDecisionShadow,
