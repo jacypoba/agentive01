@@ -4,6 +4,7 @@ import {
 } from "@/lib/whatsapp/send";
 import {
   formatCatalogSpacer,
+  formatPropertyDisplayTitle,
   formatPropertyImageCaption,
   formatPropertyListingLine,
   hasPropertyImage,
@@ -354,7 +355,10 @@ export function buildPlainPropertySummary(
     : property.city;
   const listing = property.listing_url?.trim();
 
-  const lines = [`${property.title}`, location ? `📍 ${location}` : null];
+  const lines = [
+    formatPropertyDisplayTitle(property, lang),
+    location ? `📍 ${location}` : null,
+  ];
 
   if (listing && isValidOutboundUrl(listing)) {
     lines.push(formatPropertyListingLine(lang, listing));

@@ -1,3 +1,4 @@
+import { escapeRegex, foldKey } from "@/lib/properties/city-aliases";
 import {
   buildReshowIntroText as buildLocalizedReshowIntro,
   LISTING_LABELS,
@@ -13,6 +14,92 @@ const CATALOG_SPACER = "—";
 
 export const CATALOG_MAX = 4;
 export const CATALOG_MIN = 2;
+
+type NonPortugueseLanguage = Exclude<SupportedLanguage, "pt">;
+
+const EXACT_DISPLAY_TITLES: Record<
+  NonPortugueseLanguage,
+  Record<string, string>
+> = {
+  fr: {
+    "moradia com jardim": "Maison avec jardin",
+  },
+  it: {
+    "moradia com jardim": "Casa con giardino",
+  },
+  en: {
+    "moradia com jardim": "House with garden",
+  },
+  es: {
+    "moradia com jardim": "Casa con jardín",
+  },
+};
+
+/** Longest phrase first — partial CRM title localization at render time. */
+const DISPLAY_TITLE_PHRASES: Record<
+  NonPortugueseLanguage,
+  readonly { from: string; to: string }[]
+> = {
+  fr: [
+    { from: "Moradia com jardim", to: "Maison avec jardin" },
+    { from: "com jardim", to: "avec jardin" },
+    { from: "Apartamento", to: "Appartement" },
+    { from: "Moradia", to: "Maison" },
+    { from: "Casa", to: "Maison" },
+  ],
+  it: [
+    { from: "Moradia com jardim", to: "Casa con giardino" },
+    { from: "com jardim", to: "con giardino" },
+    { from: "Apartamento", to: "Appartamento" },
+    { from: "Moradia", to: "Casa" },
+    { from: "Casa", to: "Casa" },
+  ],
+  en: [
+    { from: "Moradia com jardim", to: "House with garden" },
+    { from: "com jardim", to: "with garden" },
+    { from: "Apartamento", to: "Apartment" },
+    { from: "Moradia", to: "House" },
+    { from: "Casa", to: "House" },
+  ],
+  es: [
+    { from: "Moradia com jardim", to: "Casa con jardín" },
+    { from: "com jardim", to: "con jardín" },
+    { from: "Apartamento", to: "Apartamento" },
+    { from: "Moradia", to: "Casa" },
+    { from: "Casa", to: "Casa" },
+  ],
+};
+
+/** Localized listing title for outbound cards — never mutates property.title. */
+export function formatPropertyDisplayTitle(
+  property: Property,
+  language: SupportedLanguage = "pt"
+): string {
+  const source = property.title?.trim() ?? "";
+  if (!source) {
+    return source;
+  }
+
+  const lang = normalizeLanguage(language);
+  if (lang === "pt") {
+    return source;
+  }
+
+  const exact = EXACT_DISPLAY_TITLES[lang][foldKey(source)];
+  if (exact) {
+    return exact;
+  }
+
+  let result = source;
+  for (const { from, to } of DISPLAY_TITLE_PHRASES[lang]) {
+    const pattern = new RegExp(escapeRegex(from), "gi");
+    if (pattern.test(result)) {
+      result = result.replace(pattern, to);
+    }
+  }
+
+  return result === source ? source : result;
+}
 
 export function getListingMarker(language: SupportedLanguage): string {
   return LISTING_LABELS[normalizeLanguage(language)];
@@ -34,7 +121,7 @@ export function formatPropertyCard(
 ): string {
   const lang = normalizeLanguage(language);
   const blocks: string[] = [
-    `${CARD_MARKER} ${property.title}`,
+    `${CARD_MARKER} ${formatPropertyDisplayTitle(property, lang)}`,
     ...buildPropertyDetailLines(property, lang),
   ];
 
