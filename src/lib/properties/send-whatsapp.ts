@@ -10,6 +10,7 @@ import {
   hasPropertyListing,
 } from "@/lib/properties/property-cards";
 import type { SupportedLanguage } from "@/lib/i18n/types";
+import { normalizeLanguage } from "@/lib/i18n/types";
 import type { Property } from "@/types/database";
 
 export type OutboundWhatsAppMessage =
@@ -21,6 +22,7 @@ export type OutboundWhatsAppMessage =
       kind: "property_image";
       property: Property;
       fallbackText: string;
+      language?: SupportedLanguage;
     }
   | {
       kind: "property_details";
@@ -32,6 +34,7 @@ export type OutboundWhatsAppMessage =
       property: Property;
       url: string;
       label?: string;
+      language?: SupportedLanguage;
     }
   | {
       kind: "catalog_spacer";
@@ -96,6 +99,7 @@ export async function sendOutboundWhatsAppMessages(
         phoneDigits,
         message.property,
         message.fallbackText,
+        message.language,
         instance,
         report,
         remoteJid,
@@ -133,7 +137,10 @@ export async function sendOutboundWhatsAppMessages(
       }
       const linkText =
         message.label?.trim() ||
-        formatPropertyListingLine("en", message.url);
+        formatPropertyListingLine(
+          normalizeLanguage(message.language),
+          message.url
+        );
       await deliverText(
         phoneDigits,
         linkText,
@@ -162,13 +169,16 @@ async function deliverPropertyImage(
   phoneDigits: string,
   property: Property,
   fallbackText: string,
+  language: SupportedLanguage | undefined,
   instance: string | undefined,
   report: OutboundSendReport,
   remoteJid: string | undefined,
   deps: OutboundWhatsAppSendDeps
 ): Promise<boolean> {
+  const lang = normalizeLanguage(language);
   const imageUrl = property.image_url?.trim() ?? "";
-  const textCard = fallbackText.trim() || buildPlainPropertySummary(property);
+  const textCard =
+    fallbackText.trim() || buildPlainPropertySummary(property, lang);
 
   if (imageUrl && isValidOutboundUrl(imageUrl)) {
     report.attempted += 1;
@@ -212,7 +222,16 @@ async function deliverPropertyImage(
     return true;
   }
 
-  await deliverText(phoneDigits, buildPlainPropertySummary(property), instance, report, "property_package", property.id, remoteJid, deps);
+  await deliverText(
+    phoneDigits,
+    buildPlainPropertySummary(property, lang),
+    instance,
+    report,
+    "property_package",
+    property.id,
+    remoteJid,
+    deps
+  );
   return true;
 }
 
@@ -255,7 +274,8 @@ async function deliverText(
 
 export function buildPropertyOutboundMessages(
   property: Property,
-  detailsText: string
+  detailsText: string,
+  language: SupportedLanguage = "pt"
 ): OutboundWhatsAppMessage[] {
   const packageText = detailsText.trim();
   const messages: OutboundWhatsAppMessage[] = [];
@@ -265,6 +285,7 @@ export function buildPropertyOutboundMessages(
       kind: "property_image",
       property,
       fallbackText: packageText,
+      language,
     });
     messages.push({
       kind: "property_details",
@@ -285,14 +306,15 @@ export function buildPropertyOutboundMessages(
 
 export function buildCatalogOutboundMessages(
   properties: Property[],
-  detailsTexts: string[]
+  detailsTexts: string[],
+  language: SupportedLanguage = "pt"
 ): OutboundWhatsAppMessage[] {
   const messages: OutboundWhatsAppMessage[] = [];
 
   properties.forEach((property, index) => {
     const detailsText = detailsTexts[index] ?? "";
 
-    messages.push(...buildPropertyOutboundMessages(property, detailsText));
+    messages.push(...buildPropertyOutboundMessages(property, detailsText, language));
 
     if (index < properties.length - 1) {
       messages.push({ kind: "catalog_spacer" });
@@ -322,7 +344,11 @@ export function buildPropertyDetailsWithListing(
   return `${trimmedDetails}\n${listingLine}`;
 }
 
-function buildPlainPropertySummary(property: Property): string {
+export function buildPlainPropertySummary(
+  property: Property,
+  language: SupportedLanguage = "pt"
+): string {
+  const lang = normalizeLanguage(language);
   const location = property.neighborhood
     ? `${property.neighborhood}, ${property.city}`
     : property.city;
@@ -331,7 +357,7 @@ function buildPlainPropertySummary(property: Property): string {
   const lines = [`${property.title}`, location ? `📍 ${location}` : null];
 
   if (listing && isValidOutboundUrl(listing)) {
-    lines.push(formatPropertyListingLine("en", listing));
+    lines.push(formatPropertyListingLine(lang, listing));
   }
 
   return lines.filter(Boolean).join("\n");

@@ -4,6 +4,7 @@ import {
   formatPropertyWhatsAppPackageText,
 } from "@/lib/properties/property-cards";
 import {
+  buildPlainPropertySummary,
   buildPropertyOutboundMessages,
   sendOutboundWhatsAppMessages,
   type OutboundWhatsAppSendDeps,
@@ -200,5 +201,88 @@ describe("sendOutboundWhatsAppMessages property package delivery", () => {
     assert.match(lastText, /Vedi dettagli:/);
     assert.equal(report.sent, 1);
     assert.equal(report.failed, 1);
+  });
+
+  it("plain property summary uses French listing label when language is fr", () => {
+    const property = sampleProperty({
+      id: "p-fr-plain",
+      image_url: null,
+      listing_url: listingUrl,
+    });
+
+    const summary = buildPlainPropertySummary(property, "fr");
+
+    assert.match(summary, /🔗 Voir les détails:/);
+    assert.doesNotMatch(summary, /View details/i);
+  });
+
+  it("property_listing fallback uses French when language is fr", async () => {
+    let lastText = "";
+
+    const deps: OutboundWhatsAppSendDeps = {
+      sendMedia: async () => ({
+        success: true,
+        sentToWhatsApp: true,
+        provider: "evolution",
+      }),
+      sendText: async (_phone, text) => {
+        lastText = text;
+        return { success: true, sentToWhatsApp: true, provider: "evolution" };
+      },
+    };
+
+    const property = sampleProperty({ id: "p-fr-listing" });
+
+    await sendOutboundWhatsAppMessages(
+      "33612345678",
+      [
+        {
+          kind: "property_listing",
+          property,
+          url: listingUrl,
+          language: "fr",
+        },
+      ],
+      undefined,
+      undefined,
+      deps
+    );
+
+    assert.match(lastText, /🔗 Voir les détails:/);
+    assert.doesNotMatch(lastText, /View details/i);
+  });
+
+  it("image fallback uses French plain summary when package text is empty", async () => {
+    let lastText = "";
+
+    const deps: OutboundWhatsAppSendDeps = {
+      sendMedia: async () => ({
+        success: false,
+        sentToWhatsApp: false,
+        provider: "evolution",
+        error: "media failed",
+      }),
+      sendText: async (_phone, text) => {
+        lastText = text;
+        return { success: true, sentToWhatsApp: true, provider: "evolution" };
+      },
+    };
+
+    const property = sampleProperty({
+      id: "p-fr-image-fallback",
+      image_url: imageUrl,
+      listing_url: listingUrl,
+    });
+
+    await sendOutboundWhatsAppMessages(
+      "33612345678",
+      buildPropertyOutboundMessages(property, "", "fr"),
+      undefined,
+      undefined,
+      deps
+    );
+
+    assert.match(lastText, /🔗 Voir les détails:/);
+    assert.doesNotMatch(lastText, /View details/i);
   });
 });

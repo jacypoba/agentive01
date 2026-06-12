@@ -871,7 +871,7 @@ export async function processClientMessageWithAI(
     }
 
     outboundMessages.push(
-      ...buildCatalogOutboundMessages(propertiesToRecommend, detailsTexts)
+      ...buildCatalogOutboundMessages(propertiesToRecommend, detailsTexts, language)
     );
 
     if (
@@ -926,7 +926,8 @@ export async function processClientMessageWithAI(
     outboundMessages.push(
       ...buildPropertyOutboundMessages(
         property,
-        formatPropertyWhatsAppPackageText(property, language)
+        formatPropertyWhatsAppPackageText(property, language),
+        language
       )
     );
 

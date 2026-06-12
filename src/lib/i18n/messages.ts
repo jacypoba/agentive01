@@ -84,6 +84,11 @@ export const RESHOW_CATALOG_INTROS = completeLanguageRecord({
     "Aquí están otra vez las opciones 👇",
     "Sin problema — te las mando de nuevo 👇",
   ],
+  fr: [
+    "Bien sûr — je vous les renvoie 👇",
+    "Les voici à nouveau 👇",
+    "Pas de problème — je renvoie 👇",
+  ],
 });
 
 export const RESHOW_SINGLE_INTROS = completeLanguageRecord({
@@ -91,6 +96,7 @@ export const RESHOW_SINGLE_INTROS = completeLanguageRecord({
   en: ["Sure — this was the option 👇", "Sending it again 👇"],
   it: ["Certo — era questa l'opzione 👇", "Te la rimando 👇"],
   es: ["Claro — era esta opción 👇", "Te la reenvío 👇"],
+  fr: ["Bien sûr — voici l'option 👇", "Je vous la renvoie 👇"],
 });
 
 /** First property recommendation — warm premium welcome before cards. */
@@ -119,6 +125,12 @@ export const FIRST_RECOMMENDATION_CATALOG_INTROS = completeLanguageRecord({
     "Genial — he encontrado unas opciones que cuadran con tu perfil:",
     "Muy bien 👌 Mira si alguna de estas te encaja:",
   ],
+  fr: [
+    "Voici quelques options qui pourraient vous intéresser 👇",
+    "J'ai trouvé quelques biens qui correspondent à votre recherche 👇",
+    "Voici des options en phase avec ce que vous cherchez 👇",
+    "Ces biens pourraient vous convenir 👇",
+  ],
 });
 
 export const FIRST_RECOMMENDATION_SINGLE_INTROS = completeLanguageRecord({
@@ -141,6 +153,11 @@ export const FIRST_RECOMMENDATION_SINGLE_INTROS = completeLanguageRecord({
     "Perfecto 👌 Tengo una opción que encaja con lo que buscas:",
     "Entendido 😊 Esta podría encajarte:",
     "Genial — esta cuadra bastante bien con tu perfil:",
+  ],
+  fr: [
+    "Voici une option qui pourrait vous intéresser 👇",
+    "J'ai trouvé une option qui correspond à votre recherche 👇",
+    "Cette option semble correspondre à votre recherche 👇",
   ],
 });
 
@@ -166,6 +183,11 @@ export const MORE_OPTIONS_CATALOG_INTROS = completeLanguageRecord({
     "Estas también encajan:",
     "Más opciones que merecen la pena:",
   ],
+  fr: [
+    "J'en ai d'autres 👇",
+    "Celles-ci pourraient aussi vous intéresser 👇",
+    "D'autres options à voir 👇",
+  ],
 });
 
 export const MORE_OPTIONS_SINGLE_INTROS = completeLanguageRecord({
@@ -173,6 +195,7 @@ export const MORE_OPTIONS_SINGLE_INTROS = completeLanguageRecord({
   en: ["I have one more option 👇", "This one could work too:"],
   it: ["Ne ho un'altra 👇", "Anche questa potrebbe andare:"],
   es: ["Tengo otra opción 👇", "Esta también podría encajar:"],
+  fr: ["J'ai une autre option 👇", "Celle-ci pourrait aussi convenir 👇"],
 });
 
 /** Phase 1 (AI_QUALITY_V2): warmer intros without robotic openers. */
@@ -201,6 +224,12 @@ const FIRST_RECOMMENDATION_CATALOG_INTROS_V2 = completeLanguageRecord({
     "Unas opciones que cuadran con tu perfil 👇",
     "Mira si alguna te encaja 👇",
   ],
+  fr: [
+    "Voici quelques options qui pourraient vous intéresser 👇",
+    "J'ai trouvé quelques biens qui correspondent à votre recherche 👇",
+    "Des options en phase avec ce que vous cherchez 👇",
+    "Ces biens pourraient vous convenir 👇",
+  ],
 });
 
 const FIRST_RECOMMENDATION_SINGLE_INTROS_V2 = completeLanguageRecord({
@@ -223,6 +252,11 @@ const FIRST_RECOMMENDATION_SINGLE_INTROS_V2 = completeLanguageRecord({
     "Tengo una opción que encaja con lo que buscas 👇",
     "Esta podría encajarte 👇",
     "Esta cuadra bastante bien con tu perfil 👇",
+  ],
+  fr: [
+    "Voici une option qui pourrait vous intéresser 👇",
+    "J'ai trouvé une option qui correspond à votre recherche 👇",
+    "Cette option semble correspondre à votre recherche 👇",
   ],
 });
 
@@ -247,6 +281,11 @@ const MORE_OPTIONS_CATALOG_INTROS_V2 = completeLanguageRecord({
     "Estas también encajan 👇",
     "Más que merecen la pena 👇",
   ],
+  fr: [
+    "Quelques autres dans le même profil 👇",
+    "Celles-ci pourraient aussi convenir 👇",
+    "D'autres options à voir 👇",
+  ],
 });
 
 const MORE_OPTIONS_SINGLE_INTROS_V2 = completeLanguageRecord({
@@ -254,6 +293,7 @@ const MORE_OPTIONS_SINGLE_INTROS_V2 = completeLanguageRecord({
   en: ["One more in the same profile 👇", "This one could work too 👇"],
   it: ["Un'altra nello stesso profilo 👇", "Anche questa potrebbe andare 👇"],
   es: ["Otra en el mismo perfil 👇", "Esta también podría encajar 👇"],
+  fr: ["Une autre dans le même profil 👇", "Celle-ci pourrait aussi convenir 👇"],
 });
 
 const RESHOW_CATALOG_INTROS_V2 = completeLanguageRecord({
@@ -277,6 +317,11 @@ const RESHOW_CATALOG_INTROS_V2 = completeLanguageRecord({
     "Aquí están otra vez 👇",
     "Sin problema — te las mando de nuevo 👇",
   ],
+  fr: [
+    "Bien sûr — je vous les renvoie 👇",
+    "Les voici à nouveau 👇",
+    "Pas de problème — je renvoie 👇",
+  ],
 });
 
 const RESHOW_SINGLE_INTROS_V2 = completeLanguageRecord({
@@ -284,6 +329,7 @@ const RESHOW_SINGLE_INTROS_V2 = completeLanguageRecord({
   en: ["Sending it again 👇", "Here it is again 👇"],
   it: ["Te la rimando 👇", "Ecco di nuovo 👇"],
   es: ["Te la reenvío 👇", "Aquí está otra vez 👇"],
+  fr: ["Je vous la renvoie 👇", "La voici à nouveau 👇"],
 });
 
 export function getFirstRecommendationCatalogIntros(
@@ -335,6 +381,7 @@ export const LISTING_LABELS = completeLanguageRecord({
   en: "🔗 View details",
   it: "🔗 Vedi dettagli",
   es: "🔗 Ver detalles",
+  fr: "🔗 Voir les détails",
 });
 
 export const PROPERTY_CARD_LABELS = completeLanguageRecord({
@@ -361,6 +408,12 @@ export const PROPERTY_CARD_LABELS = completeLanguageRecord({
     bedrooms: "habitaciones",
     bathroom: "baño",
     bathrooms: "baños",
+  },
+  fr: {
+    bedroom: "chambre",
+    bedrooms: "chambres",
+    bathroom: "salle de bain",
+    bathrooms: "salles de bain",
   },
 });
 
