@@ -18,7 +18,12 @@ export function buildConversationDecisionShadow(
     inventorySummary,
   } = input;
 
-  const resolved = resolveCriteriaShadow(latestMessage, lead, pendingPropertyOffer);
+  const resolved = resolveCriteriaShadow(
+    latestMessage,
+    lead,
+    pendingPropertyOffer,
+    history
+  );
   const selected = selectActionShadow(
     latestMessage,
     history,

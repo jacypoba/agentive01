@@ -29,6 +29,20 @@ describe("extractCityFromMessage", () => {
 });
 
 describe("extractPropertyTypeFromMessage", () => {
+  it("extracts moradia from maison", () => {
+    assert.equal(
+      extractPropertyTypeFromMessage("je souhaite acheter une maison à Rome"),
+      "moradia"
+    );
+  });
+
+  it("extracts apartamento from appartement", () => {
+    assert.equal(
+      extractPropertyTypeFromMessage("je souhaite louer un appartement à Milan"),
+      "apartamento"
+    );
+  });
+
   it("extracts moradia from villa", () => {
     assert.equal(
       extractPropertyTypeFromMessage("Looking for a villa in Milan"),
@@ -42,6 +56,11 @@ describe("extractPropertyTypeFromMessage", () => {
 });
 
 describe("normalizePropertyType", () => {
+  it("maps french house and apartment terms", () => {
+    assert.equal(normalizePropertyType("maison"), "moradia");
+    assert.equal(normalizePropertyType("appartement"), "apartamento");
+  });
+
   it("maps multilingual house terms to moradia", () => {
     assert.equal(normalizePropertyType("villa"), "moradia");
     assert.equal(normalizePropertyType("house"), "moradia");

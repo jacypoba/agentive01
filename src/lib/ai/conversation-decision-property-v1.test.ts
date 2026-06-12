@@ -83,6 +83,19 @@ const romaProperty = property({
   city: "Roma",
 });
 
+const firenzeProperty = property({
+  id: "firenze-1",
+  city: "Firenze",
+  neighborhood: "Novoli",
+});
+
+const milanoApartment = property({
+  id: "milano-apt",
+  city: "Milano",
+  neighborhood: "Centro",
+  property_type: "apartamento",
+});
+
 function mockSupabase(properties: Property[]) {
   return {
     from() {
@@ -359,6 +372,185 @@ describe("executePropertyDecision regression cases", () => {
     const result = extractBroadPropertyType("Procuro casa em Roma", "trilocale");
     assert.equal(result.propertyType, "moradia");
     assert.equal(result.fromLead, false);
+  });
+});
+
+function clientHistory(
+  leadId: string,
+  messages: string[]
+): Array<{
+  id: string;
+  lead_id: string;
+  workspace_id: string;
+  message: string;
+  sender: "client";
+  created_at: string;
+}> {
+  return messages.map((message, index) => ({
+    id: String(index + 1),
+    lead_id: leadId,
+    workspace_id: "ws-1",
+    message,
+    sender: "client" as const,
+    created_at: "",
+  }));
+}
+
+describe("resolveCriteriaShadow pivot context carryover", () => {
+  it("IT pivot inherits moradia/buy/Milano from prior turn and pending offer", () => {
+    const firstMessage = "Salve, vorrei acquistare una casa a Roma";
+    const pivotMessage =
+      "Firenze non mi piace come opzione, avete qualcosa a Milano?";
+    const lead = baseLead({
+      preferred_language: "it",
+      property_type: null,
+      preferred_area: "Roma",
+    });
+    const history = clientHistory(lead.id, [firstMessage, pivotMessage]);
+    const resolved = resolveCriteriaShadow(
+      pivotMessage,
+      lead,
+      firenzeOffer(),
+      history
+    );
+
+    assert.equal(resolved.criteria.city, "Milano");
+    assert.equal(resolved.criteria.propertyType, "moradia");
+    assert.equal(resolved.criteria.buyRentIntent, "buy");
+    assert.equal(resolved.pendingOfferRejected, true);
+  });
+});
+
+describe("French Property V1 flows", () => {
+  it("FR Rome search resolves moradia/buy/Roma and enters Property V1", async () => {
+    process.env.CONVERSATION_DECISION_ENGINE_PROPERTY_V1 = "true";
+    const message = "bonjour, je souhaite acheter une maison à Rome";
+    const lead = baseLead({
+      preferred_language: "fr",
+      pending_property_offer: null,
+      preferred_area: null,
+      property_type: null,
+    });
+    const history = clientHistory(lead.id, [message]);
+    const classified = classifyMessageIntent(history, lead);
+
+    assert.equal(classified.intent, "property_search");
+    assert.equal(
+      isPropertyRelatedTurn(message, history, classified, lead, null),
+      true
+    );
+
+    const built = await buildPropertyConversationDecision(
+      mockSupabase([romaProperty]) as never,
+      lead,
+      history,
+      message,
+      "fr",
+      null
+    );
+
+    assert.equal(built.resolved.criteria.city, "Roma");
+    assert.equal(built.resolved.criteria.propertyType, "moradia");
+    assert.equal(built.resolved.criteria.buyRentIntent, "buy");
+    assert.equal(built.decision.action, "show_properties");
+    assert.notEqual(built.decision.action, "answer_general_question");
+  });
+
+  it("FR Rome with no stock offers city alternatives in French", async () => {
+    const message = "bonjour, je souhaite acheter une maison à Rome";
+    const lead = baseLead({
+      preferred_language: "fr",
+      pending_property_offer: null,
+      preferred_area: null,
+      property_type: null,
+    });
+    const history = clientHistory(lead.id, [message]);
+    const built = await buildPropertyConversationDecision(
+      mockSupabase([firenzeProperty]) as never,
+      lead,
+      history,
+      message,
+      "fr",
+      null
+    );
+
+    assert.equal(built.decision.action, "show_city_alternatives");
+    assert.equal(built.resolved.criteria.city, "Roma");
+    assert.ok(built.cityAlternatives);
+    assert.deepEqual(built.cityAlternatives?.availableCities, ["Firenze"]);
+
+    const execution = executePropertyDecision({
+      built,
+      history,
+      leadId: lead.id,
+      language: "fr",
+    });
+
+    assert.ok(execution.qualifyingReply);
+    assert.match(execution.qualifyingReply ?? "", /Firenze|Florence/i);
+  });
+
+  it("FR rent apartment in Milan resolves apartamento/rent/Milano", async () => {
+    const message = "je souhaite louer un appartement à Milan";
+    const lead = baseLead({
+      preferred_language: "fr",
+      pending_property_offer: null,
+      preferred_area: null,
+      property_type: null,
+    });
+    const history = clientHistory(lead.id, [message]);
+    const built = await buildPropertyConversationDecision(
+      mockSupabase([milanoApartment]) as never,
+      lead,
+      history,
+      message,
+      "fr",
+      null
+    );
+
+    assert.equal(built.resolved.criteria.city, "Milano");
+    assert.equal(built.resolved.criteria.propertyType, "apartamento");
+    assert.equal(built.resolved.criteria.buyRentIntent, "rent");
+    assert.equal(built.decision.action, "show_properties");
+  });
+});
+
+describe("IT pivot without repeated buy/type question", () => {
+  it("does not ask buy/rent again when prior turn established intent", async () => {
+    const firstMessage = "Salve, vorrei acquistare una casa a Roma";
+    const pivotMessage =
+      "Firenze non mi piace come opzione, avete qualcosa a Milano?";
+    const lead = baseLead({
+      preferred_language: "it",
+      property_type: null,
+      preferred_area: "Roma",
+    });
+    const history = clientHistory(lead.id, [firstMessage, pivotMessage]);
+    const built = await buildPropertyConversationDecision(
+      mockSupabase([milanoNavigli]) as never,
+      lead,
+      history,
+      pivotMessage,
+      "it",
+      firenzeOffer()
+    );
+
+    assert.equal(built.decision.action, "show_properties");
+    assert.equal(built.decision.criteria.city, "Milano");
+    assert.equal(built.decision.criteria.propertyType, "moradia");
+    assert.equal(built.decision.criteria.buyRentIntent, "buy");
+    assert.notEqual(built.decision.reason, "pivot_missing_property_type");
+
+    const execution = executePropertyDecision({
+      built,
+      history,
+      leadId: lead.id,
+      language: "it",
+    });
+
+    assert.equal(execution.qualifyingReply, null);
+    assert.equal(execution.propertiesToRecommend.length, 1);
+    assert.equal(execution.propertiesToRecommend[0]?.city, "Milano");
   });
 });
 

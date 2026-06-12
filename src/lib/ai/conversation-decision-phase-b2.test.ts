@@ -277,6 +277,38 @@ describe("tryApplyPhaseB2PropertyPivot", () => {
       preferred_language: "fr",
       property_type: "trilocale",
     });
+    const offerWithoutType: PendingPropertyOffer = {
+      ...firenzeOffer(),
+      propertyType: undefined,
+    };
+    const classified = classifyMessageIntent(
+      [{ id: "1", lead_id: lead.id, workspace_id: "ws-1", message, sender: "client", created_at: "" }],
+      lead
+    );
+
+    const result = await tryApplyPhaseB2PropertyPivot(
+      mockSupabase([milanoNavigli]) as never,
+      lead,
+      [],
+      message,
+      classified,
+      offerWithoutType,
+      "fr"
+    );
+
+    assert.ok(result);
+    assert.equal(result?.propertiesToRecommend.length, 0);
+    assert.ok(result?.qualifyingReply);
+    assert.match(result?.qualifyingReply ?? "", /acheter|louer|type/i);
+  });
+
+  it("inherits pending offer property type on pivot", async () => {
+    process.env.CONVERSATION_DECISION_ENGINE_PHASE_B2 = "true";
+    const message = "Je ne veux pas Rome, je préfère Milan";
+    const lead = baseLead({
+      preferred_language: "fr",
+      property_type: "trilocale",
+    });
     const classified = classifyMessageIntent(
       [{ id: "1", lead_id: lead.id, workspace_id: "ws-1", message, sender: "client", created_at: "" }],
       lead
@@ -293,9 +325,9 @@ describe("tryApplyPhaseB2PropertyPivot", () => {
     );
 
     assert.ok(result);
-    assert.equal(result?.propertiesToRecommend.length, 0);
-    assert.ok(result?.qualifyingReply);
-    assert.match(result?.qualifyingReply ?? "", /acheter|louer|type/i);
+    assert.equal(result?.decision.criteria.propertyType, "moradia");
+    assert.equal(result?.propertiesToRecommend.length, 1);
+    assert.equal(result?.qualifyingReply, null);
   });
 });
 

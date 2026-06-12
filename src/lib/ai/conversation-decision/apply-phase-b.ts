@@ -111,7 +111,12 @@ export async function tryApplyPhaseBCityOverride(
     return null;
   }
 
-  const resolved = resolveCriteriaShadow(latestMessage, memoryLead, pendingOffer);
+  const resolved = resolveCriteriaShadow(
+    latestMessage,
+    memoryLead,
+    pendingOffer,
+    history
+  );
   if (
     !resolved.contextUse.userOverrodePendingOffer ||
     !resolved.criteria.city

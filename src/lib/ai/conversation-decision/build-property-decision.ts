@@ -48,7 +48,12 @@ export async function buildPropertyConversationDecision(
   language: SupportedLanguage,
   pendingOffer: PendingPropertyOffer | null
 ): Promise<BuiltPropertyDecision> {
-  const resolved = resolveCriteriaShadow(latestMessage, memoryLead, pendingOffer);
+  const resolved = resolveCriteriaShadow(
+    latestMessage,
+    memoryLead,
+    pendingOffer,
+    history
+  );
   const usePivotSelector = shouldUsePivotActionSelector(
     resolved,
     latestMessage,

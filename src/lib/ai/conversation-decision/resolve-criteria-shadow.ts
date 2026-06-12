@@ -9,7 +9,7 @@ import {
   normalizePropertyType,
   parseNormalizedBudget,
 } from "@/lib/properties/normalize-search";
-import type { Lead, PendingPropertyOffer } from "@/types/database";
+import type { Conversation, Lead, PendingPropertyOffer } from "@/types/database";
 import type { DecisionContextUse, DecisionSearchCriteria } from "./types";
 
 const BEDROOM_SPECIFIC_PATTERN =
@@ -75,7 +75,7 @@ export function extractBroadPropertyType(
   }
 
   if (userExplicitlyMentionedBedroomType(latestMessage)) {
-    if (/\b(moradia|villa|casa|house|villetta|vivenda)\b/i.test(latestMessage)) {
+    if (/\b(moradia|villa|casa|house|villetta|vivenda|maison)\b/i.test(latestMessage)) {
       return { propertyType: "moradia", fromLatest: true, fromLead: false };
     }
     return { propertyType: "apartamento", fromLatest: true, fromLead: false };
@@ -92,6 +92,26 @@ export function extractBroadPropertyType(
   }
 
   return { propertyType: null, fromLatest: false, fromLead: false };
+}
+
+function shouldCarryPendingOfferContext(
+  pendingOffer: PendingPropertyOffer | null,
+  explicitCityInLatest: string | null,
+  pendingOfferRejected: boolean,
+  userOverrodePendingOffer: boolean
+): boolean {
+  if (!pendingOffer || !explicitCityInLatest) {
+    return false;
+  }
+
+  if (pendingOfferRejected || userOverrodePendingOffer) {
+    return true;
+  }
+
+  const offeredCity = normalizeCity(pendingOffer.offeredCity);
+  return Boolean(
+    offeredCity && fold(offeredCity) !== fold(explicitCityInLatest)
+  );
 }
 
 function detectOfferCityOverride(
@@ -112,10 +132,72 @@ function detectOfferCityOverride(
   };
 }
 
+function collectPriorClientText(
+  history: Conversation[],
+  latestMessage: string
+): string {
+  const clientMessages = history
+    .filter((entry) => entry.sender === "client")
+    .map((entry) => entry.message.trim())
+    .filter(Boolean);
+
+  if (clientMessages.length === 0) {
+    return "";
+  }
+
+  const last = clientMessages[clientMessages.length - 1];
+  if (last && fold(last) === fold(latestMessage.trim())) {
+    return clientMessages.slice(0, -1).join("\n");
+  }
+
+  return clientMessages.join("\n");
+}
+
+function resolveBuyRentIntentFromContext(
+  latestMessage: string,
+  history: Conversation[]
+): "buy" | "rent" | null {
+  const fromLatest = resolveBuyRentIntent(latestMessage);
+  if (fromLatest) {
+    return fromLatest;
+  }
+
+  const priorText = collectPriorClientText(history, latestMessage);
+  if (!priorText) {
+    return null;
+  }
+
+  return resolveBuyRentIntent(priorText);
+}
+
+function resolvePropertyTypeFromContext(
+  latestMessage: string,
+  leadPropertyType: string | null | undefined,
+  history: Conversation[]
+): { propertyType: string | null; fromLatest: boolean; fromLead: boolean } {
+  const fromLatestAndLead = extractBroadPropertyType(latestMessage, leadPropertyType);
+  if (fromLatestAndLead.propertyType) {
+    return fromLatestAndLead;
+  }
+
+  const priorText = collectPriorClientText(history, latestMessage);
+  if (!priorText) {
+    return fromLatestAndLead;
+  }
+
+  const fromHistory = extractPropertyTypeFromMessage(priorText);
+  if (fromHistory) {
+    return { propertyType: fromHistory, fromLatest: false, fromLead: true };
+  }
+
+  return fromLatestAndLead;
+}
+
 export function resolveCriteriaShadow(
   latestMessage: string,
   lead: Lead,
-  pendingOffer: PendingPropertyOffer | null
+  pendingOffer: PendingPropertyOffer | null,
+  history: Conversation[] = []
 ): ResolvedCriteriaShadow {
   const contextUse: DecisionContextUse = {
     usedPendingOffer: false,
@@ -132,11 +214,12 @@ export function resolveCriteriaShadow(
     parseNormalizedBudget(latestMessage) ??
     parseNormalizedBudget(lead.budget) ??
     null;
-  const propertyTypeResult = extractBroadPropertyType(
+  const propertyTypeResult = resolvePropertyTypeFromContext(
     latestMessage,
-    lead.property_type
+    lead.property_type,
+    history
   );
-  const buyRentIntent = resolveBuyRentIntent(latestMessage);
+  const buyRentIntent = resolveBuyRentIntentFromContext(latestMessage, history);
 
   let pendingOfferAccepted = false;
   let pendingOfferRejected = false;
@@ -225,6 +308,19 @@ export function resolveCriteriaShadow(
   } else if (propertyTypeResult.fromLead) {
     criteria.propertyType = propertyTypeResult.propertyType;
     contextUse.usedLeadMemory = true;
+  }
+
+  const isPivotContext = shouldCarryPendingOfferContext(
+    pendingOffer,
+    explicitCityInLatest,
+    pendingOfferRejected,
+    contextUse.userOverrodePendingOffer
+  );
+
+  if (!criteria.propertyType?.trim() && isPivotContext && pendingOffer?.propertyType) {
+    criteria.propertyType =
+      normalizePropertyType(pendingOffer.propertyType) ?? pendingOffer.propertyType;
+    contextUse.usedPendingOffer = true;
   }
 
   if (pendingOfferRejected && explicitCityInLatest) {

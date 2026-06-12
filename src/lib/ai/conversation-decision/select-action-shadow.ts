@@ -12,30 +12,17 @@ import type {
   ReplyInstruction,
 } from "./types";
 import type { ResolvedCriteriaShadow } from "./resolve-criteria-shadow";
-
-const PROPERTY_SEARCH_PATTERN =
-  /\b(procuro|procurar|procura|quero|preciso|interess(?:a|o)|busco|pesquiso|looking for|searching for|cerco|cercare|voglio|quiero|buscar)\b/i;
-
-const PROPERTY_TYPE_PATTERN =
-  /\b(apartamento|moradia|vivenda|loft|duplex|penthouse|estúdio|estudio|studio|house|apartment|appartamento|flat|villa|home|casa|villetta|vivienda)\b/i;
-
-const CITY_SIGNAL =
-  /\b(em\s+[a-zà-ú]|in\s+[a-z]|en\s+[a-z]|a\s+[a-z]|lisboa|porto|milano|milan|milão|firenze|florence|roma|madrid|paris|london)\b/i;
+import {
+  hasResolvedPropertySearchCriteria,
+  isPropertySearchMessage,
+  PROPERTY_TYPE_PATTERN,
+} from "./property-search-signals";
 
 const GENERAL_QUESTION_PATTERN =
   /\?|^(como|quando|onde|quanto|qual|quais|o que|what|how|when|where|why|come|dove|quale|qué|que|pode|podes|puoi|puedes)\b/i;
 
 const HANDOFF_PATTERN =
   /\b(falar com|humano|agente|consultor|persona|person|human|speak to|talk to|parler avec)\b/i;
-
-function isPropertySearchMessage(text: string): boolean {
-  if (!text.trim()) return false;
-  const hasSearchVerb = PROPERTY_SEARCH_PATTERN.test(text);
-  const hasType = PROPERTY_TYPE_PATTERN.test(text);
-  const hasLocation = CITY_SIGNAL.test(text);
-  if (hasSearchVerb && (hasType || hasLocation)) return true;
-  return hasType && hasLocation;
-}
 
 function computeMissingCriteria(
   criteria: DecisionSearchCriteria,
@@ -67,6 +54,14 @@ function isPropertyCityPivot(resolved: ResolvedCriteriaShadow): boolean {
   );
 }
 
+function hasCompleteSearchBrief(criteria: DecisionSearchCriteria): boolean {
+  return (
+    Boolean(criteria.city?.trim()) &&
+    Boolean(criteria.propertyType?.trim()) &&
+    criteria.buyRentIntent != null
+  );
+}
+
 function skipBroadQualification(
   criteria: DecisionSearchCriteria,
   resolved: ResolvedCriteriaShadow,
@@ -76,7 +71,8 @@ function skipBroadQualification(
   return (
     pendingOfferAccepted ||
     (isPropertyCityPivot(resolved) && criteria.city != null) ||
-    clientAskedToSeeOptions(history)
+    clientAskedToSeeOptions(history) ||
+    hasCompleteSearchBrief(criteria)
   );
 }
 
@@ -135,7 +131,8 @@ export function selectActionShadow(
   const hasSearchIntent =
     isPropertySearchMessage(latestMessage) ||
     pendingOfferAccepted ||
-    contextUse.userOverrodePendingOffer;
+    contextUse.userOverrodePendingOffer ||
+    hasResolvedPropertySearchCriteria(criteria);
 
   if (hasSearchIntent || criteria.city) {
     if (inventorySummary.matchCount > 0) {
@@ -185,7 +182,8 @@ export function selectActionShadow(
     if (
       isPropertySearchMessage(latestMessage) ||
       pendingOfferAccepted ||
-      contextUse.userOverrodePendingOffer
+      contextUse.userOverrodePendingOffer ||
+      hasResolvedPropertySearchCriteria(criteria)
     ) {
       if (
         isBroadSearch(criteria) &&

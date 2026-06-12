@@ -174,7 +174,12 @@ export async function tryApplyPhaseB2PropertyPivot(
     return null;
   }
 
-  const resolved = resolveCriteriaShadow(latestMessage, memoryLead, pendingOffer);
+  const resolved = resolveCriteriaShadow(
+    latestMessage,
+    memoryLead,
+    pendingOffer,
+    history
+  );
 
   if (!hasPropertyPivotEvidence(resolved, latestMessage, pendingOffer)) {
     return null;
