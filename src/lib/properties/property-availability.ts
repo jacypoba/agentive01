@@ -1,3 +1,6 @@
+import { getPropertyDirectiveExamples } from "@/lib/ai/property-directive-i18n";
+import { isAiQualityV2Enabled } from "@/lib/ai/quality-v2";
+import type { SupportedLanguage } from "@/lib/i18n/types";
 import type { Conversation, Property } from "@/types/database";
 import {
   selectPropertiesForCatalog,
@@ -68,8 +71,11 @@ export function buildReshowAvailability(
 
 export function buildAvailabilityDirective(
   availability: PropertyAvailability,
-  clientAskedForMore: boolean
+  clientAskedForMore: boolean,
+  language: SupportedLanguage = "pt"
 ): string {
+  const examples = getPropertyDirectiveExamples(language);
+
   const lines = [
     "---",
     "Property availability (from live database query — authoritative):",
@@ -91,9 +97,13 @@ export function buildAvailabilityDirective(
 
   if (availability.toSend.length > 0) {
     if (availability.isReshow) {
+      const reshowExample = isAiQualityV2Enabled()
+        ? `- Write ONE brief line only — e.g. '${examples.reshowCatalogIntro}'.`
+        : "- Write ONE brief line only — e.g. 'Claro — volto a enviar 👇'.";
+
       lines.push(
         "- Previously shown listings WILL be re-sent after your message.",
-        "- Write ONE brief line only — e.g. 'Claro — volto a enviar 👇'.",
+        reshowExample,
         "- NEVER say 'já mostrei', 'já enviei', or 'já partilhei' without the cards going out.",
         "- Do NOT ask a question."
       );
@@ -106,21 +116,29 @@ export function buildAvailabilityDirective(
       "- Do NOT say there are no more options — more exist and are being sent."
     );
     if (availability.remainingAfterSend > 0) {
+      const moreExample = isAiQualityV2Enabled()
+        ? `- You may mention more exist ONLY if accurate — e.g. '${examples.hasMoreInProfile}' — but do not ask a question.`
+        : "- You may mention more exist ONLY if accurate — e.g. 'Tenho mais no mesmo perfil' — but do not ask a question.";
+
       lines.push(
         `- After this batch, ${availability.remainingAfterSend} more match(es) remain in the database (not sent yet).`,
-        "- You may mention more exist ONLY if accurate — e.g. 'Tenho mais no mesmo perfil' — but do not ask a question."
+        moreExample
       );
     }
     return lines.join("\n");
   }
 
   if (availability.allShown) {
+    const exhaustedLine = isAiQualityV2Enabled()
+      ? `- Say naturally: "${examples.allShownReply}"`
+      : clientAskedForMore
+        ? '- Say naturally: "Por agora estas são as melhores dentro do perfil. Se entrar algo novo, aviso."'
+        : "- One short natural line if needed — acknowledge these are the best matches for now.";
+
     lines.push(
       "- All matching listings for this profile were already shared. Zero remaining in database.",
       "- NO property cards will be sent this turn.",
-      clientAskedForMore
-        ? '- Say naturally: "Por agora estas são as melhores dentro do perfil. Se entrar algo novo, aviso."'
-        : "- One short natural line if needed — acknowledge these are the best matches for now.",
+      exhaustedLine,
       '- NEVER say "não tenho imóveis", "não há imóveis disponíveis", or imply the market is empty.',
       '- BANNED unless remaining is truly zero (it is): promising to send more listings now.'
     );
@@ -128,11 +146,15 @@ export function buildAvailabilityDirective(
   }
 
   if (availability.noMatchesInDatabase) {
+    const noMatchExample = isAiQualityV2Enabled()
+      ? `- Say naturally that nothing matched this profile right now — e.g. "${examples.noMatchReply}"`
+      : '- Say naturally that nothing matched this profile right now — e.g. "Não encontrei imóveis neste perfil de momento."';
+
     lines.push(
       "- Database query returned zero matches for this profile.",
       "- NO property cards will be sent.",
       "- Do NOT say 'não tenho mais opções' (implies options existed before).",
-      '- Say naturally that nothing matched this profile right now — e.g. "Não encontrei imóveis neste perfil de momento."'
+      noMatchExample
     );
     return lines.join("\n");
   }

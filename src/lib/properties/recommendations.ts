@@ -1,11 +1,17 @@
+import { getPropertyDirectiveExamples } from "@/lib/ai/property-directive-i18n";
+import { isAiQualityV2Enabled } from "@/lib/ai/quality-v2";
 import { getCatalogCityHint, isCatalogBatch } from "@/lib/properties/property-cards";
 import type { PropertyAvailability } from "@/lib/properties/property-availability";
+import type { SupportedLanguage } from "@/lib/i18n/types";
 import type { Property } from "@/types/database";
 
 export function buildPropertyRecommendationDirective(
   properties: Property[],
-  availability: PropertyAvailability
+  availability: PropertyAvailability,
+  language: SupportedLanguage = "pt"
 ): string {
+  const examples = getPropertyDirectiveExamples(language);
+
   if (properties.length === 0) {
     if (availability.isReshow) {
       return [
@@ -17,24 +23,32 @@ export function buildPropertyRecommendationDirective(
     }
 
     if (availability.allShown) {
+      const exhaustedLine = isAiQualityV2Enabled()
+        ? `- Reply: "${examples.allShownReply}"`
+        : '- Reply: "Por agora estas são as melhores dentro do perfil. Se entrar algo novo, aviso."';
+
       return [
         "---",
         "Property recommendations:",
         "- All matching listings were already shared. Zero remaining in database.",
         "- NO cards will be sent.",
-        '- Reply: "Por agora estas são as melhores dentro do perfil. Se entrar algo novo, aviso."',
+        exhaustedLine,
         '- Do NOT say "não tenho mais opções" or "não há mais imóveis" — use the line above.',
       ].join("\n");
     }
 
     if (availability.noMatchesInDatabase) {
+      const noMatchHint = isAiQualityV2Enabled()
+        ? `- Say naturally that nothing matched right now — e.g. "${examples.noMatchReply}"`
+        : '- Say naturally that nothing matched right now — one short sentence.';
+
       return [
         "---",
         "Property recommendations:",
         "- Database returned zero matches for this profile.",
         "- NO cards will be sent.",
         '- Do NOT say "não tenho mais opções".',
-        '- Say naturally that nothing matched right now — one short sentence.',
+        noMatchHint,
       ].join("\n");
     }
 
@@ -50,11 +64,15 @@ export function buildPropertyRecommendationDirective(
   if (isCatalogBatch(properties)) {
     if (availability.isReshow) {
       const titles = properties.map((property) => property.title).join(", ");
+      const introExample = isAiQualityV2Enabled()
+        ? `- ONE short intro — e.g. '${examples.reshowCatalogIntro}'.`
+        : "- ONE short intro — e.g. 'Estas foram as opções 👇'.";
+
       return [
         "---",
         "Property recommendations:",
         `- Re-sending ${properties.length} previously shown listing(s): ${titles}.`,
-        "- ONE short intro — e.g. 'Estas foram as opções 👇'.",
+        introExample,
         "- NEVER say you already showed them without re-sending.",
       ].join("\n");
     }
@@ -62,25 +80,33 @@ export function buildPropertyRecommendationDirective(
     const cityHint = getCatalogCityHint(properties);
     const cityClause = cityHint ? ` in ${cityHint}` : "";
     const titles = properties.map((property) => property.title).join(", ");
+    const [introA, introB] = examples.catalogIntroOptions;
+    const catalogIntroExample = isAiQualityV2Enabled()
+      ? `- Your reply = ONE short intro only — e.g. '${introA}' or '${introB}'`
+      : "- Your reply = ONE short intro only — e.g. 'Tenho mais algumas 👇' or 'Estas também encaixam.'";
 
     return [
       "---",
       "Property recommendations:",
       `- Sending ${properties.length} more listing(s) from database RIGHT AFTER your message.`,
       `- Listings${cityClause}: ${titles}.`,
-      "- Your reply = ONE short intro only — e.g. 'Tenho mais algumas 👇' or 'Estas também encaixam.'",
+      catalogIntroExample,
       "- NO question mark. NO saying there are no more options.",
       "- NEVER invent listings or details.",
     ].join("\n");
   }
 
   const property = properties[0];
+  const singleIntroExample = isAiQualityV2Enabled()
+    ? `- Your reply = ONE short intro sentence — e.g. '${examples.singleIntro}'.`
+    : "- Your reply = ONE short intro sentence — e.g. 'Tenho mais uma opção 👇'.";
+
   return [
     "---",
     "Property recommendations:",
     "- A property card will be sent automatically RIGHT AFTER your message.",
     `- Listing: "${property.title}" in ${property.neighborhood ?? property.city}.`,
-    "- Your reply = ONE short intro sentence — e.g. 'Tenho mais uma opção 👇'.",
+    singleIntroExample,
     "- NO question mark. NO saying there are no more options.",
     "- NEVER invent listings or details.",
   ].join("\n");
