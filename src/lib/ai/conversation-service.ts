@@ -66,8 +66,6 @@ import {
 } from "@/lib/properties/property-availability";
 import {
   buildReshowIntroText,
-  formatPropertyCard,
-  formatPropertyListingRecord,
   formatPropertyWhatsAppPackageText,
   getLastShownPropertyBatchIds,
   isCatalogBatch,
@@ -133,21 +131,10 @@ async function persistPropertyRecommendation(
   property: Property,
   language: SupportedLanguage
 ): Promise<Conversation[]> {
-  const saved: Conversation[] = [];
-  const detailsText = formatPropertyCard(property, language);
+  const packageText = formatPropertyWhatsAppPackageText(property, language);
+  const record = `${packageText}\n[property:${property.id}]`;
 
-  saved.push(await saveAiMessage(supabase, leadId, detailsText));
-
-  const listingRecord = formatPropertyListingRecord(property, language);
-  if (listingRecord) {
-    saved.push(await saveAiMessage(supabase, leadId, listingRecord));
-  } else {
-    saved.push(
-      await saveAiMessage(supabase, leadId, `[property:${property.id}]`)
-    );
-  }
-
-  return saved;
+  return [await saveAiMessage(supabase, leadId, record)];
 }
 
 function prepareUniqueAiText(

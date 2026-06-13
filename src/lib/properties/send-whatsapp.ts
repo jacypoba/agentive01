@@ -8,7 +8,6 @@ import {
   formatPropertyImageCaption,
   formatPropertyListingLine,
   hasPropertyImage,
-  hasPropertyListing,
 } from "@/lib/properties/property-cards";
 import type { SupportedLanguage } from "@/lib/i18n/types";
 import { normalizeLanguage } from "@/lib/i18n/types";
@@ -79,8 +78,9 @@ export async function sendOutboundWhatsAppMessages(
   };
 
   const deliveredPropertyText = new Set<string>();
+  const deliveredPropertyBodies = new Map<string, string>();
 
-  for (const message of messages) {
+  for (const message of sanitizePropertyOutboundMessages(messages)) {
     if (message.kind === "catalog_spacer") {
       await deliverText(
         phoneDigits,
@@ -107,7 +107,12 @@ export async function sendOutboundWhatsAppMessages(
         deps
       );
       if (textDeliveredViaFallback) {
-        deliveredPropertyText.add(message.property.id);
+        markPropertyTextDelivered(
+          message.property.id,
+          message.fallbackText,
+          deliveredPropertyText,
+          deliveredPropertyBodies
+        );
       }
       continue;
     }
@@ -127,13 +132,24 @@ export async function sendOutboundWhatsAppMessages(
         deps
       );
       if (delivered) {
-        deliveredPropertyText.add(message.property.id);
+        markPropertyTextDelivered(
+          message.property.id,
+          message.text,
+          deliveredPropertyText,
+          deliveredPropertyBodies
+        );
       }
       continue;
     }
 
     if (message.kind === "property_listing") {
-      if (deliveredPropertyText.has(message.property.id)) {
+      if (
+        shouldSkipPropertyListingMessage(
+          message.property,
+          deliveredPropertyText,
+          deliveredPropertyBodies
+        )
+      ) {
         continue;
       }
       const linkText =
@@ -219,20 +235,28 @@ async function deliverPropertyImage(
     });
   }
 
+  const plainSummary = buildPlainPropertySummary(property, lang);
   if (await deliverText(phoneDigits, textCard, instance, report, "property_details", property.id, remoteJid, deps)) {
     return true;
   }
 
-  await deliverText(
-    phoneDigits,
-    buildPlainPropertySummary(property, lang),
-    instance,
-    report,
-    "property_package",
-    property.id,
-    remoteJid,
-    deps
-  );
+  if (
+    textCard.trim() &&
+    plainSummary.trim() &&
+    textCard.trim() !== plainSummary.trim()
+  ) {
+    await deliverText(
+      phoneDigits,
+      plainSummary,
+      instance,
+      report,
+      "property_package",
+      property.id,
+      remoteJid,
+      deps
+    );
+  }
+
   return true;
 }
 
@@ -273,6 +297,92 @@ async function deliverText(
   return false;
 }
 
+export function propertyPackageIncludesListingUrl(
+  text: string,
+  property: Property
+): boolean {
+  const trimmed = text.trim();
+  if (!trimmed) {
+    return false;
+  }
+
+  const listingUrl = property.listing_url?.trim();
+  if (!listingUrl || !isValidOutboundUrl(listingUrl)) {
+    return false;
+  }
+
+  return trimmed.includes(listingUrl);
+}
+
+/** Drop redundant property_listing rows when the card/details already carry the URL. */
+export function sanitizePropertyOutboundMessages(
+  messages: OutboundWhatsAppMessage[]
+): OutboundWhatsAppMessage[] {
+  const detailsIncludeListingByProperty = new Map<string, boolean>();
+
+  for (const message of messages) {
+    if (message.kind === "property_details") {
+      detailsIncludeListingByProperty.set(
+        message.property.id,
+        propertyPackageIncludesListingUrl(message.text, message.property) ||
+          detailsIncludeListingByProperty.get(message.property.id) === true
+      );
+      continue;
+    }
+
+    if (message.kind === "property_image") {
+      if (propertyPackageIncludesListingUrl(message.fallbackText, message.property)) {
+        detailsIncludeListingByProperty.set(message.property.id, true);
+      }
+    }
+  }
+
+  return messages.filter((message) => {
+    if (message.kind !== "property_listing") {
+      return true;
+    }
+
+    return detailsIncludeListingByProperty.get(message.property.id) !== true;
+  });
+}
+
+function markPropertyTextDelivered(
+  propertyId: string,
+  text: string,
+  deliveredPropertyText: Set<string>,
+  deliveredPropertyBodies: Map<string, string>
+): void {
+  deliveredPropertyText.add(propertyId);
+  const trimmed = text.trim();
+  if (!trimmed) {
+    return;
+  }
+
+  const prior = deliveredPropertyBodies.get(propertyId);
+  deliveredPropertyBodies.set(
+    propertyId,
+    prior ? `${prior}\n${trimmed}` : trimmed
+  );
+}
+
+function shouldSkipPropertyListingMessage(
+  property: Property,
+  deliveredPropertyText: Set<string>,
+  deliveredPropertyBodies: Map<string, string>
+): boolean {
+  if (deliveredPropertyText.has(property.id)) {
+    return true;
+  }
+
+  const listingUrl = property.listing_url?.trim();
+  if (!listingUrl) {
+    return false;
+  }
+
+  const prior = deliveredPropertyBodies.get(property.id);
+  return prior != null && prior.includes(listingUrl);
+}
+
 export function buildPropertyOutboundMessages(
   property: Property,
   detailsText: string,
@@ -293,7 +403,7 @@ export function buildPropertyOutboundMessages(
       text: packageText,
       property,
     });
-    return messages;
+    return sanitizePropertyOutboundMessages(messages);
   }
 
   messages.push({
@@ -302,7 +412,7 @@ export function buildPropertyOutboundMessages(
     property,
   });
 
-  return messages;
+  return sanitizePropertyOutboundMessages(messages);
 }
 
 export function buildCatalogOutboundMessages(
@@ -322,7 +432,7 @@ export function buildCatalogOutboundMessages(
     }
   });
 
-  return messages;
+  return sanitizePropertyOutboundMessages(messages);
 }
 
 export function buildPropertyDetailsWithListing(
