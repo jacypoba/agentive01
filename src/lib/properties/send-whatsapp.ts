@@ -63,6 +63,41 @@ const defaultOutboundSendDeps: OutboundWhatsAppSendDeps = {
   sendText: sendWhatsAppTextSafe,
 };
 
+const PRICE_MARKERS = ["💰", "€", "EUR", "$", "£"];
+const BEDROOM_MARKERS = [
+  "bedroom",
+  "bedrooms",
+  "chambre",
+  "chambres",
+  "quarto",
+  "quartos",
+  "camere",
+  "camera",
+  "habitación",
+  "habitaciones",
+  "🛏",
+];
+
+function logPropertyOutboundDebug(input: {
+  kind: OutboundSendFailure["kind"] | "property_image";
+  sourceFunction: string;
+  propertyId?: string;
+  text?: string;
+}): void {
+  const text = input.text?.trim() ?? "";
+  console.log("[Property Outbound Debug]", {
+    kind: input.kind,
+    sourceFunction: input.sourceFunction,
+    propertyId: input.propertyId ?? null,
+    containsPrice: PRICE_MARKERS.some((marker) => text.includes(marker)),
+    containsBedrooms: BEDROOM_MARKERS.some((marker) =>
+      text.toLowerCase().includes(marker.toLowerCase())
+    ),
+    containsListingUrl: /https?:\/\//i.test(text),
+    textPreview: text.slice(0, 120),
+  });
+}
+
 export async function sendOutboundWhatsAppMessages(
   phoneDigits: string,
   messages: OutboundWhatsAppMessage[],
@@ -79,6 +114,14 @@ export async function sendOutboundWhatsAppMessages(
 
   const deliveredPropertyText = new Set<string>();
   const deliveredPropertyBodies = new Map<string, string>();
+
+  console.log("[Property Outbound Debug]", {
+    phase: "queue",
+    messageKinds: messages.map((message) => message.kind),
+    sanitizedKinds: sanitizePropertyOutboundMessages(messages).map(
+      (message) => message.kind
+    ),
+  });
 
   for (const message of sanitizePropertyOutboundMessages(messages)) {
     if (message.kind === "catalog_spacer") {
@@ -129,7 +172,8 @@ export async function sendOutboundWhatsAppMessages(
         "property_details",
         message.property.id,
         remoteJid,
-        deps
+        deps,
+        "sendOutboundWhatsAppMessages.property_details"
       );
       if (delivered) {
         markPropertyTextDelivered(
@@ -166,12 +210,23 @@ export async function sendOutboundWhatsAppMessages(
         "property_listing",
         message.property.id,
         remoteJid,
-        deps
+        deps,
+        "sendOutboundWhatsAppMessages.property_listing"
       );
       continue;
     }
 
-    await deliverText(phoneDigits, message.text, instance, report, "text", undefined, remoteJid, deps);
+    await deliverText(
+      phoneDigits,
+      message.text,
+      instance,
+      report,
+      "text",
+      undefined,
+      remoteJid,
+      deps,
+      "sendOutboundWhatsAppMessages.text"
+    );
   }
 
   if (report.failed > 0) {
@@ -181,7 +236,7 @@ export async function sendOutboundWhatsAppMessages(
   return report;
 }
 
-/** Sends property image only; returns true if fallback text was delivered (image failed). */
+/** Sends property image only; returns true if fallback text was attempted (image failed). */
 async function deliverPropertyImage(
   phoneDigits: string,
   property: Property,
@@ -194,10 +249,19 @@ async function deliverPropertyImage(
 ): Promise<boolean> {
   const lang = normalizeLanguage(language);
   const imageUrl = property.image_url?.trim() ?? "";
-  const textCard =
-    fallbackText.trim() || buildPlainPropertySummary(property, lang);
+  const hasPackageTextCard = Boolean(fallbackText.trim());
+  const textCard = hasPackageTextCard
+    ? fallbackText.trim()
+    : buildPlainPropertySummary(property, lang);
 
   if (imageUrl && isValidOutboundUrl(imageUrl)) {
+    logPropertyOutboundDebug({
+      kind: "property_image",
+      sourceFunction: "deliverPropertyImage",
+      propertyId: property.id,
+      text: textCard,
+    });
+
     report.attempted += 1;
     const caption = formatPropertyImageCaption(property);
     const mediaResult = await deps.sendMedia(
@@ -235,28 +299,37 @@ async function deliverPropertyImage(
     });
   }
 
-  const plainSummary = buildPlainPropertySummary(property, lang);
-  if (await deliverText(phoneDigits, textCard, instance, report, "property_details", property.id, remoteJid, deps)) {
-    return true;
+  if (!textCard) {
+    return false;
   }
 
-  if (
-    textCard.trim() &&
-    plainSummary.trim() &&
-    textCard.trim() !== plainSummary.trim()
-  ) {
-    await deliverText(
-      phoneDigits,
-      plainSummary,
-      instance,
-      report,
-      "property_package",
-      property.id,
-      remoteJid,
-      deps
-    );
-  }
+  const textKind = hasPackageTextCard ? "property_details" : "property_package";
+  const sourceFunction = hasPackageTextCard
+    ? "deliverPropertyImage.textCard"
+    : "deliverPropertyImage.plainSummary";
 
+  logPropertyOutboundDebug({
+    kind: textKind,
+    sourceFunction,
+    propertyId: property.id,
+    text: textCard,
+  });
+
+  await deliverText(
+    phoneDigits,
+    textCard,
+    instance,
+    report,
+    textKind,
+    property.id,
+    remoteJid,
+    deps,
+    sourceFunction
+  );
+
+  // Package textCard was attempted — never chain plainSummary afterward.
+  // Return true so queued property_details is skipped (avoids duplicate cards
+  // when the provider ack is false but the message still reaches the client).
   return true;
 }
 
@@ -268,12 +341,20 @@ async function deliverText(
   kind: OutboundSendFailure["kind"],
   propertyId: string | undefined,
   remoteJid: string | undefined,
-  deps: OutboundWhatsAppSendDeps
+  deps: OutboundWhatsAppSendDeps,
+  sourceFunction = "deliverText"
 ): Promise<boolean> {
   const trimmed = text.trim();
   if (!trimmed) {
     return false;
   }
+
+  logPropertyOutboundDebug({
+    kind,
+    sourceFunction,
+    propertyId,
+    text: trimmed,
+  });
 
   report.attempted += 1;
   const result = await deps.sendText(phoneDigits, trimmed, { instance, remoteJid });

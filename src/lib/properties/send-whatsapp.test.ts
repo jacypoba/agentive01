@@ -284,5 +284,130 @@ describe("sendOutboundWhatsAppMessages property package delivery", () => {
 
     assert.match(lastText, /🔗 Voir les détails:/);
     assert.doesNotMatch(lastText, /View details/i);
+    assert.doesNotMatch(lastText, /💰/);
+  });
+});
+
+describe("deliverPropertyImage plainSummary guard", () => {
+  const failedTextResult: WhatsAppSendResult = {
+    success: false,
+    sentToWhatsApp: false,
+    provider: "evolution",
+    error: "provider ack false",
+  };
+
+  it("with full textCard and deliverText returns false → only one text attempt", async () => {
+    let textCalls = 0;
+    const texts: string[] = [];
+
+    const deps: OutboundWhatsAppSendDeps = {
+      sendMedia: async () => ({
+        success: false,
+        sentToWhatsApp: false,
+        provider: "evolution",
+        error: "media failed",
+      }),
+      sendText: async (_phone, text) => {
+        textCalls += 1;
+        texts.push(text);
+        return failedTextResult;
+      },
+    };
+
+    const property = sampleProperty({
+      id: "p-no-double-fallback",
+      image_url: imageUrl,
+      listing_url: listingUrl,
+    });
+    const details = formatPropertyWhatsAppPackageText(property, "fr");
+
+    await sendOutboundWhatsAppMessages(
+      "33612345678",
+      buildPropertyOutboundMessages(property, details, "fr"),
+      undefined,
+      undefined,
+      deps
+    );
+
+    assert.equal(textCalls, 1);
+    assert.match(texts[0] ?? "", /💰/);
+    assert.match(texts[0] ?? "", /chambres/i);
+    assert.doesNotMatch(texts[0] ?? "", /^Maison avec jardin\n📍/m);
+  });
+
+  it("with no textCard → plainSummary is still sent once", async () => {
+    let textCalls = 0;
+    let lastText = "";
+
+    const deps: OutboundWhatsAppSendDeps = {
+      sendMedia: async () => ({
+        success: false,
+        sentToWhatsApp: false,
+        provider: "evolution",
+        error: "media failed",
+      }),
+      sendText: async (_phone, text) => {
+        textCalls += 1;
+        lastText = text;
+        return { success: true, sentToWhatsApp: true, provider: "evolution" };
+      },
+    };
+
+    const property = sampleProperty({
+      id: "p-plain-only",
+      image_url: imageUrl,
+      listing_url: listingUrl,
+    });
+
+    await sendOutboundWhatsAppMessages(
+      "33612345678",
+      buildPropertyOutboundMessages(property, "", "fr"),
+      undefined,
+      undefined,
+      deps
+    );
+
+    assert.equal(textCalls, 1);
+    assert.match(lastText, /🔗 Voir les détails:/);
+    assert.doesNotMatch(lastText, /💰/);
+  });
+
+  it("French image_url + listing_url → image success and one details card only", async () => {
+    let mediaCalls = 0;
+    let textCalls = 0;
+    const texts: string[] = [];
+
+    const deps: OutboundWhatsAppSendDeps = {
+      sendMedia: async () => {
+        mediaCalls += 1;
+        return { success: true, sentToWhatsApp: true, provider: "evolution" };
+      },
+      sendText: async (_phone, text) => {
+        textCalls += 1;
+        texts.push(text);
+        return { success: true, sentToWhatsApp: true, provider: "evolution" };
+      },
+    };
+
+    const property = sampleProperty({
+      id: "p-fr-single-card",
+      image_url: imageUrl,
+      listing_url: listingUrl,
+    });
+    const details = formatPropertyWhatsAppPackageText(property, "fr");
+
+    await sendOutboundWhatsAppMessages(
+      "33612345678",
+      buildPropertyOutboundMessages(property, details, "fr"),
+      undefined,
+      undefined,
+      deps
+    );
+
+    assert.equal(mediaCalls, 1);
+    assert.equal(textCalls, 1);
+    assert.match(texts[0] ?? "", /💰/);
+    assert.match(texts[0] ?? "", /chambres/i);
+    assert.match(texts[0] ?? "", /🔗 Voir les détails:/);
   });
 });

@@ -224,3 +224,51 @@ describe("property outbound package — no duplicate listing messages", () => {
     }
   });
 });
+
+describe("property outbound — no plainSummary after full textCard", () => {
+  const failedTextResult: WhatsAppSendResult = {
+    success: false,
+    sentToWhatsApp: false,
+    provider: "evolution",
+    error: "provider ack false",
+  };
+
+  for (const language of languages) {
+    it(`${language}: image fail + full card does not chain plainSummary`, async () => {
+      let textCalls = 0;
+      const texts: string[] = [];
+
+      const deps: OutboundWhatsAppSendDeps = {
+        sendMedia: async () => ({
+          success: false,
+          sentToWhatsApp: false,
+          provider: "evolution",
+          error: "media failed",
+        }),
+        sendText: async (_phone, text) => {
+          textCalls += 1;
+          texts.push(text);
+          return failedTextResult;
+        },
+      };
+
+      const property = sampleProperty({
+        id: `p-plain-guard-${language}`,
+        image_url: imageUrl,
+        listing_url: listingUrl,
+      });
+      const details = formatPropertyWhatsAppPackageText(property, language);
+
+      await sendOutboundWhatsAppMessages(
+        "393471234567",
+        buildPropertyOutboundMessages(property, details, language),
+        undefined,
+        undefined,
+        deps
+      );
+
+      assert.equal(textCalls, 1);
+      assert.match(texts[0] ?? "", /💰/);
+    });
+  }
+});
