@@ -407,6 +407,14 @@ async function finalizeLead(
   return extractAndApplyLeadQualification(supabase, lead, fullHistory);
 }
 
+/** When true, empty-property turns may call generateAIReply; skip if V1/gate already replied. */
+export function shouldRunEmptyPropertyIntroReply(
+  propertiesToRecommendLength: number,
+  gatedQualifyingReply: string | null
+): boolean {
+  return propertiesToRecommendLength === 0 && gatedQualifyingReply == null;
+}
+
 /** Core flow: save client message → classify intent → guarded reply → qualification. */
 export async function processClientMessageWithAI(
   supabase: Client,
@@ -854,7 +862,12 @@ export async function processClientMessageWithAI(
       aiMessages.push(saved);
       outboundMessages.push({ kind: "text", text: preparedIntro });
     }
-  } else {
+  } else if (
+    shouldRunEmptyPropertyIntroReply(
+      propertiesToRecommend.length,
+      gatedQualifyingReply
+    )
+  ) {
     const aiReply = await buildIntroReply(
       languageLead,
       history,

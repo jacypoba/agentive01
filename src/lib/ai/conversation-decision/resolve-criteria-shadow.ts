@@ -27,6 +27,10 @@ const RENT_PATTERN =
 const REJECTION_PATTERN =
   /\b(n[aã]o|nao|no|non|pas maintenant|not now|not really)\b/i;
 
+/** English buy phrasing without a bare "buy"/"purchase" token. */
+const EN_BUY_INTENT_PATTERN =
+  /\b(?:looking\s+for\s+(?:a\s+)?(?:house|home|property)\s+to\s+buy|looking\s+to\s+buy\s+(?:a\s+)?(?:house|home|property)|want\s+to\s+buy\s+(?:a\s+)?(?:house|home|property)|buying\s+(?:a\s+)?(?:house|home|property)|(?:house|home|property)\s+to\s+buy)\b/i;
+
 export type ResolvedCriteriaShadow = {
   criteria: DecisionSearchCriteria;
   contextUse: DecisionContextUse;
@@ -52,9 +56,10 @@ function extractNeighborhoodFromText(text: string): string | null {
 
 function resolveBuyRentIntent(text: string): "buy" | "rent" | null {
   const hasRent = RENT_PATTERN.test(text);
-  const hasBuy = BUY_RENT_PATTERN.test(text) && !hasRent;
   if (hasRent) return "rent";
-  if (hasBuy) return "buy";
+  if (BUY_RENT_PATTERN.test(text) || EN_BUY_INTENT_PATTERN.test(text)) {
+    return "buy";
+  }
   return null;
 }
 

@@ -24,6 +24,12 @@ const GENERAL_QUESTION_PATTERN =
 const HANDOFF_PATTERN =
   /\b(falar com|humano|agente|consultor|persona|person|human|speak to|talk to|parler avec)\b/i;
 
+const EN_PROPERTY_SEARCH_VERB_PATTERN =
+  /\b(looking for|searching for|i['']m looking|i am looking|want to buy|looking to buy)\b/i;
+
+const OTHER_LANG_PROPERTY_SEARCH_VERB_PATTERN =
+  /\b(procuro|procurar|procura|quero|preciso|cerco|cercare|voglio|quiero|busco|buscar|je cherche|je souhaite|je veux|acheter|souhaite)\b/i;
+
 function computeMissingCriteria(
   criteria: DecisionSearchCriteria,
   latestMessage: string
@@ -54,25 +60,56 @@ function isPropertyCityPivot(resolved: ResolvedCriteriaShadow): boolean {
   );
 }
 
-function hasCompleteSearchBrief(criteria: DecisionSearchCriteria): boolean {
-  return (
+function isEnglishPropertySearchBrief(
+  criteria: DecisionSearchCriteria,
+  latestMessage: string
+): boolean {
+  if (
+    !Boolean(criteria.city?.trim()) ||
+    !Boolean(criteria.propertyType?.trim()) ||
+    !isPropertySearchMessage(latestMessage)
+  ) {
+    return false;
+  }
+
+  if (!EN_PROPERTY_SEARCH_VERB_PATTERN.test(latestMessage)) {
+    return false;
+  }
+
+  if (OTHER_LANG_PROPERTY_SEARCH_VERB_PATTERN.test(latestMessage)) {
+    return false;
+  }
+
+  return true;
+}
+
+function hasCompleteSearchBrief(
+  criteria: DecisionSearchCriteria,
+  latestMessage: string
+): boolean {
+  if (
     Boolean(criteria.city?.trim()) &&
     Boolean(criteria.propertyType?.trim()) &&
     criteria.buyRentIntent != null
-  );
+  ) {
+    return true;
+  }
+
+  return isEnglishPropertySearchBrief(criteria, latestMessage);
 }
 
 function skipBroadQualification(
   criteria: DecisionSearchCriteria,
   resolved: ResolvedCriteriaShadow,
   pendingOfferAccepted: boolean,
-  history: Conversation[]
+  history: Conversation[],
+  latestMessage: string
 ): boolean {
   return (
     pendingOfferAccepted ||
     (isPropertyCityPivot(resolved) && criteria.city != null) ||
     clientAskedToSeeOptions(history) ||
-    hasCompleteSearchBrief(criteria)
+    hasCompleteSearchBrief(criteria, latestMessage)
   );
 }
 
@@ -138,7 +175,13 @@ export function selectActionShadow(
     if (inventorySummary.matchCount > 0) {
       if (
         isBroadSearch(criteria) &&
-        !skipBroadQualification(criteria, resolved, pendingOfferAccepted, history)
+        !skipBroadQualification(
+          criteria,
+          resolved,
+          pendingOfferAccepted,
+          history,
+          latestMessage
+        )
       ) {
         return {
           action: "ask_clarifying_question",
@@ -187,7 +230,13 @@ export function selectActionShadow(
     ) {
       if (
         isBroadSearch(criteria) &&
-        !skipBroadQualification(criteria, resolved, pendingOfferAccepted, history)
+        !skipBroadQualification(
+          criteria,
+          resolved,
+          pendingOfferAccepted,
+          history,
+          latestMessage
+        )
       ) {
         return {
           action: "ask_clarifying_question",

@@ -11,6 +11,8 @@ import {
   resolveCriteriaShadow,
   tryApplyPropertyDecisionV1,
 } from "@/lib/ai/conversation-decision";
+import { shouldRunEmptyPropertyIntroReply } from "@/lib/ai/conversation-service";
+import { getConsultantLanguageFallback } from "@/lib/i18n/reply-language";
 import type { Lead, PendingPropertyOffer, Property } from "@/types/database";
 
 const ORIGINAL_PROPERTY_V1 =
@@ -418,6 +420,131 @@ describe("resolveCriteriaShadow pivot context carryover", () => {
     assert.equal(resolved.criteria.propertyType, "moradia");
     assert.equal(resolved.criteria.buyRentIntent, "buy");
     assert.equal(resolved.pendingOfferRejected, true);
+  });
+});
+
+describe("English Property V1 flows", () => {
+  it("EN buy intent phrases resolve buyRentIntent", () => {
+    const phrases = [
+      "looking for a house to buy",
+      "looking to buy a house",
+      "want to buy a house",
+      "buying a house",
+      "house to buy",
+      "home to buy",
+      "property to buy",
+    ];
+
+    for (const phrase of phrases) {
+      const resolved = resolveCriteriaShadow(
+        `hi, I'm ${phrase} in Roma`,
+        baseLead({
+          preferred_language: "en",
+          pending_property_offer: null,
+          preferred_area: null,
+          property_type: null,
+        }),
+        null
+      );
+      assert.equal(resolved.criteria.buyRentIntent, "buy", phrase);
+    }
+  });
+
+  it("EN house to buy in Roma with zero stock offers city alternatives", async () => {
+    const message = "hi, i'm looking for a house to buy in Roma";
+    const lead = baseLead({
+      preferred_language: "en",
+      pending_property_offer: null,
+      preferred_area: null,
+      property_type: null,
+    });
+    const history = clientHistory(lead.id, [message]);
+    const built = await buildPropertyConversationDecision(
+      mockSupabase([firenzeProperty]) as never,
+      lead,
+      history,
+      message,
+      "en",
+      null
+    );
+
+    assert.equal(built.resolved.criteria.city, "Roma");
+    assert.equal(built.resolved.criteria.propertyType, "moradia");
+    assert.equal(built.resolved.criteria.buyRentIntent, "buy");
+    assert.equal(built.decision.action, "show_city_alternatives");
+    assert.deepEqual(built.cityAlternatives?.availableCities, ["Firenze"]);
+  });
+
+  it("EN house in Roma without buy keyword with zero stock offers city alternatives", async () => {
+    const message = "hi, i'm looking for a house in Roma";
+    const lead = baseLead({
+      preferred_language: "en",
+      pending_property_offer: null,
+      preferred_area: null,
+      property_type: null,
+    });
+    const history = clientHistory(lead.id, [message]);
+    const built = await buildPropertyConversationDecision(
+      mockSupabase([firenzeProperty]) as never,
+      lead,
+      history,
+      message,
+      "en",
+      null
+    );
+
+    assert.equal(built.resolved.criteria.city, "Roma");
+    assert.equal(built.resolved.criteria.propertyType, "moradia");
+    assert.equal(built.decision.action, "show_city_alternatives");
+    assert.deepEqual(built.cityAlternatives?.availableCities, ["Firenze"]);
+  });
+
+  it("EN house in Roma with stock shows properties instead of broad qualification", async () => {
+    const message = "hi, i'm looking for a house in Roma";
+    const lead = baseLead({
+      preferred_language: "en",
+      pending_property_offer: null,
+      preferred_area: null,
+      property_type: null,
+    });
+    const history = clientHistory(lead.id, [message]);
+    const built = await buildPropertyConversationDecision(
+      mockSupabase([romaProperty]) as never,
+      lead,
+      history,
+      message,
+      "en",
+      null
+    );
+
+    assert.equal(built.decision.action, "show_properties");
+    assert.notEqual(built.decision.reason, "broad_search_needs_qualification");
+
+    const execution = executePropertyDecision({
+      built,
+      history,
+      leadId: lead.id,
+      language: "en",
+    });
+
+    assert.equal(execution.qualifyingReply, null);
+    assert.equal(execution.propertiesToRecommend.length, 1);
+  });
+});
+
+describe("Property V1 qualifying reply guard", () => {
+  it("does not run empty-property intro when V1 already qualified", () => {
+    assert.equal(
+      shouldRunEmptyPropertyIntroReply(0, "I can show you options in Firenze."),
+      false
+    );
+  });
+
+  it("would allow consultant fallback only when no gated V1 reply exists", () => {
+    const fallback = getConsultantLanguageFallback("en");
+    assert.match(fallback, /preferred area/i);
+    assert.equal(shouldRunEmptyPropertyIntroReply(0, null), true);
+    assert.equal(shouldRunEmptyPropertyIntroReply(1, null), false);
   });
 });
 
