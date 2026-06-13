@@ -97,6 +97,29 @@ export function violatesReplyGuardrails(
   return false;
 }
 
+function finalizeGuardedReplyText(
+  trimmed: string,
+  context: ReplyGuardContext
+): string | null {
+  const { text: pureText, adjusted } = enforceReplyLanguage(trimmed, context.language);
+  if (adjusted) {
+    console.log("[WhatsApp guardrails] Replaced mixed-language reply", {
+      language: context.language,
+      preview: trimmed.slice(0, 80),
+    });
+  }
+
+  const finalized = finalizeWhatsAppText(pureText);
+  if (!finalized) {
+    console.log("[WhatsApp guardrails] Blocked incomplete reply", {
+      preview: pureText.slice(0, 80),
+    });
+    return null;
+  }
+
+  return polishConversationalReply(finalized, context.language);
+}
+
 export function sanitizeGuardedReply(
   text: string,
   history: Conversation[],
@@ -115,6 +138,23 @@ export function sanitizeGuardedReply(
     return null;
   }
 
+  return finalizeGuardedReplyText(trimmed, context);
+}
+
+/** Property recommendation intros: allow repeat across batches; dedupe only within the turn. */
+export function sanitizePropertyRecommendationIntro(
+  text: string,
+  context: ReplyGuardContext
+): string | null {
+  const trimmed = text.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  if (violatesReplyGuardrails(trimmed, context)) {
+    return null;
+  }
+
   const { text: pureText, adjusted } = enforceReplyLanguage(trimmed, context.language);
   if (adjusted) {
     console.log("[WhatsApp guardrails] Replaced mixed-language reply", {
@@ -123,15 +163,8 @@ export function sanitizeGuardedReply(
     });
   }
 
-  const finalized = finalizeWhatsAppText(pureText);
-  if (!finalized) {
-    console.log("[WhatsApp guardrails] Blocked incomplete reply", {
-      preview: pureText.slice(0, 80),
-    });
-    return null;
-  }
-
-  return polishConversationalReply(finalized, context.language);
+  // Curated intro templates end with 👇 by design; skip incomplete-response heuristics.
+  return polishConversationalReply(pureText.trim(), context.language);
 }
 
 export function logIntentDecision(

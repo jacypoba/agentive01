@@ -1,13 +1,18 @@
 import type { ClassifiedIntent } from "@/lib/ai/intent-classifier";
-import { pickUnusedVariant } from "@/lib/ai/dedupe-reply";
+import { normalizeForDedupe, pickUnusedVariant } from "@/lib/ai/dedupe-reply";
 import {
-  FIRST_RECOMMENDATION_CATALOG_INTROS,
-  FIRST_RECOMMENDATION_SINGLE_INTROS,
-  MORE_OPTIONS_CATALOG_INTROS,
-  MORE_OPTIONS_SINGLE_INTROS,
+  sanitizePropertyRecommendationIntro,
+  type ReplyGuardContext,
+} from "@/lib/ai/guardrails";
+import {
+  getFirstRecommendationCatalogIntros,
+  getFirstRecommendationSingleIntros,
+  getMoreOptionsCatalogIntros,
+  getMoreOptionsSingleIntros,
 } from "@/lib/i18n/messages";
 import type { SupportedLanguage } from "@/lib/i18n/types";
 import { getShownPropertyIds } from "@/lib/properties/property-cards";
+import type { OutboundWhatsAppMessage } from "@/lib/properties/send-whatsapp";
 import type { Conversation } from "@/types/database";
 
 export function shouldUseFirstRecommendationIntro(
@@ -35,13 +40,13 @@ function getIntroVariants(
 
   if (isFirstBatch) {
     return catalog
-      ? FIRST_RECOMMENDATION_CATALOG_INTROS[language]
-      : FIRST_RECOMMENDATION_SINGLE_INTROS[language];
+      ? getFirstRecommendationCatalogIntros(language)
+      : getFirstRecommendationSingleIntros(language);
   }
 
   return catalog
-    ? MORE_OPTIONS_CATALOG_INTROS[language]
-    : MORE_OPTIONS_SINGLE_INTROS[language];
+    ? getMoreOptionsCatalogIntros(language)
+    : getMoreOptionsSingleIntros(language);
 }
 
 export function buildRecommendationIntroText(
@@ -61,4 +66,41 @@ export function buildRecommendationIntroText(
   const seed = `${leadId}:${classified.intent}:${propertyCount}:${isFirstBatch ? "first" : "more"}`;
 
   return pickUnusedVariant(variants, history, seed);
+}
+
+export function preparePropertyRecommendationIntroOutbound(
+  introText: string,
+  seenThisTurn: Set<string>,
+  outboundMessages: OutboundWhatsAppMessage[],
+  context: ReplyGuardContext
+): string | null {
+  const trimmed = introText.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  const isAlreadyQueued = (text: string): boolean => {
+    const normalized = normalizeForDedupe(text);
+    if (seenThisTurn.has(normalized)) {
+      return true;
+    }
+
+    return outboundMessages.some(
+      (message) =>
+        message.kind === "text" &&
+        normalizeForDedupe(message.text) === normalized
+    );
+  };
+
+  if (isAlreadyQueued(trimmed)) {
+    return null;
+  }
+
+  const sanitized = sanitizePropertyRecommendationIntro(trimmed, context);
+  if (!sanitized || isAlreadyQueued(sanitized)) {
+    return null;
+  }
+
+  seenThisTurn.add(normalizeForDedupe(sanitized));
+  return sanitized;
 }

@@ -58,7 +58,10 @@ import { applyPropertyOutboundSafetyGate } from "@/lib/properties/property-outbo
 import { runConversationDecisionShadowTurn, tryApplyPhaseBCityOverride, tryApplyPhaseB2PropertyPivot, tryApplyPropertyDecisionV1 } from "@/lib/ai/conversation-decision";
 import type { SupportedLanguage } from "@/lib/i18n/types";
 import { findPropertyRecommendations } from "@/lib/properties/find-recommendations";
-import { buildRecommendationIntroText } from "@/lib/properties/recommendation-intros";
+import {
+  buildRecommendationIntroText,
+  preparePropertyRecommendationIntroOutbound,
+} from "@/lib/properties/recommendation-intros";
 import {
   analyzePropertyAvailability,
   buildReshowAvailability,
@@ -812,9 +815,21 @@ export async function processClientMessageWithAI(
       ? { ...classified, intent: "property_search" as const }
       : classified;
 
-  const aiReply =
-    gatedQualifyingReply ??
-    (await buildIntroReply(
+  if (gatedQualifyingReply) {
+    await appendUniqueTextReply(
+      supabase,
+      lead.id,
+      history,
+      seenThisTurn,
+      gatedQualifyingReply,
+      aiMessages,
+      outboundMessages,
+      guardContext
+    );
+  }
+
+  if (propertiesToRecommend.length > 0) {
+    const introText = await buildIntroReply(
       languageLead,
       history,
       propertiesToRecommend,
@@ -825,19 +840,46 @@ export async function processClientMessageWithAI(
       language,
       workspaceSettings,
       cityAlternatives
-    ));
+    );
 
-  if (aiReply) {
-    await appendUniqueTextReply(
-      supabase,
-      lead.id,
-      history,
+    const preparedIntro = preparePropertyRecommendationIntroOutbound(
+      introText,
       seenThisTurn,
-      aiReply,
-      aiMessages,
       outboundMessages,
       guardContext
     );
+
+    if (preparedIntro) {
+      const saved = await saveAiMessage(supabase, lead.id, preparedIntro);
+      aiMessages.push(saved);
+      outboundMessages.push({ kind: "text", text: preparedIntro });
+    }
+  } else {
+    const aiReply = await buildIntroReply(
+      languageLead,
+      history,
+      propertiesToRecommend,
+      availability,
+      introClassified,
+      isReshow,
+      freshQueryMade,
+      language,
+      workspaceSettings,
+      cityAlternatives
+    );
+
+    if (aiReply) {
+      await appendUniqueTextReply(
+        supabase,
+        lead.id,
+        history,
+        seenThisTurn,
+        aiReply,
+        aiMessages,
+        outboundMessages,
+        guardContext
+      );
+    }
   }
 
   if (isCatalogBatch(propertiesToRecommend)) {
