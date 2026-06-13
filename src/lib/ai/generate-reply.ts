@@ -8,6 +8,10 @@ import {
 import { MEMORY_MESSAGE_LIMIT } from "@/lib/ai/conversation-memory";
 import type { MessageIntent } from "@/lib/ai/intent-classifier";
 import { buildQualificationDirective } from "@/lib/ai/qualification";
+import {
+  logConsultantFallbackUsed,
+  type ConsultantFallbackForensicContext,
+} from "@/lib/ai/forensic-production-logs";
 import { getRealEstateAssistantPrompt } from "@/lib/ai/prompts";
 import {
   buildWorkspaceAssistantContext,
@@ -322,7 +326,8 @@ export async function generateAIReply(
   clientAskedToReshow = false,
   messageIntent: MessageIntent = "unknown",
   languageOverride?: SupportedLanguage,
-  workspaceSettings: WorkspaceAISettings | null = null
+  workspaceSettings: WorkspaceAISettings | null = null,
+  forensicContext: ConsultantFallbackForensicContext | null = null
 ): Promise<string> {
   const language = resolveTurnLanguage(history, lead, languageOverride);
   const messages = toOpenAIMessages(
@@ -342,6 +347,14 @@ export async function generateAIReply(
 
   if (!polished && rawReply) {
     polished = getConsultantLanguageFallback(language);
+    if (forensicContext) {
+      logConsultantFallbackUsed({
+        ...forensicContext,
+        source: "generateAIReply",
+        reason: "polish_empty_with_raw_reply",
+        fallbackPreview: polished,
+      });
+    }
   }
 
   if (polished && !validateReplyLanguage(polished, language).valid) {
@@ -356,7 +369,18 @@ export async function generateAIReply(
   }
 
   if (!polished || !validateReplyLanguage(polished, language).valid) {
-    return getConsultantLanguageFallback(language);
+    const fallback = getConsultantLanguageFallback(language);
+    if (forensicContext) {
+      logConsultantFallbackUsed({
+        ...forensicContext,
+        source: "generateAIReply",
+        reason: !polished
+          ? "polish_empty_after_retry"
+          : "language_validation_failed",
+        fallbackPreview: fallback,
+      });
+    }
+    return fallback;
   }
 
   return polished;

@@ -8,6 +8,7 @@ import {
 } from "@/lib/ai/dedupe-reply";
 import { NO_MATCH_LINES } from "@/lib/i18n/messages";
 import { getConsultantLanguageFallback } from "@/lib/i18n/reply-language";
+import { logConsultantFallbackUsed } from "@/lib/ai/forensic-production-logs";
 import type { SupportedLanguage } from "@/lib/i18n/types";
 import type { Conversation } from "@/types/database";
 
@@ -29,6 +30,26 @@ export function pickNoMatchIntroReply(
   }
 
   const fallbackBody = getConsultantLanguageFallback(language);
+  logConsultantFallbackUsed({
+    source: "getConsultantLanguageFallback",
+    reason: "pickNoMatchIntroReply_variants_exhausted_or_duplicate",
+    intent: "property_search",
+    propertyV1Applied: false,
+    gatedQualifyingReply: null,
+    propertiesToRecommendLength: 0,
+    availability: {
+      matchingTotal: 0,
+      shownCount: 0,
+      remainingCount: 0,
+      toSend: [],
+      remainingAfterSend: 0,
+      allShown: false,
+      noMatchesInDatabase: true,
+      criteriaMissing: false,
+    },
+    leadId,
+    fallbackPreview: fallbackBody,
+  });
   const fallback = withConversationalOpener(
     fallbackBody,
     language,

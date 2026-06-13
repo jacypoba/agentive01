@@ -19,6 +19,10 @@ import {
   logPropertyDecisionV1Applied,
   type PropertyDecisionV1Execution,
 } from "./execute-property-decision";
+import {
+  logPropertyV1Result,
+  type PropertyV1SkipReason,
+} from "@/lib/ai/forensic-production-logs";
 import { isPropertyRelatedTurn } from "./is-property-related-turn";
 import type { ResolvedCriteriaShadow } from "./resolve-criteria-shadow";
 import type { ConversationDecision } from "./types";
@@ -65,14 +69,39 @@ export async function tryApplyPropertyDecisionV1(
   pendingOffer: PendingPropertyOffer | null,
   language: ConversationDecision["language"]
 ): Promise<PropertyDecisionV1Result | null> {
-  if (!isConversationDecisionEnginePropertyV1Enabled()) {
-    return null;
+  const enabled = isConversationDecisionEnginePropertyV1Enabled();
+  const propertyRelated = isPropertyRelatedTurn(
+    latestMessage,
+    history,
+    classified,
+    memoryLead,
+    pendingOffer
+  );
+
+  function finish(
+    result: PropertyDecisionV1Result | null,
+    skippedReason: PropertyV1SkipReason | null
+  ): PropertyDecisionV1Result | null {
+    logPropertyV1Result({
+      leadId: memoryLead.id,
+      enabled,
+      isPropertyRelatedTurn: propertyRelated,
+      applied: result != null,
+      skippedReason,
+      decisionAction: result?.decision.action ?? null,
+      decisionReason: result?.decision.reason ?? null,
+      qualifyingReplyPreview: result?.qualifyingReply?.slice(0, 120) ?? null,
+      propertiesCount: result?.propertiesToRecommend.length ?? 0,
+    });
+    return result;
   }
 
-  if (
-    !isPropertyRelatedTurn(latestMessage, history, classified, memoryLead, pendingOffer)
-  ) {
-    return null;
+  if (!enabled) {
+    return finish(null, "flag_disabled");
+  }
+
+  if (!propertyRelated) {
+    return finish(null, "not_property_related_turn");
   }
 
   if (shouldUseReshowBatch(classified)) {
@@ -91,7 +120,7 @@ export async function tryApplyPropertyDecisionV1(
         propertiesFound: reshowResult.propertiesToRecommend.length,
         outboundKinds: reshowResult.outboundKinds,
       });
-      return reshowResult;
+      return finish(reshowResult, "applied");
     }
   }
 
@@ -112,6 +141,17 @@ export async function tryApplyPropertyDecisionV1(
       "no_match",
     ].includes(built.decision.action)
   ) {
+    logPropertyV1Result({
+      leadId: memoryLead.id,
+      enabled,
+      isPropertyRelatedTurn: propertyRelated,
+      applied: false,
+      skippedReason: "action_not_applicable",
+      decisionAction: built.decision.action,
+      decisionReason: built.decision.reason,
+      qualifyingReplyPreview: null,
+      propertiesCount: 0,
+    });
     return null;
   }
 
@@ -132,22 +172,25 @@ export async function tryApplyPropertyDecisionV1(
     outboundKinds: execution.outboundKinds,
   });
 
-  return {
-    ...execution,
-    completePendingOffer: shouldCompletePendingOffer(
-      pendingOffer,
-      execution,
-      latestMessage,
-      built.resolved
-    ),
-    createPendingOffer: Boolean(
-      execution.decision.action === "show_city_alternatives" &&
-      execution.cityAlternatives &&
-      execution.cityAlternatives.availableCities.length > 0 &&
-      execution.propertiesToRecommend.length === 0 &&
-      built.searchCriteria != null
-    ),
-  };
+  return finish(
+    {
+      ...execution,
+      completePendingOffer: shouldCompletePendingOffer(
+        pendingOffer,
+        execution,
+        latestMessage,
+        built.resolved
+      ),
+      createPendingOffer: Boolean(
+        execution.decision.action === "show_city_alternatives" &&
+          execution.cityAlternatives &&
+          execution.cityAlternatives.availableCities.length > 0 &&
+          execution.propertiesToRecommend.length === 0 &&
+          built.searchCriteria != null
+      ),
+    },
+    "applied"
+  );
 }
 
 export async function resolveReshowPropertyDecision(

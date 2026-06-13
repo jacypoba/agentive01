@@ -55,7 +55,12 @@ import {
 } from "@/lib/i18n/resolve-language";
 import { derivePropertySearchCriteriaDebug } from "@/lib/properties/search-criteria";
 import { applyPropertyOutboundSafetyGate } from "@/lib/properties/property-outbound-safety-gate";
-import { runConversationDecisionShadowTurn, tryApplyPhaseBCityOverride, tryApplyPhaseB2PropertyPivot, tryApplyPropertyDecisionV1 } from "@/lib/ai/conversation-decision";
+import { runConversationDecisionShadowTurn, tryApplyPhaseBCityOverride, tryApplyPhaseB2PropertyPivot, tryApplyPropertyDecisionV1, isConversationDecisionEnginePropertyV1Enabled, isPropertyRelatedTurn } from "@/lib/ai/conversation-decision";
+import {
+  logProcessClientMessageForensicStart,
+  logPropertyV1Entry,
+  type ConsultantFallbackForensicContext,
+} from "@/lib/ai/forensic-production-logs";
 import type { SupportedLanguage } from "@/lib/i18n/types";
 import { findPropertyRecommendations } from "@/lib/properties/find-recommendations";
 import {
@@ -321,7 +326,8 @@ async function buildIntroReply(
   freshQueryMade: boolean,
   language: SupportedLanguage,
   workspaceSettings: WorkspaceAISettings | null,
-  cityAlternatives: CityAlternativeSummary | null = null
+  cityAlternatives: CityAlternativeSummary | null = null,
+  forensicContext: ConsultantFallbackForensicContext | null = null
 ): Promise<string> {
   if (isReshow && propertiesToRecommend.length > 0) {
     return buildReshowIntroText(
@@ -390,7 +396,13 @@ async function buildIntroReply(
     isReshow,
     classified.intent,
     language,
-    workspaceSettings
+    workspaceSettings,
+    forensicContext
+      ? {
+          ...forensicContext,
+          reason: "buildIntroReply_fallthrough_to_generateAIReply",
+        }
+      : null
   );
 }
 
@@ -456,6 +468,13 @@ export async function processClientMessageWithAI(
 
   const classified = classifyMessageIntent(history, languageLead);
   logIntentDecision(lead.id, classified, language);
+
+  logProcessClientMessageForensicStart({
+    leadId: lead.id,
+    latestMessage: message,
+    propertyV1Raw: process.env.CONVERSATION_DECISION_ENGINE_PROPERTY_V1,
+    propertyV1Enabled: isConversationDecisionEnginePropertyV1Enabled(),
+  });
 
   const aiMessages: Conversation[] = [];
   const outboundMessages: OutboundWhatsAppMessage[] = [];
@@ -538,6 +557,21 @@ export async function processClientMessageWithAI(
   let memoryLeadForTurn = memoryLead;
 
   const pendingOfferForTurn = getActivePendingPropertyOffer(memoryLeadForTurn);
+
+  logPropertyV1Entry({
+    leadId: lead.id,
+    latestMessage: message,
+    enabled: isConversationDecisionEnginePropertyV1Enabled(),
+    isPropertyRelatedTurn: isPropertyRelatedTurn(
+      message,
+      history,
+      classified,
+      memoryLeadForTurn,
+      pendingOfferForTurn
+    ),
+    intent: classified.intent,
+  });
+
   const propertyV1Result = await tryApplyPropertyDecisionV1(
     supabase,
     memoryLeadForTurn,
@@ -823,6 +857,16 @@ export async function processClientMessageWithAI(
       ? { ...classified, intent: "property_search" as const }
       : classified;
 
+  const forensicOutbound: ConsultantFallbackForensicContext = {
+    reason: "",
+    intent: classified.intent,
+    propertyV1Applied,
+    gatedQualifyingReply,
+    propertiesToRecommendLength: propertiesToRecommend.length,
+    availability,
+    leadId: lead.id,
+  };
+
   if (gatedQualifyingReply) {
     await appendUniqueTextReply(
       supabase,
@@ -847,7 +891,8 @@ export async function processClientMessageWithAI(
       freshQueryMade,
       language,
       workspaceSettings,
-      cityAlternatives
+      cityAlternatives,
+      forensicOutbound
     );
 
     const preparedIntro = preparePropertyRecommendationIntroOutbound(
@@ -878,7 +923,8 @@ export async function processClientMessageWithAI(
       freshQueryMade,
       language,
       workspaceSettings,
-      cityAlternatives
+      cityAlternatives,
+      forensicOutbound
     );
 
     if (aiReply) {
