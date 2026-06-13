@@ -219,12 +219,13 @@ export function buildCityAlternativeFallbackText(
     fr: " Je vous les montre ?",
   });
 
-  const opened = withConversationalOpener(
-    unavailable[language],
-    language,
-    seed
-  );
-  const raw = `${opened}. ${options}${closing[language]}`;
+  // EN curated property copy must not use conversational openers (e.g. "Sure,")
+  // that fail validateReplyLanguage banned_opener checks in sanitizeGuardedReply.
+  const lead =
+    language === "en"
+      ? unavailable[language]
+      : withConversationalOpener(unavailable[language], language, seed);
+  const raw = `${lead}. ${options}${closing[language]}`;
   return polishConversationalReply(raw, language, seed);
 }
 

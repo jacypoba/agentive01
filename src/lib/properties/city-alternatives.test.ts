@@ -105,6 +105,21 @@ describe("buildCityAlternativeFallbackText", () => {
     assert.match(text, /Navigli/i);
     assert.match(text, /\?$/);
   });
+
+  it("English Roma fallback does not use banned Sure opener", () => {
+    const summary = buildCityAlternativeSummary(
+      [property({ id: "firenze-1", city: "Firenze", neighborhood: "Novoli" })],
+      { city: "Roma", propertyType: "moradia" }
+    );
+    assert.ok(summary);
+
+    const text = buildCityAlternativeFallbackText("en", summary);
+    assert.match(text, /^I don't have anything in Roma right now/i);
+    assert.equal(/^Sure[,.\s]/i.test(text), false);
+    assert.match(text, /Firenze/i);
+    assert.match(text, /Novoli/i);
+    assert.match(text, /Would you like me to show them\?$/);
+  });
 });
 
 describe("no-match vs city fallback selection", () => {
