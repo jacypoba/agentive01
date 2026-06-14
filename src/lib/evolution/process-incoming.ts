@@ -5,7 +5,10 @@ import {
 } from "@/lib/properties/send-whatsapp";
 import type { ParsedIncomingMessage } from "@/lib/whatsapp/types";
 import { createLead, getLeadByPhone } from "@/lib/data/leads";
-import { assertCanCreateLead } from "@/lib/billing/workspace-subscription";
+import {
+  assertCanCreateLead,
+  assertWorkspaceSubscriptionActive,
+} from "@/lib/billing/workspace-subscription";
 import { formatPhoneDisplay } from "@/lib/phone/normalize";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { resolveWhatsAppTenantContext } from "@/lib/workspaces/resolve-whatsapp-tenant";
@@ -67,6 +70,8 @@ export async function processIncomingWhatsAppMessage(
   }
 
   requireLeadWorkspaceId(lead);
+
+  await assertWorkspaceSubscriptionActive(supabase, workspaceId, lead.user_id);
 
   const {
     userMessage,

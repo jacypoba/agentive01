@@ -1,3 +1,4 @@
+import { assertWorkspaceSubscriptionActive } from "@/lib/billing/workspace-subscription";
 import { extractAndApplyLeadQualification } from "@/lib/ai/apply-qualification";
 import { loadConversationMemory } from "@/lib/ai/conversation-memory";
 import {
@@ -433,6 +434,9 @@ export async function processClientMessageWithAI(
   lead: Lead,
   message: string
 ): Promise<SendWithAIResult> {
+  const workspaceId = requireLeadWorkspaceId(lead);
+  await assertWorkspaceSubscriptionActive(supabase, workspaceId, lead.user_id);
+
   const userMessage = await createConversation(supabase, {
     lead_id: lead.id,
     message,
@@ -460,7 +464,6 @@ export async function processClientMessageWithAI(
     history
   );
 
-  const workspaceId = requireLeadWorkspaceId(lead);
   const workspaceSettings = await getOrCreateWorkspaceSettings(
     supabase,
     workspaceId

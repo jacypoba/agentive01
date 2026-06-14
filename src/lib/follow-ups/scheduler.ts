@@ -96,7 +96,26 @@ export async function scheduleFollowUp(
 ): Promise<FollowUp | null> {
   const { lead, type, context } = params;
 
-  if (!params.force) {
+  if (params.force) {
+    if (!isLeadEligibleForFollowUp(lead)) {
+      return null;
+    }
+
+    const workspaceId = requireLeadWorkspaceId(lead);
+    const followUpsEnabled = await isFollowUpsEnabledForWorkspace(
+      supabase,
+      workspaceId,
+      lead.user_id
+    );
+    if (!followUpsEnabled) {
+      console.log("[Follow-ups] Skipped schedule (force)", {
+        leadId: lead.id,
+        type,
+        reason: "subscription_or_plan",
+      });
+      return null;
+    }
+  } else {
     const eligibility = await canScheduleFollowUp(supabase, lead);
     if (!eligibility.allowed) {
       console.log("[Follow-ups] Skipped schedule", {
@@ -106,8 +125,6 @@ export async function scheduleFollowUp(
       });
       return null;
     }
-  } else if (!isLeadEligibleForFollowUp(lead)) {
-    return null;
   }
 
   const workspaceId = requireLeadWorkspaceId(lead);

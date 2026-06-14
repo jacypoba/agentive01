@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { assertWorkspaceSubscriptionActive } from "@/lib/billing/workspace-subscription";
 import { generateAiSettingsPreview, type AiPreviewResult } from "@/lib/ai/generate-ai-preview";
 import {
   getOrCreateWorkspaceSettings,
@@ -97,6 +98,7 @@ export async function previewAiReplyAction(
   }
 
   try {
+    await assertWorkspaceSubscriptionActive(supabase, workspace.id, user.id);
     const settings = await getOrCreateWorkspaceSettings(supabase, workspace.id);
     const preview = await generateAiSettingsPreview({
       workspaceId: workspace.id,

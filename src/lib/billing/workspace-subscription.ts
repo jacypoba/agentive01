@@ -40,6 +40,48 @@ export async function getWorkspaceSubscription(
   return getCurrentSubscription(supabase, workspaceId, userId);
 }
 
+export class WorkspaceSubscriptionInactiveError extends PlanAccessError {
+  readonly code = "subscription_inactive";
+
+  constructor() {
+    super(
+      "Your subscription is inactive. Renew on the Billing page to use Agentive01.",
+      "subscription"
+    );
+    this.name = "WorkspaceSubscriptionInactiveError";
+  }
+}
+
+/** True when an error should skip inbound webhooks with 200 (not 500). */
+export function isSubscriptionBillingBlockError(error: unknown): boolean {
+  if (error instanceof WorkspaceSubscriptionInactiveError) {
+    return true;
+  }
+
+  return error instanceof PlanAccessError && error.feature === "subscription";
+}
+
+/**
+ * Requires an active, trialing, or past_due subscription before core automation.
+ */
+export async function assertWorkspaceSubscriptionActive(
+  supabase: Client,
+  workspaceId: string,
+  userId: string
+): Promise<CurrentSubscription> {
+  const subscription = await getWorkspaceSubscription(
+    supabase,
+    workspaceId,
+    userId
+  );
+
+  if (!isSubscriptionActiveForAccess(subscription)) {
+    throw new WorkspaceSubscriptionInactiveError();
+  }
+
+  return subscription!;
+}
+
 /**
  * Ensures the user is a workspace member with owner/admin role for billing mutations.
  */
@@ -170,6 +212,14 @@ export async function isFollowUpsEnabledForWorkspace(
   return getPlanLimits(subscription!.plan_name).followUpsEnabled;
 }
 
-export { assertPlanAccess, getPlanLimits, isSubscriptionUsable, PlanAccessError };
+export {
+  assertPlanAccess,
+  assertWorkspaceSubscriptionActive,
+  getPlanLimits,
+  isSubscriptionBillingBlockError,
+  isSubscriptionUsable,
+  PlanAccessError,
+  WorkspaceSubscriptionInactiveError,
+};
 
 export type { PlanFeature, PlanName };

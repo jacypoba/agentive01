@@ -2,6 +2,7 @@ import {
   releaseWhatsAppMessageClaim,
   tryClaimWhatsAppMessage,
 } from "@/lib/evolution/message-dedup";
+import { isSubscriptionBillingBlockError } from "@/lib/billing/workspace-subscription";
 import { processIncomingWhatsAppMessage } from "@/lib/evolution/process-incoming";
 import { recordInboundHeartbeat } from "@/lib/evolution/whatsapp-heartbeat";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -82,6 +83,29 @@ export async function handleInboundWhatsAppMessage(
       aiMessageId: result.aiMessage?.id ?? null,
     };
   } catch (error) {
+    if (isSubscriptionBillingBlockError(error)) {
+      const message =
+        error instanceof Error ? error.message : "Subscription inactive.";
+
+      console.log("[WhatsApp inbound] Skipped — subscription inactive", {
+        messageId: incoming.messageId,
+        instance: incoming.instance,
+        phone: incoming.phoneDigits,
+      });
+
+      void recordInboundHeartbeat({
+        last_processing_status: "skipped",
+        last_error: message,
+      });
+
+      return {
+        ok: true,
+        skipped: true,
+        reason: "subscription_inactive",
+        messageId: incoming.messageId,
+      };
+    }
+
     if (claimedMessageId && claimedInstance && adminClient) {
       try {
         await releaseWhatsAppMessageClaim(

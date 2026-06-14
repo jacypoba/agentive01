@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { isFollowUpsEnabledForWorkspace } from "@/lib/billing/workspace-subscription";
 import { getConversationsByLead } from "@/lib/data/conversations";
 import {
   getFollowUpById,
@@ -146,6 +147,19 @@ export async function triggerFollowUpNowAction(
 
   try {
     const leadWorkspaceId = requireLeadWorkspaceId(lead);
+
+    const followUpsEnabled = await isFollowUpsEnabledForWorkspace(
+      supabase,
+      leadWorkspaceId,
+      user.id
+    );
+    if (!followUpsEnabled) {
+      return {
+        error:
+          "Follow-ups require an active subscription and a Pro or Enterprise plan.",
+      };
+    }
+
     const history = await getConversationsByLead(
       supabase,
       leadWorkspaceId,
