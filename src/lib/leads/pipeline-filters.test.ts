@@ -30,6 +30,9 @@ function lead(status: Lead["status"]): Lead {
     visit_datetime_text: null,
     preferred_language: null,
     pending_property_offer: null,
+    last_message_text: null,
+    last_message_sender: null,
+    last_message_at: null,
     created_at: "2026-05-01T10:00:00.000Z",
   };
 }

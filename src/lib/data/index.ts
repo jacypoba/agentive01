@@ -18,6 +18,17 @@ export {
   getRecentConversationsForUser,
 } from "./conversations";
 export {
+  buildLeadInboxItems,
+  buildReadsByLeadIdMap,
+  compareLeadsForInbox,
+  countUnreadClientMessages,
+  getLeadsForInbox,
+  groupClientMessagesByLeadId,
+  markLeadConversationRead,
+  sortLeadsForInbox,
+  type ClientMessageTimestamp,
+} from "./inbox";
+export {
   formatRelativeTime,
   getActivityLabel,
   getDashboardData,

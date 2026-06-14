@@ -126,7 +126,34 @@ export type Lead = {
   visit_datetime_text: string | null;
   preferred_language: string | null;
   pending_property_offer: PendingPropertyOffer | null;
+  last_message_text: string | null;
+  last_message_sender: ConversationSender | null;
+  last_message_at: string | null;
   created_at: string;
+};
+
+export type LeadForInbox = Lead & {
+  unread_count: number;
+};
+
+export type LeadConversationRead = {
+  id: string;
+  workspace_id: string;
+  lead_id: string;
+  user_id: string;
+  last_read_at: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type LeadConversationReadInsert = {
+  id?: string;
+  workspace_id: string;
+  lead_id: string;
+  user_id: string;
+  last_read_at?: string;
+  created_at?: string;
+  updated_at?: string;
 };
 
 export type PendingPropertyOfferStatus = "pending" | "completed";
@@ -603,6 +630,12 @@ export type Database = {
         Row: Lead;
         Insert: LeadInsert;
         Update: LeadUpdate;
+        Relationships: [];
+      };
+      lead_conversation_reads: {
+        Row: LeadConversationRead;
+        Insert: LeadConversationReadInsert;
+        Update: Partial<LeadConversationReadInsert>;
         Relationships: [];
       };
       conversations: {

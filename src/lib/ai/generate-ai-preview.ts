@@ -58,6 +58,9 @@ export function buildPreviewLead(
     visit_datetime_text: null,
     preferred_language: settings.defaultLanguage,
     pending_property_offer: null,
+    last_message_text: null,
+    last_message_sender: null,
+    last_message_at: null,
     created_at: new Date().toISOString(),
   };
 }
