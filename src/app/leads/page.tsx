@@ -4,9 +4,10 @@ import {
   LeadsList,
 } from "@/components/leads/leads-list";
 import { LeadsListSkeleton } from "@/components/leads/leads-list-skeleton";
-import { getLeadsForInbox } from "@/lib/data/inbox";
+import { getCachedLeadsForInbox } from "@/lib/data/inbox";
 import { listWorkspaceMembers } from "@/lib/data/workspace-members";
-import type { LeadAssigneeFilter } from "@/lib/leads/assignment-filters";
+import { parseInboxQueueFilterParam } from "@/lib/leads/inbox-attention";
+import type { InboxQueueFilter } from "@/lib/leads/inbox-attention";
 import { buildMemberLabelMap } from "@/lib/leads/member-display";
 import {
   parseDrillDownPeriodParam,
@@ -32,10 +33,10 @@ function isLeadStatusParam(value: string | undefined): value is LeadStatus {
   return LEAD_STATUSES.includes(value as LeadStatus);
 }
 
-function isAssigneeFilterParam(
+function isInboxQueueFilterParam(
   value: string | undefined
-): value is LeadAssigneeFilter {
-  return value === "me" || value === "unassigned" || value === "all";
+): value is InboxQueueFilter {
+  return parseInboxQueueFilterParam(value) !== undefined;
 }
 
 export const metadata: Metadata = {
@@ -54,12 +55,12 @@ type LeadsPageProps = {
 
 async function LeadsContent({
   initialStatus,
-  initialAssigneeFilter,
+  initialQueueFilter,
   initialPipeline,
   initialPeriod,
 }: {
   initialStatus?: LeadStatus;
-  initialAssigneeFilter?: LeadAssigneeFilter;
+  initialQueueFilter?: InboxQueueFilter;
   initialPipeline?: LeadPipelineFilter;
   initialPeriod?: AnalyticsPeriodKey;
 }) {
@@ -76,7 +77,7 @@ async function LeadsContent({
     try {
       const { workspaceId } = await resolveTenantScope(supabase, user.id);
       const [loadedLeads, members] = await Promise.all([
-        getLeadsForInbox(supabase, workspaceId, user.id),
+        getCachedLeadsForInbox(supabase, workspaceId, user.id),
         listWorkspaceMembers(supabase, workspaceId),
       ]);
       leads = loadedLeads;
@@ -99,12 +100,12 @@ async function LeadsContent({
         initialPipeline,
         initialStatus,
         initialPeriod,
-        initialAssigneeFilter,
+        initialQueueFilter,
       })}
       leads={leads ?? []}
       dbError={dbError}
       initialStatus={initialStatus}
-      initialAssigneeFilter={initialAssigneeFilter}
+      initialQueueFilter={initialQueueFilter}
       initialPipeline={initialPipeline}
       initialPeriod={initialPeriod}
       currentUserId={user.id}
@@ -118,7 +119,7 @@ export default async function LeadsPage({ searchParams }: LeadsPageProps) {
   const initialStatus = isLeadStatusParam(params.status)
     ? params.status
     : undefined;
-  const initialAssigneeFilter = isAssigneeFilterParam(params.assignee)
+  const initialQueueFilter = isInboxQueueFilterParam(params.assignee)
     ? params.assignee
     : undefined;
   const initialPipeline = parsePipelineFilterParam(params.pipeline);
@@ -150,7 +151,7 @@ export default async function LeadsPage({ searchParams }: LeadsPageProps) {
           <Suspense fallback={<LeadsListSkeleton />}>
             <LeadsContent
               initialStatus={initialStatus}
-              initialAssigneeFilter={initialAssigneeFilter}
+              initialQueueFilter={initialQueueFilter}
               initialPipeline={initialPipeline}
               initialPeriod={initialPeriod}
             />

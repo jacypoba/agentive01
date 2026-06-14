@@ -1,15 +1,16 @@
-import { filterLeadsByAssignee } from "@/lib/leads/assignment-filters";
-import type { LeadAssigneeFilter } from "@/lib/leads/assignment-filters";
 import {
-  filterLeadsByPipeline,
-  type LeadPipelineFilter,
-} from "@/lib/leads/pipeline-filters";
-import { isTimestampInAnalyticsPeriod } from "@/lib/analytics/period-filters";
+  buildInboxPipelineScope,
+  filterLeadsByInboxQueue,
+  type InboxQueueFilter,
+} from "@/lib/leads/inbox-attention";
+import type { LeadPipelineFilter } from "@/lib/leads/pipeline-filters";
 import type { AnalyticsPeriodKey } from "@/lib/analytics/periods";
-import type { Lead, LeadStatus } from "@/types/database";
+import type { Lead, LeadForInbox, LeadStatus } from "@/types/database";
+
+export type { InboxQueueFilter };
 
 export type LeadsListScopeInput = {
-  assigneeFilter: LeadAssigneeFilter;
+  queueFilter: InboxQueueFilter;
   pipeline?: LeadPipelineFilter;
   period?: AnalyticsPeriodKey;
   currentUserId: string;
@@ -28,24 +29,20 @@ export function resolveInitialStatusFilter(
 }
 
 /** Leads visible in the inbox before status tab and search filtering. */
-export function buildLeadsScopeBeforeStatusFilter<T extends Lead>(
+export function buildLeadsScopeBeforeStatusFilter<T extends LeadForInbox>(
   leads: T[],
   input: LeadsListScopeInput
 ): T[] {
-  let result = filterLeadsByAssignee(
-    leads,
-    input.assigneeFilter,
+  const pipelineScoped = buildInboxPipelineScope(leads, {
+    pipeline: input.pipeline,
+    period: input.period,
+  });
+
+  return filterLeadsByInboxQueue(
+    pipelineScoped,
+    input.queueFilter,
     input.currentUserId
   );
-  result = filterLeadsByPipeline(result, input.pipeline);
-
-  if (input.period) {
-    result = result.filter((lead) =>
-      isTimestampInAnalyticsPeriod(lead.created_at, input.period!)
-    );
-  }
-
-  return result;
 }
 
 export function filterLeadsByStatusTab<T extends Lead>(
@@ -63,12 +60,12 @@ export function buildLeadsListFilterKey(input: {
   initialPipeline?: LeadPipelineFilter;
   initialStatus?: LeadStatus;
   initialPeriod?: AnalyticsPeriodKey;
-  initialAssigneeFilter?: LeadAssigneeFilter;
+  initialQueueFilter?: InboxQueueFilter;
 }): string {
   return [
     input.initialPipeline ?? "",
     input.initialStatus ?? "",
     input.initialPeriod ?? "",
-    input.initialAssigneeFilter ?? "",
+    input.initialQueueFilter ?? "",
   ].join("|");
 }

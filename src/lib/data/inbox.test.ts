@@ -7,6 +7,7 @@ import {
   countUnreadClientMessages,
   getLeadsForInbox,
   groupClientMessagesByLeadId,
+  groupConversationsByLeadId,
   markLeadConversationRead,
   sortLeadsForInbox,
 } from "@/lib/data/inbox";
@@ -126,7 +127,12 @@ describe("inbox unread helpers", () => {
     const items = buildLeadInboxItems(
       [leadA, leadB],
       readsByLeadId,
-      clientMessagesByLeadId
+      clientMessagesByLeadId,
+      groupConversationsByLeadId([
+        { lead_id: "lead-a", sender: "client", created_at: "2026-05-01T09:00:00.000Z" },
+        { lead_id: "lead-a", sender: "client", created_at: "2026-05-01T11:00:00.000Z" },
+        { lead_id: "lead-b", sender: "client", created_at: "2026-05-01T08:00:00.000Z" },
+      ])
     );
 
     assert.equal(items[0]?.unread_count, 1);
@@ -140,10 +146,14 @@ describe("inbox unread helpers", () => {
       new Map(),
       groupClientMessagesByLeadId([
         { lead_id: "lead-a", created_at: "2026-05-01T10:00:00.000Z" },
+      ]),
+      groupConversationsByLeadId([
+        { lead_id: "lead-a", sender: "client", created_at: "2026-05-01T10:00:00.000Z" },
       ])
     );
 
     assert.equal(items[0]?.unread_count, 1);
+    assert.equal(items[0]?.needs_attention, true);
   });
 });
 
@@ -197,26 +207,32 @@ describe("getLeadsForInbox", () => {
         if (table === "conversations") {
           return {
             select: () => ({
-              eq: () => ({
-                eq: () =>
-                  Promise.resolve({
-                    data: [
-                      {
-                        lead_id: "lead-newer",
-                        created_at: "2026-05-02T11:00:00.000Z",
-                      },
-                      {
-                        lead_id: "lead-newer",
-                        created_at: "2026-05-02T13:00:00.000Z",
-                      },
-                      {
-                        lead_id: "lead-older",
-                        created_at: "2026-05-01T13:00:00.000Z",
-                      },
-                    ],
-                    error: null,
-                  }),
-              }),
+              eq: () =>
+                Promise.resolve({
+                  data: [
+                    {
+                      lead_id: "lead-newer",
+                      sender: "client",
+                      created_at: "2026-05-02T11:00:00.000Z",
+                    },
+                    {
+                      lead_id: "lead-newer",
+                      sender: "client",
+                      created_at: "2026-05-02T13:00:00.000Z",
+                    },
+                    {
+                      lead_id: "lead-older",
+                      sender: "client",
+                      created_at: "2026-05-01T13:00:00.000Z",
+                    },
+                    {
+                      lead_id: "lead-older",
+                      sender: "agent",
+                      created_at: "2026-05-01T14:00:00.000Z",
+                    },
+                  ],
+                  error: null,
+                }),
             }),
           };
         }
@@ -235,7 +251,9 @@ describe("getLeadsForInbox", () => {
     assert.equal(items[0]?.id, "lead-newer");
     assert.equal(items[0]?.last_message_text, "Latest");
     assert.equal(items[0]?.unread_count, 1);
+    assert.equal(items[0]?.needs_attention, true);
     assert.equal(items[1]?.unread_count, 1);
+    assert.equal(items[1]?.needs_attention, false);
   });
 });
 

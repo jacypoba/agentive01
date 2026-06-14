@@ -65,7 +65,7 @@ describe("pipeline qualified drill-down visibility", () => {
   ];
 
   const scopeInput = {
-    assigneeFilter: "all" as const,
+    queueFilter: "all" as const,
     pipeline: "qualified" as const,
     currentUserId: USER_A,
   };
@@ -119,7 +119,7 @@ describe("pipeline-aware chip counts", () => {
 
   it("status chip counts use pipeline scope not full workspace", () => {
     const scoped = buildLeadsScopeBeforeStatusFilter(leads, {
-      assigneeFilter: "all",
+      queueFilter: "all",
       pipeline: "qualified",
       currentUserId: USER_A,
     });
@@ -148,12 +148,12 @@ describe("pipeline-aware chip counts", () => {
     const workspace = [assignedScheduled, unassignedQualified, lead("new")];
 
     const mineScoped = buildLeadsScopeBeforeStatusFilter(workspace, {
-      assigneeFilter: "me",
+      queueFilter: "me",
       pipeline: "qualified",
       currentUserId: USER_A,
     });
     const allScoped = buildLeadsScopeBeforeStatusFilter(workspace, {
-      assigneeFilter: "all",
+      queueFilter: "all",
       pipeline: "qualified",
       currentUserId: USER_A,
     });

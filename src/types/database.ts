@@ -134,6 +134,7 @@ export type Lead = {
 
 export type LeadForInbox = Lead & {
   unread_count: number;
+  needs_attention: boolean;
 };
 
 export type LeadConversationRead = {

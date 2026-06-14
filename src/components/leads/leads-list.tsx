@@ -4,12 +4,13 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { CreateTestLeadButton } from "@/components/dashboard/create-test-lead-button";
 import { LeadInboxCard } from "@/components/leads/lead-inbox-card";
-import {
-  type LeadAssigneeFilter,
-} from "@/lib/leads/assignment-filters";
-import { type LeadPipelineFilter } from "@/lib/leads/pipeline-filters";
+import type { LeadPipelineFilter } from "@/lib/leads/pipeline-filters";
 import type { AnalyticsPeriodKey } from "@/lib/analytics/periods";
 import { sortLeadsForInbox } from "@/lib/data/inbox";
+import {
+  computeInboxQueueCounts,
+  type InboxQueueFilter,
+} from "@/lib/leads/inbox-attention";
 import { leadMatchesInboxSearch } from "@/lib/leads/inbox-display";
 import {
   buildLeadsScopeBeforeStatusFilter,
@@ -19,13 +20,13 @@ import {
 import { getAssigneeLabel } from "@/lib/leads/member-display";
 import type { LeadForInbox, LeadStatus } from "@/types/database";
 
-export type { LeadAssigneeFilter };
+export type { InboxQueueFilter };
 
 type LeadsListProps = {
   leads: LeadForInbox[];
   dbError?: string | null;
   initialStatus?: LeadStatus;
-  initialAssigneeFilter?: LeadAssigneeFilter;
+  initialQueueFilter?: InboxQueueFilter;
   initialPipeline?: LeadPipelineFilter;
   initialPeriod?: AnalyticsPeriodKey;
   currentUserId: string;
@@ -41,9 +42,14 @@ const LEAD_STATUSES: LeadStatus[] = [
   "lost",
 ];
 
-const ASSIGNEE_FILTERS: { value: LeadAssigneeFilter; label: string }[] = [
-  { value: "all", label: "All leads" },
-  { value: "me", label: "My leads" },
+const INBOX_QUEUE_FILTERS: {
+  value: InboxQueueFilter;
+  label: string;
+}[] = [
+  { value: "all", label: "All" },
+  { value: "unread", label: "Unread" },
+  { value: "needs_attention", label: "Needs Attention" },
+  { value: "me", label: "My Leads" },
   { value: "unassigned", label: "Unassigned" },
 ];
 
@@ -65,26 +71,11 @@ function SearchIcon() {
   );
 }
 
-function countByAssignee(
-  leads: LeadForInbox[],
-  assigneeFilter: LeadAssigneeFilter,
-  currentUserId: string,
-  pipeline?: LeadPipelineFilter,
-  period?: AnalyticsPeriodKey
-): number {
-  return buildLeadsScopeBeforeStatusFilter(leads, {
-    assigneeFilter,
-    pipeline,
-    period,
-    currentUserId,
-  }).length;
-}
-
 export function LeadsList({
   leads,
   dbError,
   initialStatus,
-  initialAssigneeFilter = "all",
+  initialQueueFilter = "all",
   initialPipeline,
   initialPeriod,
   currentUserId,
@@ -94,8 +85,8 @@ export function LeadsList({
   const [statusFilter, setStatusFilter] = useState<LeadStatus | "all">(() =>
     resolveInitialStatusFilter(initialStatus, initialPipeline)
   );
-  const [assigneeFilter, setAssigneeFilter] = useState<LeadAssigneeFilter>(
-    initialAssigneeFilter
+  const [queueFilter, setQueueFilter] = useState<InboxQueueFilter>(
+    initialQueueFilter
   );
 
   const memberLabelMap = useMemo(
@@ -103,15 +94,25 @@ export function LeadsList({
     [memberLabels]
   );
 
-  const scopedBeforeStatus = useMemo(
+  const queueCounts = useMemo(
     () =>
-      buildLeadsScopeBeforeStatusFilter(leads, {
-        assigneeFilter,
+      computeInboxQueueCounts(leads, {
         pipeline: initialPipeline,
         period: initialPeriod,
         currentUserId,
       }),
-    [leads, assigneeFilter, initialPipeline, initialPeriod, currentUserId]
+    [leads, initialPipeline, initialPeriod, currentUserId]
+  );
+
+  const scopedBeforeStatus = useMemo(
+    () =>
+      buildLeadsScopeBeforeStatusFilter(leads, {
+        queueFilter,
+        pipeline: initialPipeline,
+        period: initialPeriod,
+        currentUserId,
+      }),
+    [leads, queueFilter, initialPipeline, initialPeriod, currentUserId]
   );
 
   const filteredLeads = useMemo(() => {
@@ -150,29 +151,22 @@ export function LeadsList({
 
       <div className="space-y-3">
         <div className="flex flex-wrap gap-2">
-          {ASSIGNEE_FILTERS.map(({ value, label }) => {
-            const count = countByAssignee(
-              leads,
-              value,
-              currentUserId,
-              initialPipeline,
-              initialPeriod
-            );
-            const isActive = assigneeFilter === value;
+          {INBOX_QUEUE_FILTERS.map(({ value, label }) => {
+            const count = queueCounts[value];
+            const isActive = queueFilter === value;
 
             return (
               <button
                 key={value}
                 type="button"
-                onClick={() => setAssigneeFilter(value)}
+                onClick={() => setQueueFilter(value)}
                 className={`rounded-full border px-3 py-1.5 text-xs font-medium transition-all ${
                   isActive
                     ? "border-[#0066FF]/40 bg-[#0066FF]/20 text-[#00D4FF]"
                     : "border-white/10 text-white/50 hover:border-white/20 hover:text-white"
                 }`}
               >
-                {label}{" "}
-                <span className="text-white/35">({count})</span>
+                {`${label} (${count})`}
               </button>
             );
           })}
@@ -255,7 +249,7 @@ export function LeadsList({
         <div className="rounded-2xl border border-white/10 bg-white/[0.02] px-6 py-12 text-center">
           <p className="text-sm text-white/50">No leads match your filters</p>
           <p className="mt-1 text-xs text-white/30">
-            Try a different search, status, or assignment filter.
+            Try a different search, status, or queue filter.
           </p>
         </div>
       )}

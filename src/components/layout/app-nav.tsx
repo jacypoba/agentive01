@@ -2,19 +2,35 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { formatNavLeadsLabel } from "@/lib/leads/inbox-attention";
+
+type AppNavProps = {
+  needsAttentionCount?: number;
+};
 
 const links = [
   { href: "/dashboard", label: "Dashboard" },
-  { href: "/leads", label: "Leads" },
+  { href: "/leads", label: "Leads", badgeFromNeedsAttention: true },
   { href: "/visits", label: "Visits" },
   { href: "/follow-ups", label: "Follow-ups" },
   { href: "/properties", label: "Properties" },
   { href: "/settings/ai", label: "AI Assistant" },
   { href: "/settings/calendar", label: "Calendar" },
   { href: "/billing", label: "Billing" },
-];
+] as const;
 
-export function AppNav() {
+function getLinkLabel(
+  link: (typeof links)[number],
+  needsAttentionCount: number
+): string {
+  if ("badgeFromNeedsAttention" in link && link.badgeFromNeedsAttention) {
+    return formatNavLeadsLabel(needsAttentionCount, link.label);
+  }
+
+  return link.label;
+}
+
+export function AppNav({ needsAttentionCount = 0 }: AppNavProps) {
   const pathname = usePathname();
 
   return (
@@ -33,7 +49,7 @@ export function AppNav() {
                 : "text-white/50 hover:text-white"
             }`}
           >
-            {link.label}
+            {getLinkLabel(link, needsAttentionCount)}
           </Link>
         );
       })}
@@ -41,7 +57,7 @@ export function AppNav() {
   );
 }
 
-export function AppNavMobile() {
+export function AppNavMobile({ needsAttentionCount = 0 }: AppNavProps) {
   const pathname = usePathname();
 
   return (
@@ -60,7 +76,7 @@ export function AppNavMobile() {
                 : "border border-white/10 text-white/50"
             }`}
           >
-            {link.label}
+            {getLinkLabel(link, needsAttentionCount)}
           </Link>
         );
       })}

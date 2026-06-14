@@ -38,6 +38,7 @@ function inboxLead(overrides: Partial<LeadForInbox> = {}): LeadForInbox {
     last_message_at: "2026-05-20T12:00:00.000Z",
     created_at: "2026-05-19T10:00:00.000Z",
     unread_count: 2,
+    needs_attention: false,
     ...overrides,
   };
 }
@@ -127,7 +128,7 @@ describe("inbox item shape with existing filters", () => {
     ];
 
     const scoped = buildLeadsScopeBeforeStatusFilter(leads, {
-      assigneeFilter: "me",
+      queueFilter: "me",
       pipeline: "qualified",
       currentUserId: USER_A,
     });

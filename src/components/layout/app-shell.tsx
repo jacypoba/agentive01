@@ -6,8 +6,11 @@ import { GridBackground } from "@/components/ui/grid-background";
 import { Logo } from "@/components/ui/logo";
 import { WorkspacePillFallback } from "@/components/workspaces/workspace-pill";
 import { WorkspaceSwitcher } from "@/components/workspaces/workspace-switcher";
+import { getCachedLeadsForInbox } from "@/lib/data/inbox";
 import { getProfile } from "@/lib/data/profiles";
+import { countNeedsAttentionLeads } from "@/lib/leads/inbox-attention";
 import { createClient } from "@/lib/supabase/server";
+import { resolveTenantScope } from "@/lib/workspaces/workspace-access";
 
 export async function AppShell({ children }: { children: React.ReactNode }) {
   const supabase = await createClient();
@@ -32,6 +35,15 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
     user.email?.split("@")[0] ??
     "Agent";
 
+  let needsAttentionCount = 0;
+  try {
+    const { workspaceId } = await resolveTenantScope(supabase, user.id);
+    const leads = await getCachedLeadsForInbox(supabase, workspaceId, user.id);
+    needsAttentionCount = countNeedsAttentionLeads(leads);
+  } catch {
+    // Inbox badge is best-effort when data layer is unavailable.
+  }
+
   return (
     <div className="relative min-h-screen overflow-x-hidden bg-black text-white">
       <GridBackground />
@@ -48,7 +60,7 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
 
             <div className="hidden min-w-0 justify-center md:flex">
               <div className="max-w-full overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-                <AppNav />
+                <AppNav needsAttentionCount={needsAttentionCount} />
               </div>
             </div>
 
@@ -70,7 +82,7 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
         </div>
 
         <div className="mx-auto max-w-6xl border-t border-white/[0.04] px-4 pb-3 pt-2 md:hidden sm:px-6 lg:px-8">
-          <AppNavMobile />
+          <AppNavMobile needsAttentionCount={needsAttentionCount} />
         </div>
       </header>
 

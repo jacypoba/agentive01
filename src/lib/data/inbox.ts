@@ -1,5 +1,8 @@
+import { cache } from "react";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { leadNeedsAttentionFromConversations } from "@/lib/leads/inbox-attention";
 import type {
+  ConversationSender,
   Database,
   Lead,
   LeadConversationRead,
@@ -10,6 +13,12 @@ type Client = SupabaseClient<Database>;
 
 export type ClientMessageTimestamp = {
   lead_id: string;
+  created_at: string;
+};
+
+export type ConversationTimelineMessage = {
+  lead_id: string;
+  sender: ConversationSender;
   created_at: string;
 };
 
@@ -88,18 +97,38 @@ export function groupClientMessagesByLeadId(
   return grouped;
 }
 
+export function groupConversationsByLeadId(
+  conversations: ConversationTimelineMessage[]
+): Map<string, ConversationTimelineMessage[]> {
+  const grouped = new Map<string, ConversationTimelineMessage[]>();
+
+  for (const message of conversations) {
+    const existing = grouped.get(message.lead_id);
+    if (existing) {
+      existing.push(message);
+    } else {
+      grouped.set(message.lead_id, [message]);
+    }
+  }
+
+  return grouped;
+}
+
 export function buildLeadInboxItems(
   leads: Lead[],
   readsByLeadId: Map<string, string>,
-  clientMessagesByLeadId: Map<string, Array<{ created_at: string }>>
+  clientMessagesByLeadId: Map<string, Array<{ created_at: string }>>,
+  conversationsByLeadId: Map<string, ConversationTimelineMessage[]>
 ): LeadForInbox[] {
   return leads.map((lead) => {
     const clientMessages = clientMessagesByLeadId.get(lead.id) ?? [];
     const lastReadAt = readsByLeadId.get(lead.id);
+    const conversations = conversationsByLeadId.get(lead.id) ?? [];
 
     return {
       ...lead,
       unread_count: countUnreadClientMessages(clientMessages, lastReadAt),
+      needs_attention: leadNeedsAttentionFromConversations(conversations),
     };
   });
 }
@@ -120,9 +149,8 @@ export async function getLeadsForInbox(
       .eq("user_id", userId),
     supabase
       .from("conversations")
-      .select("lead_id, created_at")
-      .eq("workspace_id", workspaceId)
-      .eq("sender", "client"),
+      .select("lead_id, sender, created_at")
+      .eq("workspace_id", workspaceId),
   ]);
 
   if (leadsResult.error) {
@@ -137,17 +165,24 @@ export async function getLeadsForInbox(
 
   if (messagesResult.error) {
     throw new Error(
-      `Failed to fetch client messages for inbox: ${messagesResult.error.message}`
+      `Failed to fetch conversations for inbox: ${messagesResult.error.message}`
     );
   }
 
   const leads = leadsResult.data ?? [];
   const readsByLeadId = buildReadsByLeadIdMap(readsResult.data ?? []);
+  const conversations = messagesResult.data ?? [];
+  const conversationsByLeadId = groupConversationsByLeadId(conversations);
   const clientMessagesByLeadId = groupClientMessagesByLeadId(
-    messagesResult.data ?? []
+    conversations.filter((message) => message.sender === "client")
   );
 
-  return buildLeadInboxItems(leads, readsByLeadId, clientMessagesByLeadId);
+  return buildLeadInboxItems(
+    leads,
+    readsByLeadId,
+    clientMessagesByLeadId,
+    conversationsByLeadId
+  );
 }
 
 export async function markLeadConversationRead(
@@ -178,3 +213,5 @@ export async function markLeadConversationRead(
 
   return data;
 }
+
+export const getCachedLeadsForInbox = cache(getLeadsForInbox);
