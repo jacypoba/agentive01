@@ -2,15 +2,20 @@ import Link from "next/link";
 import { ClearLeadMemoryPanel } from "@/components/leads/clear-lead-memory";
 import { ConversationPanel } from "@/components/leads/conversation-panel";
 import { LanguageBadge } from "@/components/leads/language-badge";
+import { LeadAssignmentPanel } from "@/components/leads/lead-assignment-panel";
 import { LeadFollowUpsPanel } from "@/components/leads/lead-follow-ups-panel";
 import { LeadQualificationSummary } from "@/components/leads/lead-qualification-summary";
 import { getLanguageLabel, normalizeLanguage } from "@/lib/i18n/types";
 import { formatLeadDate, getStatusBadgeColor } from "@/lib/leads/status";
+import type { WorkspaceMemberWithProfile } from "@/lib/data/workspace-members";
 import type { Conversation, Lead } from "@/types/database";
 
 type LeadDetailViewProps = {
   lead: Lead;
   conversations: Conversation[];
+  members: WorkspaceMemberWithProfile[];
+  memberLabels: Record<string, string>;
+  canReassign: boolean;
 };
 
 function PhoneIcon() {
@@ -67,7 +72,13 @@ function InterestIcon() {
   );
 }
 
-export function LeadDetailView({ lead, conversations }: LeadDetailViewProps) {
+export function LeadDetailView({
+  lead,
+  conversations,
+  members,
+  memberLabels,
+  canReassign,
+}: LeadDetailViewProps) {
   return (
     <div className="space-y-6">
       <Link
@@ -163,6 +174,16 @@ export function LeadDetailView({ lead, conversations }: LeadDetailViewProps) {
                   </div>
                 </div>
               </dl>
+
+              <div className="mt-6 border-t border-white/5 pt-6">
+                <LeadAssignmentPanel
+                  leadId={lead.id}
+                  assignedUserId={lead.assigned_user_id}
+                  members={members}
+                  memberLabels={memberLabels}
+                  canReassign={canReassign}
+                />
+              </div>
 
               <div className="mt-6 border-t border-white/5 pt-6">
                 <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-white/40">

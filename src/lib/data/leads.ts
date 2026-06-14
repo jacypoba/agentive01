@@ -127,6 +127,29 @@ export async function updateLeadQualification(
   return data;
 }
 
+export async function updateLeadAssignment(
+  supabase: Client,
+  workspaceId: string,
+  leadId: string,
+  assignedUserId: string | null
+): Promise<Lead> {
+  const { data, error } = await workspaceFilter(
+    supabase
+      .from("leads")
+      .update({ assigned_user_id: assignedUserId })
+      .eq("id", leadId),
+    workspaceId
+  )
+    .select("*")
+    .single();
+
+  if (error) {
+    throw new Error(`Failed to update lead assignment: ${error.message}`);
+  }
+
+  return data;
+}
+
 export async function updateLeadStatus(
   supabase: Client,
   workspaceId: string,

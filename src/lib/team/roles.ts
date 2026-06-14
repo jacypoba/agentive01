@@ -15,6 +15,18 @@ export function canManageTeam(role: WorkspaceRole): boolean {
   return MANAGEMENT_ROLES.has(role);
 }
 
+export function canReassignLeads(role: WorkspaceRole): boolean {
+  return canManageTeam(role);
+}
+
+export function assertCanReassignLeads(role: WorkspaceRole): void {
+  if (!canReassignLeads(role)) {
+    throw new TeamAccessError(
+      "Only workspace owners and admins can reassign leads."
+    );
+  }
+}
+
 /** Roles the actor may assign when sending an invitation. */
 export function getInvitableRoles(actorRole: WorkspaceRole): InvitableRole[] {
   if (actorRole === "owner") {

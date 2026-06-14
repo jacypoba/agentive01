@@ -4,15 +4,24 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { CreateTestLeadButton } from "@/components/dashboard/create-test-lead-button";
 import { LanguageBadge } from "@/components/leads/language-badge";
-import { LeadQualificationSummary } from "@/components/leads/lead-qualification-summary";
+import {
+  countLeadsByAssignee,
+  filterLeadsByAssignee,
+  type LeadAssigneeFilter,
+} from "@/lib/leads/assignment-filters";
+import { getAssigneeLabel } from "@/lib/leads/member-display";
 import { formatLeadDate, getStatusBadgeColor } from "@/lib/leads/status";
-import { getIntentStatusColor, getIntentStatusLabel } from "@/lib/leads/qualification-display";
 import type { Lead, LeadStatus } from "@/types/database";
+
+export type { LeadAssigneeFilter };
 
 type LeadsListProps = {
   leads: Lead[];
   dbError?: string | null;
   initialStatus?: LeadStatus;
+  initialAssigneeFilter?: LeadAssigneeFilter;
+  currentUserId: string;
+  memberLabels: Record<string, string>;
 };
 
 const LEAD_STATUSES: LeadStatus[] = [
@@ -24,9 +33,11 @@ const LEAD_STATUSES: LeadStatus[] = [
   "lost",
 ];
 
-function isLeadStatus(value: string | undefined): value is LeadStatus {
-  return LEAD_STATUSES.includes(value as LeadStatus);
-}
+const ASSIGNEE_FILTERS: { value: LeadAssigneeFilter; label: string }[] = [
+  { value: "all", label: "All leads" },
+  { value: "me", label: "My leads" },
+  { value: "unassigned", label: "Unassigned" },
+];
 
 function SearchIcon() {
   return (
@@ -46,64 +57,67 @@ function SearchIcon() {
   );
 }
 
-function PhoneIcon() {
-  return (
-    <svg
-      className="h-3.5 w-3.5 shrink-0 text-white/30"
-      fill="none"
-      viewBox="0 0 24 24"
-      stroke="currentColor"
-      strokeWidth={1.5}
-    >
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        d="M2.25 6.75c0 8.284 6.716 15 15 15h2.25a2.25 2.25 0 0 0 2.25-2.25v-1.372c0-.516-.351-.966-.852-1.091l-4.423-1.106c-.44-.11-.902.055-1.173.417l-.97 1.293c-.282.376-.769.542-1.21.38a12.035 12.035 0 0 1-7.143-7.143c-.162-.441.004-.928.38-1.21l1.293-.97c.363-.271.527-.734.417-1.173L6.963 3.102a1.125 1.125 0 0 0-1.091-.852H4.5A2.25 2.25 0 0 0 2.25 4.5v2.25Z"
-      />
-    </svg>
-  );
+function filterByAssignee(
+  leads: Lead[],
+  assigneeFilter: LeadAssigneeFilter,
+  currentUserId: string
+): Lead[] {
+  return filterLeadsByAssignee(leads, assigneeFilter, currentUserId);
 }
 
-function CalendarIcon() {
-  return (
-    <svg
-      className="h-3.5 w-3.5 shrink-0 text-white/30"
-      fill="none"
-      viewBox="0 0 24 24"
-      stroke="currentColor"
-      strokeWidth={1.5}
-    >
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5"
-      />
-    </svg>
-  );
+function countByAssignee(
+  leads: Lead[],
+  assigneeFilter: LeadAssigneeFilter,
+  currentUserId: string
+): number {
+  return countLeadsByAssignee(leads, assigneeFilter, currentUserId);
 }
 
-export function LeadsList({ leads, dbError, initialStatus }: LeadsListProps) {
+export function LeadsList({
+  leads,
+  dbError,
+  initialStatus,
+  initialAssigneeFilter = "all",
+  currentUserId,
+  memberLabels,
+}: LeadsListProps) {
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<LeadStatus | "all">(
     initialStatus ?? "all"
   );
+  const [assigneeFilter, setAssigneeFilter] = useState<LeadAssigneeFilter>(
+    initialAssigneeFilter
+  );
+
+  const memberLabelMap = useMemo(
+    () => new Map(Object.entries(memberLabels)),
+    [memberLabels]
+  );
 
   const filteredLeads = useMemo(() => {
-    let result = leads;
+    let result = filterByAssignee(leads, assigneeFilter, currentUserId);
 
     if (statusFilter !== "all") {
       result = result.filter((lead) => lead.status === statusFilter);
     }
 
     const normalized = query.trim().toLowerCase();
-    if (!normalized) return result;
+    if (!normalized) {
+      return result;
+    }
 
     return result.filter((lead) => {
+      const assigneeLabel = getAssigneeLabel(
+        lead.assigned_user_id,
+        memberLabelMap
+      );
+
       const haystack = [
         lead.client_name,
         lead.phone ?? "",
         lead.interest ?? "",
         lead.status,
+        assigneeLabel,
         lead.budget ?? "",
         lead.preferred_area ?? "",
         lead.property_type ?? "",
@@ -116,7 +130,14 @@ export function LeadsList({ leads, dbError, initialStatus }: LeadsListProps) {
 
       return haystack.includes(normalized);
     });
-  }, [leads, query, statusFilter]);
+  }, [
+    leads,
+    query,
+    statusFilter,
+    assigneeFilter,
+    currentUserId,
+    memberLabelMap,
+  ]);
 
   return (
     <div className="space-y-6">
@@ -129,40 +150,67 @@ export function LeadsList({ leads, dbError, initialStatus }: LeadsListProps) {
             type="search"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search by name, phone, budget, area, status…"
+            placeholder="Search by name, phone, assignee, status…"
             className="w-full rounded-xl border border-white/10 bg-white/5 py-3 pl-11 pr-4 text-sm text-white placeholder:text-white/30 outline-none transition-colors focus:border-[#0066FF]/50 focus:ring-2 focus:ring-[#0066FF]/20"
           />
         </div>
         <CreateTestLeadButton />
       </div>
 
-      <div className="flex flex-wrap gap-2">
-        {(["all", ...LEAD_STATUSES] as const).map((status) => {
-          const count =
-            status === "all"
-              ? leads.length
-              : leads.filter((lead) => lead.status === status).length;
-          const isActive = statusFilter === status;
+      <div className="space-y-3">
+        <div className="flex flex-wrap gap-2">
+          {ASSIGNEE_FILTERS.map(({ value, label }) => {
+            const count = countByAssignee(leads, value, currentUserId);
+            const isActive = assigneeFilter === value;
 
-          return (
-            <Link
-              key={status}
-              href={status === "all" ? "/leads" : `/leads?status=${status}`}
-              onClick={(event) => {
-                event.preventDefault();
-                setStatusFilter(status);
-              }}
-              className={`rounded-full border px-3 py-1.5 text-xs font-medium transition-all ${
-                isActive
-                  ? "border-[#0066FF]/40 bg-[#0066FF]/20 text-[#00D4FF]"
-                  : "border-white/10 text-white/50 hover:border-white/20 hover:text-white"
-              }`}
-            >
-              {status === "all" ? "All" : status}{" "}
-              <span className="text-white/35">({count})</span>
-            </Link>
-          );
-        })}
+            return (
+              <button
+                key={value}
+                type="button"
+                onClick={() => setAssigneeFilter(value)}
+                className={`rounded-full border px-3 py-1.5 text-xs font-medium transition-all ${
+                  isActive
+                    ? "border-[#0066FF]/40 bg-[#0066FF]/20 text-[#00D4FF]"
+                    : "border-white/10 text-white/50 hover:border-white/20 hover:text-white"
+                }`}
+              >
+                {label}{" "}
+                <span className="text-white/35">({count})</span>
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="flex flex-wrap gap-2">
+          {(["all", ...LEAD_STATUSES] as const).map((status) => {
+            const scopedLeads = filterByAssignee(
+              leads,
+              assigneeFilter,
+              currentUserId
+            );
+            const count =
+              status === "all"
+                ? scopedLeads.length
+                : scopedLeads.filter((lead) => lead.status === status).length;
+            const isActive = statusFilter === status;
+
+            return (
+              <button
+                key={status}
+                type="button"
+                onClick={() => setStatusFilter(status)}
+                className={`rounded-full border px-3 py-1.5 text-xs font-medium transition-all ${
+                  isActive
+                    ? "border-[#0066FF]/40 bg-[#0066FF]/20 text-[#00D4FF]"
+                    : "border-white/10 text-white/50 hover:border-white/20 hover:text-white"
+                }`}
+              >
+                {status === "all" ? "All statuses" : status}{" "}
+                <span className="text-white/35">({count})</span>
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       {dbError && (
@@ -212,9 +260,9 @@ export function LeadsList({ leads, dbError, initialStatus }: LeadsListProps) {
 
       {!dbError && leads.length > 0 && filteredLeads.length === 0 && (
         <div className="rounded-2xl border border-white/10 bg-white/[0.02] px-6 py-12 text-center">
-          <p className="text-sm text-white/50">No leads match your search</p>
+          <p className="text-sm text-white/50">No leads match your filters</p>
           <p className="mt-1 text-xs text-white/30">
-            Try a different name, phone number, or status.
+            Try a different search, status, or assignment filter.
           </p>
         </div>
       )}
@@ -225,59 +273,76 @@ export function LeadsList({ leads, dbError, initialStatus }: LeadsListProps) {
             Showing {filteredLeads.length} of {leads.length} lead
             {leads.length === 1 ? "" : "s"}
           </p>
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-            {filteredLeads.map((lead) => (
-              <Link
-                key={lead.id}
-                href={`/leads/${lead.id}`}
-                className="group relative block overflow-hidden rounded-2xl border border-white/10 bg-white/[0.02] p-5 transition-all duration-300 hover:border-[#0066FF]/40 hover:bg-[#0066FF]/5 hover:shadow-lg hover:shadow-[#0066FF]/5"
-              >
-                <div className="absolute -right-8 -top-8 h-24 w-24 rounded-full bg-[#0066FF]/10 blur-2xl transition-opacity group-hover:opacity-100 opacity-0" />
-
-                <div className="relative flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <h3 className="truncate text-base font-semibold text-white">
-                      {lead.client_name}
-                    </h3>
-                    {lead.interest && (
-                      <p className="mt-1 line-clamp-2 text-sm leading-relaxed text-white/50">
-                        {lead.interest}
-                      </p>
-                    )}
-                  </div>
-                  <span
-                    className={`shrink-0 rounded-full border px-2.5 py-1 text-[10px] font-semibold tracking-wider capitalize ${getStatusBadgeColor(lead.status)}`}
-                  >
-                    {lead.status}
-                  </span>
-                </div>
-
-                <div className="relative mt-5 space-y-3 border-t border-white/5 pt-4">
-                  <LanguageBadge language={lead.preferred_language} />
-
-                  {lead.intent_status && lead.intent_status !== "unknown" && (
-                    <span
-                      className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-medium ${getIntentStatusColor(lead.intent_status)}`}
+          <div className="overflow-hidden rounded-2xl border border-white/10 bg-white/[0.02]">
+            <div className="overflow-x-auto">
+              <table className="min-w-full text-left text-sm">
+                <thead>
+                  <tr className="border-b border-white/10 text-xs uppercase tracking-wider text-white/40">
+                    <th className="px-4 py-3 font-medium">Client</th>
+                    <th className="px-4 py-3 font-medium">Status</th>
+                    <th className="px-4 py-3 font-medium">Assigned to</th>
+                    <th className="hidden px-4 py-3 font-medium md:table-cell">
+                      Phone
+                    </th>
+                    <th className="px-4 py-3 font-medium">Created</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredLeads.map((lead) => (
+                    <tr
+                      key={lead.id}
+                      className="border-b border-white/5 transition-colors last:border-b-0 hover:bg-[#0066FF]/5"
                     >
-                      {getIntentStatusLabel(lead.intent_status)}
-                    </span>
-                  )}
-
-                  <LeadQualificationSummary lead={lead} compact />
-
-                  {lead.phone && (
-                    <div className="flex items-center gap-2 text-xs text-white/60">
-                      <PhoneIcon />
-                      <span className="truncate">{lead.phone}</span>
-                    </div>
-                  )}
-                  <div className="flex items-center gap-2 text-xs text-white/40">
-                    <CalendarIcon />
-                    <span>{formatLeadDate(lead.created_at)}</span>
-                  </div>
-                </div>
-              </Link>
-            ))}
+                      <td className="px-4 py-3">
+                        <Link
+                          href={`/leads/${lead.id}`}
+                          className="block min-w-[10rem]"
+                        >
+                          <span className="font-medium text-white">
+                            {lead.client_name}
+                          </span>
+                          {lead.interest && (
+                            <span className="mt-0.5 block max-w-xs truncate text-xs text-white/45">
+                              {lead.interest}
+                            </span>
+                          )}
+                          <span className="mt-1 inline-flex md:hidden">
+                            <LanguageBadge language={lead.preferred_language} />
+                          </span>
+                        </Link>
+                      </td>
+                      <td className="px-4 py-3 align-top">
+                        <Link href={`/leads/${lead.id}`} className="inline-block">
+                          <span
+                            className={`rounded-full border px-2.5 py-1 text-[10px] font-semibold capitalize ${getStatusBadgeColor(lead.status)}`}
+                          >
+                            {lead.status}
+                          </span>
+                        </Link>
+                      </td>
+                      <td className="px-4 py-3 align-top text-white/70">
+                        <Link href={`/leads/${lead.id}`} className="block">
+                          {getAssigneeLabel(
+                            lead.assigned_user_id,
+                            memberLabelMap
+                          )}
+                        </Link>
+                      </td>
+                      <td className="hidden px-4 py-3 align-top text-white/60 md:table-cell">
+                        <Link href={`/leads/${lead.id}`} className="block">
+                          {lead.phone ?? "—"}
+                        </Link>
+                      </td>
+                      <td className="px-4 py-3 align-top text-white/50">
+                        <Link href={`/leads/${lead.id}`} className="block whitespace-nowrap">
+                          {formatLeadDate(lead.created_at)}
+                        </Link>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         </>
       )}

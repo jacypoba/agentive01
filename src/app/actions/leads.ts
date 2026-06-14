@@ -3,11 +3,14 @@
 import { revalidatePath } from "next/cache";
 import { assertCanCreateLead } from "@/lib/billing/workspace-subscription";
 import { buildLeadAssignmentFields } from "@/lib/leads/assignment";
-import { createLead } from "@/lib/data/leads";
+import { createLead, updateLeadAssignment } from "@/lib/data/leads";
+import { getWorkspaceMemberByUserId } from "@/lib/data/workspace-members";
 import {
   buildClearMemorySuccessMessage,
   clearLeadMemory,
 } from "@/lib/leads/clear-memory";
+import { assertCanReassignLeads, TeamAccessError } from "@/lib/team/roles";
+import { getCurrentWorkspace } from "@/lib/workspaces/get-current-workspace";
 import { resolveTenantScope } from "@/lib/workspaces/workspace-access";
 import { createClient } from "@/lib/supabase/server";
 
@@ -20,6 +23,72 @@ export type ClearLeadMemoryState = {
   error?: string;
   success?: string;
 };
+
+export type ReassignLeadState = {
+  error?: string;
+  success?: string;
+};
+
+export async function reassignLeadAction(
+  leadId: string,
+  assignedUserId: string | null
+): Promise<ReassignLeadState> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { error: "You must be signed in." };
+  }
+
+  try {
+    const { workspaceId } = await resolveTenantScope(supabase, user.id);
+    const workspace = await getCurrentWorkspace(supabase, user.id);
+
+    if (!workspace) {
+      return { error: "No active workspace found." };
+    }
+
+    assertCanReassignLeads(workspace.role);
+
+    if (assignedUserId) {
+      const member = await getWorkspaceMemberByUserId(
+        supabase,
+        workspaceId,
+        assignedUserId
+      );
+
+      if (!member) {
+        return { error: "Selected user is not a workspace member." };
+      }
+    }
+
+    await updateLeadAssignment(
+      supabase,
+      workspaceId,
+      leadId,
+      assignedUserId
+    );
+
+    revalidatePath("/leads");
+    revalidatePath(`/leads/${leadId}`);
+    revalidatePath("/dashboard");
+
+    return { success: "Lead assignment updated." };
+  } catch (error) {
+    if (error instanceof TeamAccessError) {
+      return { error: error.message };
+    }
+
+    return {
+      error:
+        error instanceof Error
+          ? error.message
+          : "Failed to update lead assignment.",
+    };
+  }
+}
 
 export async function clearLeadMemoryAction(
   leadId: string,

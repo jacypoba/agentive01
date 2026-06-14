@@ -6,9 +6,11 @@ import { hashInvitationToken } from "@/lib/team/invitation-token";
 import {
   assertCanInviteRole,
   assertCanManageTeam,
+  assertCanReassignLeads,
   assertCanRemoveMember,
   canInviteRole,
   canManageTeam,
+  canReassignLeads,
   canRemoveMember,
   getInvitableRoles,
   TeamAccessError,
@@ -39,8 +41,17 @@ describe("team role permissions", () => {
 
   it("member cannot manage team or invite", () => {
     assert.equal(canManageTeam("member"), false);
+    assert.equal(canReassignLeads("member"), false);
     assert.throws(() => assertCanManageTeam("member"), TeamAccessError);
+    assert.throws(() => assertCanReassignLeads("member"), TeamAccessError);
     assert.deepEqual(getInvitableRoles("member"), []);
+  });
+
+  it("owner and admin can reassign leads", () => {
+    assert.equal(canReassignLeads("owner"), true);
+    assert.equal(canReassignLeads("admin"), true);
+    assert.doesNotThrow(() => assertCanReassignLeads("owner"));
+    assert.doesNotThrow(() => assertCanReassignLeads("admin"));
   });
 
   it("owner can remove admins and members but not owners", () => {

@@ -7,6 +7,7 @@ export {
   getLeadByPhone,
   getLeads,
   getRecentLeads,
+  updateLeadAssignment,
   updateLeadQualification,
   updateLeadStatus,
 } from "./leads";
