@@ -12,7 +12,9 @@ const LEAD_ID = "11111111-1111-1111-1111-111111111111";
 const WORKSPACE_ID = "22222222-2222-2222-2222-222222222222";
 
 function buildLead(
-  overrides: Partial<Pick<Lead, "phone" | "phone_normalized">> = {}
+  overrides: Partial<
+    Pick<Lead, "phone" | "phone_normalized" | "workspace_id">
+  > = {}
 ): Lead {
   return {
     id: LEAD_ID,
@@ -76,6 +78,7 @@ describe("sendAgentWhatsAppReply", () => {
         createConversation: async (_client, input) => {
           createCalls += 1;
           assert.equal(input.lead_id, LEAD_ID);
+          assert.equal(input.workspace_id, WORKSPACE_ID);
           assert.equal(input.message, "Hello from the agent");
           assert.equal(input.sender, "agent");
           return savedConversation;
@@ -86,6 +89,48 @@ describe("sendAgentWhatsAppReply", () => {
     assert.equal(sendCalls, 1);
     assert.equal(createCalls, 1);
     assert.equal(result.conversation, savedConversation);
+  });
+
+  it("persists workspace_id on the agent conversation row", async () => {
+    await sendAgentWhatsAppReply(supabase, buildLead(), "Workspace scoped", {
+      sendWhatsAppText: async () => ({ success: true }),
+      createConversation: async (_client, input) => {
+        assert.equal(input.workspace_id, WORKSPACE_ID);
+        return {
+          ...savedConversation,
+          message: input.message,
+          workspace_id: input.workspace_id ?? null,
+        };
+      },
+    });
+  });
+
+  it("throws when workspace_id is missing and does not send WhatsApp or create a row", async () => {
+    let sendCalls = 0;
+    let createCalls = 0;
+
+    await assert.rejects(
+      () =>
+        sendAgentWhatsAppReply(
+          supabase,
+          buildLead({ workspace_id: null }),
+          "Hello",
+          {
+            sendWhatsAppText: async () => {
+              sendCalls += 1;
+              return { success: true };
+            },
+            createConversation: async () => {
+              createCalls += 1;
+              return savedConversation;
+            },
+          }
+        ),
+      /not associated with a workspace/
+    );
+
+    assert.equal(sendCalls, 0);
+    assert.equal(createCalls, 0);
   });
 
   it("throws when the lead has no phone and does not create a conversation", async () => {

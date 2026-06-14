@@ -44,10 +44,18 @@ export async function sendAgentWhatsAppReply(
     throw new Error("This lead has no phone number — WhatsApp was not sent.");
   }
 
+  const workspaceId = lead.workspace_id;
+  if (!workspaceId) {
+    throw new Error(
+      "This lead is not associated with a workspace — WhatsApp was not sent."
+    );
+  }
+
   await deps.sendWhatsAppText(phoneDigits, trimmed);
 
   const conversation = await deps.createConversation(supabase, {
     lead_id: lead.id,
+    workspace_id: workspaceId,
     message: trimmed,
     sender: "agent",
   });
