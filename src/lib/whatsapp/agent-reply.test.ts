@@ -1,9 +1,11 @@
 import assert from "node:assert/strict";
-import { describe, it } from "node:test";
+import { describe, it, mock } from "node:test";
 import {
+  isAcceptableAgentWhatsAppSendResult,
   sendAgentWhatsAppReply,
   usesAgentWhatsAppOutbound,
 } from "@/lib/whatsapp/agent-reply";
+import type { WhatsAppSendResult } from "@/lib/whatsapp/types";
 import type { Conversation, Lead } from "@/types/database";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
@@ -51,6 +53,64 @@ const savedConversation: Conversation = {
 
 const supabase = {} as SupabaseClient<Database>;
 
+function confirmedSendResult(
+  overrides: Partial<WhatsAppSendResult> = {}
+): WhatsAppSendResult {
+  return {
+    success: true,
+    status: 201,
+    sentToWhatsApp: true,
+    pendingOnly: false,
+    ...overrides,
+  };
+}
+
+function pendingSendResult(
+  overrides: Partial<WhatsAppSendResult> = {}
+): WhatsAppSendResult {
+  return {
+    success: true,
+    status: 201,
+    sentToWhatsApp: false,
+    pendingOnly: true,
+    deliveryStatus: "PENDING",
+    warning:
+      "Evolution returned HTTP 201 with status PENDING — message is NOT confirmed delivered to WhatsApp.",
+    ...overrides,
+  };
+}
+
+describe("isAcceptableAgentWhatsAppSendResult", () => {
+  it("accepts confirmed delivery", () => {
+    assert.equal(isAcceptableAgentWhatsAppSendResult(confirmedSendResult()), true);
+  });
+
+  it("accepts Evolution PENDING when HTTP send succeeded", () => {
+    assert.equal(isAcceptableAgentWhatsAppSendResult(pendingSendResult()), true);
+  });
+
+  it("rejects failed sends", () => {
+    assert.equal(
+      isAcceptableAgentWhatsAppSendResult({
+        success: false,
+        error: "Evolution API request failed (500)",
+      }),
+      false
+    );
+  });
+
+  it("rejects success without confirmed or pending-only acceptance", () => {
+    assert.equal(
+      isAcceptableAgentWhatsAppSendResult({
+        success: true,
+        sentToWhatsApp: false,
+        pendingOnly: false,
+      }),
+      false
+    );
+  });
+});
+
 describe("usesAgentWhatsAppOutbound", () => {
   it("routes only agent sender through WhatsApp outbound", () => {
     assert.equal(usesAgentWhatsAppOutbound("agent"), true);
@@ -60,7 +120,7 @@ describe("usesAgentWhatsAppOutbound", () => {
 });
 
 describe("sendAgentWhatsAppReply", () => {
-  it("sends WhatsApp then creates one agent conversation row", async () => {
+  it("sends WhatsApp then creates one agent conversation row on confirmed delivery", async () => {
     let sendCalls = 0;
     let createCalls = 0;
 
@@ -69,11 +129,11 @@ describe("sendAgentWhatsAppReply", () => {
       buildLead(),
       "Hello from the agent",
       {
-        sendWhatsAppText: async (phoneDigits, text) => {
+        sendWhatsAppTextSafe: async (phoneDigits, text) => {
           sendCalls += 1;
           assert.equal(phoneDigits, "393331234567");
           assert.equal(text, "Hello from the agent");
-          return { success: true, status: 200 };
+          return confirmedSendResult({ status: 200 });
         },
         createConversation: async (_client, input) => {
           createCalls += 1;
@@ -91,9 +151,35 @@ describe("sendAgentWhatsAppReply", () => {
     assert.equal(result.conversation, savedConversation);
   });
 
+  it("persists conversation when Evolution returns PENDING and logs a warning", async () => {
+    let createCalls = 0;
+    const warnMock = mock.method(console, "warn", () => {});
+
+    try {
+      await sendAgentWhatsAppReply(supabase, buildLead(), "Pending but sent", {
+        sendWhatsAppTextSafe: async () => pendingSendResult(),
+        createConversation: async (_client, input) => {
+          createCalls += 1;
+          assert.equal(input.workspace_id, WORKSPACE_ID);
+          assert.equal(input.sender, "agent");
+          return {
+            ...savedConversation,
+            message: input.message,
+          };
+        },
+      });
+
+      assert.equal(createCalls, 1);
+      assert.equal(warnMock.mock.callCount(), 1);
+      assert.match(String(warnMock.mock.calls[0]?.arguments[0]), /PENDING delivery status/);
+    } finally {
+      warnMock.mock.restore();
+    }
+  });
+
   it("persists workspace_id on the agent conversation row", async () => {
     await sendAgentWhatsAppReply(supabase, buildLead(), "Workspace scoped", {
-      sendWhatsAppText: async () => ({ success: true }),
+      sendWhatsAppTextSafe: async () => confirmedSendResult(),
       createConversation: async (_client, input) => {
         assert.equal(input.workspace_id, WORKSPACE_ID);
         return {
@@ -116,9 +202,9 @@ describe("sendAgentWhatsAppReply", () => {
           buildLead({ workspace_id: null }),
           "Hello",
           {
-            sendWhatsAppText: async () => {
+            sendWhatsAppTextSafe: async () => {
               sendCalls += 1;
-              return { success: true };
+              return confirmedSendResult();
             },
             createConversation: async () => {
               createCalls += 1;
@@ -144,9 +230,9 @@ describe("sendAgentWhatsAppReply", () => {
           buildLead({ phone: null, phone_normalized: null }),
           "Hello",
           {
-            sendWhatsAppText: async () => {
+            sendWhatsAppTextSafe: async () => {
               sendCalls += 1;
-              return { success: true };
+              return confirmedSendResult();
             },
             createConversation: async () => {
               createCalls += 1;
@@ -168,9 +254,12 @@ describe("sendAgentWhatsAppReply", () => {
     await assert.rejects(
       () =>
         sendAgentWhatsAppReply(supabase, buildLead(), "Hello", {
-          sendWhatsAppText: async () => {
+          sendWhatsAppTextSafe: async () => {
             sendCalls += 1;
-            throw new Error("WhatsApp provider unavailable");
+            return {
+              success: false,
+              error: "WhatsApp provider unavailable",
+            };
           },
           createConversation: async () => {
             createCalls += 1;
@@ -188,7 +277,7 @@ describe("sendAgentWhatsAppReply", () => {
     let createCalls = 0;
 
     await sendAgentWhatsAppReply(supabase, buildLead(), "One message only", {
-      sendWhatsAppText: async () => ({ success: true }),
+      sendWhatsAppTextSafe: async () => confirmedSendResult(),
       createConversation: async () => {
         createCalls += 1;
         return savedConversation;
