@@ -89,6 +89,7 @@ import { getLeadById } from "@/lib/data/leads";
 import { createClient } from "@/lib/supabase/server";
 import { resolveTenantScope } from "@/lib/workspaces/workspace-access";
 import { requireLeadWorkspaceId } from "@/lib/workspaces/workspace-access";
+import { sendAgentWhatsAppReply } from "@/lib/whatsapp/agent-reply";
 import type { WorkspaceAISettings } from "@/lib/workspace-settings/types";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type {
@@ -1090,6 +1091,17 @@ export async function sendMessageWithAI(
 
   if (sender === "client") {
     return processClientMessageWithAI(supabase, lead, message);
+  }
+
+  if (sender === "agent") {
+    const { conversation } = await sendAgentWhatsAppReply(supabase, lead, message);
+
+    return {
+      userMessage: conversation,
+      aiMessages: [],
+      outboundMessages: [],
+      lead,
+    };
   }
 
   const userMessage = await createConversation(supabase, {
