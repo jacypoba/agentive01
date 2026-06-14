@@ -13,7 +13,10 @@ import type {
   FunnelStage,
   TimeSeriesPoint,
 } from "@/lib/analytics/types";
-import type { LeadStatus } from "@/types/database";
+import { preferredLanguageLabel } from "@/lib/analytics/language-metrics";
+import { countQualifiedLeads } from "@/lib/analytics/qualification-metrics";
+
+export { countQualifiedLeads } from "@/lib/analytics/qualification-metrics";
 
 type TimeBucketMode = "day" | "week" | "month";
 
@@ -114,17 +117,7 @@ export function aggregateLanguageDistribution(
   const counts = new Map<string, number>();
 
   for (const row of rows) {
-    const lang = (row.preferred_language ?? "unknown").toLowerCase();
-    const label =
-      lang === "pt"
-        ? "Portuguese"
-        : lang === "en"
-          ? "English"
-          : lang === "it"
-            ? "Italian"
-            : lang === "es"
-              ? "Spanish"
-              : "Unknown";
+    const label = preferredLanguageLabel(row.preferred_language);
     counts.set(label, (counts.get(label) ?? 0) + 1);
   }
 
@@ -173,12 +166,6 @@ export function aggregateTopCities(
   return toDistribution(counts, 6);
 }
 
-const QUALIFIED_STATUSES: LeadStatus[] = [
-  "qualified",
-  "scheduled",
-  "closed",
-];
-
 export function buildConversionFunnel(input: {
   totalLeads: number;
   qualifiedLeads: number;
@@ -222,10 +209,4 @@ export function buildConversionFunnel(input: {
   ];
 
   return stages;
-}
-
-export function countQualifiedLeads(
-  rows: { status: LeadStatus }[]
-): number {
-  return rows.filter((row) => QUALIFIED_STATUSES.includes(row.status)).length;
 }

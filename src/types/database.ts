@@ -470,7 +470,7 @@ export type CalendarVisitBuckets = {
 export type DashboardStats = {
   totalLeads: number;
   qualifiedLeads: number;
-  scheduledLeads: number;
+  confirmedVisitRequests: number;
   recentConversations: number;
   pendingVisitRequests: number;
   pendingFollowUps: number;

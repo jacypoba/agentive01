@@ -15,6 +15,17 @@ function applyCreatedAtRange<T extends { gte: (col: string, val: string) => T; l
   return query.gte("created_at", range.start).lte("created_at", range.end);
 }
 
+function applySentAtRange<T extends { gte: (col: string, val: string) => T; lte: (col: string, val: string) => T }>(
+  query: T,
+  range: AnalyticsDateRange
+): T {
+  if (range.allTime || !range.start || !range.end) {
+    return query;
+  }
+
+  return query.gte("sent_at", range.start).lte("sent_at", range.end);
+}
+
 export type LeadAnalyticsRow = {
   created_at: string;
   status: Database["public"]["Tables"]["leads"]["Row"]["status"];
@@ -101,24 +112,49 @@ export async function fetchVisitAnalyticsRows(
   return data ?? [];
 }
 
-export async function fetchFollowUpAnalyticsRows(
+/** Sent follow-ups in period — filtered by sent_at, not created_at. */
+export async function fetchSentFollowUpAnalyticsRows(
   supabase: Client,
   workspaceId: string,
   range: AnalyticsDateRange
 ): Promise<FollowUpAnalyticsRow[]> {
-  const { data, error } = await applyCreatedAtRange(
+  const { data, error } = await applySentAtRange(
     supabase
       .from("follow_ups")
       .select("created_at, sent_at, status")
-      .eq("workspace_id", workspaceId),
+      .eq("workspace_id", workspaceId)
+      .eq("status", "sent")
+      .not("sent_at", "is", null),
+    range
+  ).order("sent_at", { ascending: true });
+
+  if (error) {
+    throw new Error(`Failed to fetch sent follow-up analytics: ${error.message}`);
+  }
+
+  return data ?? [];
+}
+
+export async function countSentFollowUpsInRange(
+  supabase: Client,
+  workspaceId: string,
+  range: AnalyticsDateRange
+): Promise<number> {
+  const { count, error } = await applySentAtRange(
+    supabase
+      .from("follow_ups")
+      .select("*", { count: "exact", head: true })
+      .eq("workspace_id", workspaceId)
+      .eq("status", "sent")
+      .not("sent_at", "is", null),
     range
   );
 
   if (error) {
-    throw new Error(`Failed to fetch follow-up analytics: ${error.message}`);
+    throw new Error(`Failed to count sent follow-ups: ${error.message}`);
   }
 
-  return data ?? [];
+  return count ?? 0;
 }
 
 export async function fetchAllVisitRowsForFunnel(

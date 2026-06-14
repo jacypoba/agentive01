@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { countLeads, countLeadsByStatus, getRecentLeads } from "@/lib/data/leads";
+import { countLeads, countQualifiedLeadsInWorkspace, getRecentLeads } from "@/lib/data/leads";
 import { getProfile } from "@/lib/data/profiles";
 import {
   countRecentConversations,
@@ -120,7 +120,7 @@ export async function getDashboardData(
     profile,
     totalLeads,
     qualifiedLeads,
-    scheduledLeads,
+    confirmedVisitRequests,
     recentConversations,
     pendingVisitRequests,
     conversations,
@@ -133,8 +133,8 @@ export async function getDashboardData(
   ] = await Promise.all([
     getProfile(supabase, userId),
     countLeads(supabase, workspaceId),
-    countLeadsByStatus(supabase, workspaceId, "qualified"),
-    countLeadsByStatus(supabase, workspaceId, "scheduled"),
+    countQualifiedLeadsInWorkspace(supabase, workspaceId),
+    countVisitRequestsByStatus(supabase, workspaceId, "confirmed"),
     countRecentConversations(supabase, workspaceId, 7),
     countVisitRequestsByStatus(supabase, workspaceId, "pending"),
     getRecentConversationsForWorkspace(supabase, workspaceId, 5),
@@ -151,7 +151,7 @@ export async function getDashboardData(
     stats: {
       totalLeads,
       qualifiedLeads,
-      scheduledLeads,
+      confirmedVisitRequests,
       recentConversations,
       pendingVisitRequests,
       pendingFollowUps,

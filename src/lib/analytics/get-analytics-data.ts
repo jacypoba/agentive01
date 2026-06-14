@@ -4,8 +4,8 @@ import {
   aggregateTopCities,
   bucketRowsByDay,
   buildConversionFunnel,
-  countQualifiedLeads,
 } from "@/lib/analytics/aggregate";
+import { countQualifiedLeads } from "@/lib/analytics/qualification-metrics";
 import { buildAnalyticsDateRangeForPeriod } from "@/lib/analytics/date-ranges";
 import { generateAnalyticsInsights } from "@/lib/analytics/insights";
 import {
@@ -14,7 +14,7 @@ import {
 } from "@/lib/analytics/periods";
 import {
   countInboundWhatsAppMessages,
-  fetchFollowUpAnalyticsRows,
+  countSentFollowUpsInRange,
   fetchLeadAnalyticsRows,
   fetchPropertyAnalyticsRows,
   fetchVisitAnalyticsRows,
@@ -24,6 +24,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 
 type Client = SupabaseClient<Database>;
+
+export const LISTINGS_KPI_LABEL = "Total listings";
 
 function buildAnalyticsKpis(input: {
   leads: number;
@@ -48,7 +50,7 @@ function buildAnalyticsKpis(input: {
       id: "conversion",
       label: "Qualification rate",
       value: `${input.conversionRate}%`,
-      change: "Qualified ÷ leads in period",
+      change: "Qualified, scheduled, or closed ÷ leads in period",
       accent: "text-white",
       href: "/leads?status=qualified",
     },
@@ -78,9 +80,9 @@ function buildAnalyticsKpis(input: {
     },
     {
       id: "properties",
-      label: "Active listings",
+      label: LISTINGS_KPI_LABEL,
       value: String(input.properties),
-      change: "Total catalog inventory",
+      change: "All catalog rows in workspace",
       accent: "text-white",
       href: "/properties",
     },
@@ -98,17 +100,17 @@ export async function getAnalyticsDashboardData(
   const [
     leadRows,
     visitRows,
-    followUpRows,
     propertyRowsInRange,
     totalPropertyRows,
     whatsappInbound,
+    followUpsSent,
   ] = await Promise.all([
     fetchLeadAnalyticsRows(supabase, workspaceId, range),
     fetchVisitAnalyticsRows(supabase, workspaceId, range),
-    fetchFollowUpAnalyticsRows(supabase, workspaceId, range),
     fetchPropertyAnalyticsRows(supabase, workspaceId, range),
     fetchPropertyAnalyticsRows(supabase, workspaceId),
     countInboundWhatsAppMessages(supabase, workspaceId, range),
+    countSentFollowUpsInRange(supabase, workspaceId, range),
   ]);
 
   const qualifiedInRange = countQualifiedLeads(leadRows);
@@ -119,10 +121,6 @@ export async function getAnalyticsDashboardData(
 
   const confirmedVisits = visitRows.filter(
     (row) => row.status === "confirmed"
-  ).length;
-
-  const followUpsSent = followUpRows.filter(
-    (row) => row.status === "sent"
   ).length;
 
   const conversionFunnel = buildConversionFunnel({

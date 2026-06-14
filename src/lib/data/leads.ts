@@ -4,6 +4,7 @@ import {
   normalizePhoneDigits,
 } from "@/lib/phone/normalize";
 import { resolveWorkspaceIdForInsert, resolveWorkspaceIdForSystemInsert } from "@/lib/workspaces/resolve-workspace-id-for-insert";
+import { QUALIFIED_LEAD_STATUSES } from "@/lib/analytics/qualification-metrics";
 import type { Database, Lead, LeadInsert, LeadStatus, LeadUpdate } from "@/types/database";
 
 type Client = SupabaseClient<Database>;
@@ -144,6 +145,25 @@ export async function updateLeadStatus(
   }
 
   return data;
+}
+
+export async function countQualifiedLeadsInWorkspace(
+  supabase: Client,
+  workspaceId: string
+): Promise<number> {
+  const { count, error } = await workspaceFilter(
+    supabase
+      .from("leads")
+      .select("*", { count: "exact", head: true })
+      .in("status", QUALIFIED_LEAD_STATUSES),
+    workspaceId
+  );
+
+  if (error) {
+    throw new Error(`Failed to count qualified leads: ${error.message}`);
+  }
+
+  return count ?? 0;
 }
 
 export async function countLeadsByStatus(

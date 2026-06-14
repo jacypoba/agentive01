@@ -109,7 +109,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         {
           label: "Pending visits",
           value: String(dashboardData.stats.pendingVisitRequests),
-          change: `${dashboardData.stats.scheduledLeads} confirmed on calendar`,
+          change: `${dashboardData.stats.confirmedVisitRequests} confirmed`,
           accent: "text-amber-300",
           href: "/visits?status=pending",
         },
