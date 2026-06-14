@@ -110,6 +110,7 @@ export type IntentStatus =
 export type Lead = {
   id: string;
   user_id: string;
+  assigned_user_id: string | null;
   workspace_id: string | null;
   client_name: string;
   phone: string | null;
@@ -194,6 +195,7 @@ export type ProfileUpdate = {
 export type LeadInsert = {
   id?: string;
   user_id: string;
+  assigned_user_id?: string | null;
   workspace_id?: string | null;
   client_name: string;
   phone?: string | null;
@@ -205,6 +207,7 @@ export type LeadInsert = {
 
 export type LeadUpdate = {
   client_name?: string;
+  assigned_user_id?: string | null;
   phone?: string | null;
   interest?: string | null;
   status?: LeadStatus;

@@ -1,3 +1,4 @@
+import { buildLeadAssignmentFields } from "@/lib/leads/assignment";
 import { processClientMessageWithAI } from "@/lib/ai/conversation-service";
 import {
   sendOutboundWhatsAppMessages,
@@ -57,7 +58,7 @@ export async function processIncomingWhatsAppMessage(
     lead = await createLead(
       supabase,
       {
-        user_id: userId,
+        ...buildLeadAssignmentFields(userId),
         workspace_id: workspaceId,
         client_name: incoming.pushName,
         phone: formatPhoneDisplay(incoming.phoneDigits),
@@ -71,7 +72,7 @@ export async function processIncomingWhatsAppMessage(
 
   requireLeadWorkspaceId(lead);
 
-  await assertWorkspaceSubscriptionActive(supabase, workspaceId, lead.user_id);
+  await assertWorkspaceSubscriptionActive(supabase, workspaceId, userId);
 
   const {
     userMessage,

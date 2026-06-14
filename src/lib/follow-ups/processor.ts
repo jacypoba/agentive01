@@ -1,4 +1,5 @@
 import { isFollowUpsEnabledForWorkspace } from "@/lib/billing/workspace-subscription";
+import { resolveBillingContextUserId } from "@/lib/billing/billing-context-user";
 import { createConversation } from "@/lib/data/conversations";
 import {
   getDueFollowUps,
@@ -101,10 +102,11 @@ export async function sendFollowUpImmediately(
   }
 
   const workspaceId = resolveFollowUpWorkspaceId(item);
+  const billingUserId = await resolveBillingContextUserId(supabase, workspaceId);
   const followUpsEnabled = await isFollowUpsEnabledForWorkspace(
     supabase,
     workspaceId,
-    lead.user_id
+    billingUserId
   );
   if (!followUpsEnabled) {
     await updateFollowUpStatus(supabase, workspaceId, item.id, "cancelled");
@@ -171,10 +173,14 @@ export async function processPendingFollowUps(
     const lead = item.leads;
     const workspaceId = resolveFollowUpWorkspaceId(item);
 
+    const billingUserId = await resolveBillingContextUserId(
+      supabase,
+      workspaceId
+    );
     const followUpsEnabled = await isFollowUpsEnabledForWorkspace(
       supabase,
       workspaceId,
-      lead.user_id
+      billingUserId
     );
     if (!followUpsEnabled) {
       await updateFollowUpStatus(supabase, workspaceId, item.id, "cancelled");

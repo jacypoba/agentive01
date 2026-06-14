@@ -1,3 +1,4 @@
+import { resolveBillingContextUserId } from "@/lib/billing/billing-context-user";
 import { assertWorkspaceSubscriptionActive } from "@/lib/billing/workspace-subscription";
 import { extractAndApplyLeadQualification } from "@/lib/ai/apply-qualification";
 import { loadConversationMemory } from "@/lib/ai/conversation-memory";
@@ -435,7 +436,8 @@ export async function processClientMessageWithAI(
   message: string
 ): Promise<SendWithAIResult> {
   const workspaceId = requireLeadWorkspaceId(lead);
-  await assertWorkspaceSubscriptionActive(supabase, workspaceId, lead.user_id);
+  const billingUserId = await resolveBillingContextUserId(supabase, workspaceId);
+  await assertWorkspaceSubscriptionActive(supabase, workspaceId, billingUserId);
 
   const userMessage = await createConversation(supabase, {
     lead_id: lead.id,

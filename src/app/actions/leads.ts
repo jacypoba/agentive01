@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { assertCanCreateLead } from "@/lib/billing/workspace-subscription";
+import { buildLeadAssignmentFields } from "@/lib/leads/assignment";
 import { createLead } from "@/lib/data/leads";
 import {
   buildClearMemorySuccessMessage,
@@ -74,7 +75,7 @@ export async function createTestLead(): Promise<CreateTestLeadState> {
     const { userId, workspaceId } = await resolveTenantScope(supabase, user.id);
     await assertCanCreateLead(supabase, workspaceId, userId);
     await createLead(supabase, {
-      user_id: userId,
+      ...buildLeadAssignmentFields(userId),
       ...TEST_LEAD,
     });
   } catch (error) {

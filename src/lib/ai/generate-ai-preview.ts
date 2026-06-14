@@ -1,3 +1,4 @@
+import { buildLeadAssignmentFields } from "@/lib/leads/assignment";
 import { generateAIReply } from "@/lib/ai/generate-reply";
 import { classifyMessageIntent, type MessageIntent } from "@/lib/ai/intent-classifier";
 import {
@@ -41,7 +42,7 @@ export function buildPreviewLead(
 ): Lead {
   return {
     id: PREVIEW_LEAD_ID,
-    user_id: userId,
+    ...buildLeadAssignmentFields(userId),
     workspace_id: workspaceId,
     client_name: "Preview Lead",
     phone: null,

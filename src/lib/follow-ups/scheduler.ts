@@ -1,6 +1,7 @@
 import {
   isFollowUpsEnabledForWorkspace,
 } from "@/lib/billing/workspace-subscription";
+import { resolveBillingContextUserId } from "@/lib/billing/billing-context-user";
 import {
   cancelPendingFollowUpsForLead,
   countSentFollowUpsForLead,
@@ -54,10 +55,11 @@ async function canScheduleFollowUp(
   }
 
   const workspaceId = requireLeadWorkspaceId(lead);
+  const billingUserId = await resolveBillingContextUserId(supabase, workspaceId);
   const followUpsEnabled = await isFollowUpsEnabledForWorkspace(
     supabase,
     workspaceId,
-    lead.user_id
+    billingUserId
   );
   if (!followUpsEnabled) {
     return { allowed: false, reason: "plan_limit" };
@@ -102,10 +104,14 @@ export async function scheduleFollowUp(
     }
 
     const workspaceId = requireLeadWorkspaceId(lead);
+    const billingUserId = await resolveBillingContextUserId(
+      supabase,
+      workspaceId
+    );
     const followUpsEnabled = await isFollowUpsEnabledForWorkspace(
       supabase,
       workspaceId,
-      lead.user_id
+      billingUserId
     );
     if (!followUpsEnabled) {
       console.log("[Follow-ups] Skipped schedule (force)", {
