@@ -9,12 +9,15 @@ import {
   getVisitStatusColor,
   getVisitStatusLabel,
 } from "@/lib/visits/status";
+import { isTimestampInAnalyticsPeriod } from "@/lib/analytics/period-filters";
+import type { AnalyticsPeriodKey } from "@/lib/analytics/periods";
 import type { VisitRequestStatus, VisitRequestWithLead } from "@/types/database";
 
 type VisitsListProps = {
   visits: VisitRequestWithLead[];
   dbError?: string | null;
   initialStatus?: StatusFilter;
+  initialPeriod?: AnalyticsPeriodKey;
 };
 
 type StatusFilter = "all" | VisitRequestStatus;
@@ -32,6 +35,7 @@ export function VisitsList({
   visits,
   dbError,
   initialStatus = "all",
+  initialPeriod,
 }: VisitsListProps) {
   const [filter, setFilter] = useState<StatusFilter>(initialStatus);
   const [pendingId, setPendingId] = useState<string | null>(null);
@@ -41,9 +45,20 @@ export function VisitsList({
   const [isPending, startTransition] = useTransition();
 
   const filteredVisits = useMemo(() => {
-    if (filter === "all") return visits;
-    return visits.filter((visit) => visit.status === filter);
-  }, [filter, visits]);
+    let result = visits;
+
+    if (filter !== "all") {
+      result = result.filter((visit) => visit.status === filter);
+    }
+
+    if (initialPeriod) {
+      result = result.filter((visit) =>
+        isTimestampInAnalyticsPeriod(visit.created_at, initialPeriod)
+      );
+    }
+
+    return result;
+  }, [filter, visits, initialPeriod]);
 
   const counts = useMemo(
     () => ({

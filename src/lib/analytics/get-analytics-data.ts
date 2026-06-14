@@ -7,6 +7,11 @@ import {
 } from "@/lib/analytics/aggregate";
 import { countQualifiedLeads } from "@/lib/analytics/qualification-metrics";
 import { buildAnalyticsDateRangeForPeriod } from "@/lib/analytics/date-ranges";
+import {
+  buildFollowUpsDrillDownHref,
+  buildLeadsDrillDownHref,
+  buildVisitsDrillDownHref,
+} from "@/lib/analytics/drill-down-hrefs";
 import { generateAnalyticsInsights } from "@/lib/analytics/insights";
 import {
   DEFAULT_ANALYTICS_PERIOD,
@@ -36,6 +41,7 @@ function buildAnalyticsKpis(input: {
   properties: number;
   conversionRate: number;
   rangeLabel: string;
+  period: AnalyticsPeriodKey;
 }): AnalyticsKpi[] {
   return [
     {
@@ -44,7 +50,7 @@ function buildAnalyticsKpis(input: {
       value: String(input.leads),
       change: input.rangeLabel,
       accent: "text-[#00D4FF]",
-      href: "/leads",
+      href: buildLeadsDrillDownHref({ period: input.period }),
     },
     {
       id: "conversion",
@@ -52,7 +58,10 @@ function buildAnalyticsKpis(input: {
       value: `${input.conversionRate}%`,
       change: "Qualified, scheduled, or closed ÷ leads in period",
       accent: "text-white",
-      href: "/leads?status=qualified",
+      href: buildLeadsDrillDownHref({
+        pipeline: "qualified",
+        period: input.period,
+      }),
     },
     {
       id: "visits",
@@ -60,7 +69,7 @@ function buildAnalyticsKpis(input: {
       value: String(input.visits),
       change: `${input.confirmedVisits} confirmed`,
       accent: "text-amber-300",
-      href: "/visits",
+      href: buildVisitsDrillDownHref({ period: input.period }),
     },
     {
       id: "whatsapp",
@@ -76,7 +85,10 @@ function buildAnalyticsKpis(input: {
       value: String(input.followUpsSent),
       change: "Automated re-engagement",
       accent: "text-[#00D4FF]",
-      href: "/follow-ups?group=sent",
+      href: buildFollowUpsDrillDownHref({
+        group: "sent",
+        period: input.period,
+      }),
     },
     {
       id: "properties",
@@ -159,6 +171,7 @@ export async function getAnalyticsDashboardData(
       properties: totalPropertyRows.length,
       conversionRate,
       rangeLabel: range.label,
+      period,
     }),
     leadsOverTime: bucketRowsByDay(leadRows, range),
     visitsOverTime: bucketRowsByDay(visitRows, range),

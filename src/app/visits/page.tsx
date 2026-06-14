@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import { VisitsList } from "@/components/visits/visits-list";
+import { parseDrillDownPeriodParam } from "@/lib/analytics/drill-down-hrefs";
+import type { AnalyticsPeriodKey } from "@/lib/analytics/periods";
 import { getVisitRequests } from "@/lib/data/visit-requests";
 import { createClient } from "@/lib/supabase/server";
 import { resolveTenantScope } from "@/lib/workspaces/workspace-access";
@@ -22,7 +24,7 @@ export const metadata: Metadata = {
 };
 
 type VisitsPageProps = {
-  searchParams: Promise<{ status?: string }>;
+  searchParams: Promise<{ status?: string; period?: string }>;
 };
 
 export default async function VisitsPage({ searchParams }: VisitsPageProps) {
@@ -30,6 +32,7 @@ export default async function VisitsPage({ searchParams }: VisitsPageProps) {
   const initialStatus = isVisitStatusFilter(params.status)
     ? params.status
     : "all";
+  const initialPeriod = parseDrillDownPeriodParam(params.period);
 
   const supabase = await createClient();
   const {
@@ -72,6 +75,7 @@ export default async function VisitsPage({ searchParams }: VisitsPageProps) {
             visits={visits ?? []}
             dbError={dbError}
             initialStatus={initialStatus}
+            initialPeriod={initialPeriod}
           />
         </div>
       </div>

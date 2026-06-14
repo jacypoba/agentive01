@@ -9,6 +9,12 @@ import {
   filterLeadsByAssignee,
   type LeadAssigneeFilter,
 } from "@/lib/leads/assignment-filters";
+import {
+  filterLeadsByPipeline,
+  type LeadPipelineFilter,
+} from "@/lib/leads/pipeline-filters";
+import { isTimestampInAnalyticsPeriod } from "@/lib/analytics/period-filters";
+import type { AnalyticsPeriodKey } from "@/lib/analytics/periods";
 import { getAssigneeLabel } from "@/lib/leads/member-display";
 import { formatLeadDate, getStatusBadgeColor } from "@/lib/leads/status";
 import type { Lead, LeadStatus } from "@/types/database";
@@ -20,6 +26,8 @@ type LeadsListProps = {
   dbError?: string | null;
   initialStatus?: LeadStatus;
   initialAssigneeFilter?: LeadAssigneeFilter;
+  initialPipeline?: LeadPipelineFilter;
+  initialPeriod?: AnalyticsPeriodKey;
   currentUserId: string;
   memberLabels: Record<string, string>;
 };
@@ -78,6 +86,8 @@ export function LeadsList({
   dbError,
   initialStatus,
   initialAssigneeFilter = "all",
+  initialPipeline,
+  initialPeriod,
   currentUserId,
   memberLabels,
 }: LeadsListProps) {
@@ -96,9 +106,16 @@ export function LeadsList({
 
   const filteredLeads = useMemo(() => {
     let result = filterByAssignee(leads, assigneeFilter, currentUserId);
+    result = filterLeadsByPipeline(result, initialPipeline);
 
     if (statusFilter !== "all") {
       result = result.filter((lead) => lead.status === statusFilter);
+    }
+
+    if (initialPeriod) {
+      result = result.filter((lead) =>
+        isTimestampInAnalyticsPeriod(lead.created_at, initialPeriod)
+      );
     }
 
     const normalized = query.trim().toLowerCase();
@@ -137,6 +154,8 @@ export function LeadsList({
     assigneeFilter,
     currentUserId,
     memberLabelMap,
+    initialPipeline,
+    initialPeriod,
   ]);
 
   return (

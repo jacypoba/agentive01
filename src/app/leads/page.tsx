@@ -8,6 +8,12 @@ import { getLeads } from "@/lib/data/leads";
 import { listWorkspaceMembers } from "@/lib/data/workspace-members";
 import type { LeadAssigneeFilter } from "@/lib/leads/assignment-filters";
 import { buildMemberLabelMap } from "@/lib/leads/member-display";
+import {
+  parseDrillDownPeriodParam,
+  parsePipelineFilterParam,
+} from "@/lib/analytics/drill-down-hrefs";
+import type { LeadPipelineFilter } from "@/lib/leads/pipeline-filters";
+import type { AnalyticsPeriodKey } from "@/lib/analytics/periods";
 import { createClient } from "@/lib/supabase/server";
 import { resolveTenantScope } from "@/lib/workspaces/workspace-access";
 import type { LeadStatus } from "@/types/database";
@@ -37,15 +43,24 @@ export const metadata: Metadata = {
 };
 
 type LeadsPageProps = {
-  searchParams: Promise<{ status?: string; assignee?: string }>;
+  searchParams: Promise<{
+    status?: string;
+    assignee?: string;
+    pipeline?: string;
+    period?: string;
+  }>;
 };
 
 async function LeadsContent({
   initialStatus,
   initialAssigneeFilter,
+  initialPipeline,
+  initialPeriod,
 }: {
   initialStatus?: LeadStatus;
   initialAssigneeFilter?: LeadAssigneeFilter;
+  initialPipeline?: LeadPipelineFilter;
+  initialPeriod?: AnalyticsPeriodKey;
 }) {
   const supabase = await createClient();
   const {
@@ -83,6 +98,8 @@ async function LeadsContent({
       dbError={dbError}
       initialStatus={initialStatus}
       initialAssigneeFilter={initialAssigneeFilter}
+      initialPipeline={initialPipeline}
+      initialPeriod={initialPeriod}
       currentUserId={user.id}
       memberLabels={memberLabels}
     />
@@ -97,6 +114,8 @@ export default async function LeadsPage({ searchParams }: LeadsPageProps) {
   const initialAssigneeFilter = isAssigneeFilterParam(params.assignee)
     ? params.assignee
     : undefined;
+  const initialPipeline = parsePipelineFilterParam(params.pipeline);
+  const initialPeriod = parseDrillDownPeriodParam(params.period);
 
   return (
     <main className="px-6 pb-16 lg:px-8">
@@ -125,6 +144,8 @@ export default async function LeadsPage({ searchParams }: LeadsPageProps) {
             <LeadsContent
               initialStatus={initialStatus}
               initialAssigneeFilter={initialAssigneeFilter}
+              initialPipeline={initialPipeline}
+              initialPeriod={initialPeriod}
             />
           </Suspense>
         </section>

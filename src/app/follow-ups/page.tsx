@@ -1,5 +1,10 @@
 import type { Metadata } from "next";
 import { FollowUpsList } from "@/components/follow-ups/follow-ups-list";
+import {
+  parseDrillDownPeriodParam,
+  parseTodayParam,
+} from "@/lib/analytics/drill-down-hrefs";
+import type { AnalyticsPeriodKey } from "@/lib/analytics/periods";
 import { getFollowUpsGrouped } from "@/lib/data/follow-ups";
 import { createClient } from "@/lib/supabase/server";
 import { resolveTenantScope } from "@/lib/workspaces/workspace-access";
@@ -10,7 +15,7 @@ export const metadata: Metadata = {
 };
 
 type FollowUpsPageProps = {
-  searchParams: Promise<{ group?: string }>;
+  searchParams: Promise<{ group?: string; today?: string; period?: string }>;
 };
 
 function isGroupFilter(
@@ -22,6 +27,8 @@ function isGroupFilter(
 export default async function FollowUpsPage({ searchParams }: FollowUpsPageProps) {
   const params = await searchParams;
   const initialGroup = isGroupFilter(params.group) ? params.group : "pending";
+  const initialToday = parseTodayParam(params.today);
+  const initialPeriod = parseDrillDownPeriodParam(params.period);
 
   const supabase = await createClient();
   const {
@@ -74,6 +81,8 @@ export default async function FollowUpsPage({ searchParams }: FollowUpsPageProps
             }
             dbError={dbError}
             initialGroup={initialGroup}
+            initialToday={initialToday}
+            initialPeriod={initialPeriod}
           />
         </div>
       </div>

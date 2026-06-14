@@ -6,6 +6,10 @@ import { CreateTestLeadButton } from "@/components/dashboard/create-test-lead-bu
 import { FollowUpsPanel } from "@/components/dashboard/follow-ups-panel";
 import { WhatsAppLiveFeed } from "@/components/dashboard/whatsapp-live-feed";
 import { VisitRequestsPanel } from "@/components/visits/visit-requests-panel";
+import {
+  buildFollowUpsDrillDownHref,
+  buildLeadsDrillDownHref,
+} from "@/lib/analytics/drill-down-hrefs";
 import { createClient } from "@/lib/supabase/server";
 import { parseAnalyticsPeriod } from "@/lib/analytics/periods";
 import {
@@ -104,7 +108,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           value: String(dashboardData.stats.qualifiedLeads),
           change: `${dashboardData.stats.totalLeads} total leads`,
           accent: "text-white",
-          href: "/leads?status=qualified",
+          href: buildLeadsDrillDownHref({ pipeline: "qualified" }),
         },
         {
           label: "Pending visits",
@@ -125,7 +129,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           value: String(dashboardData.stats.sentFollowUpsToday),
           change: "WhatsApp re-engagement",
           accent: "text-emerald-300",
-          href: "/follow-ups?group=sent",
+          href: buildFollowUpsDrillDownHref({ group: "sent", today: true }),
         },
         {
           label: "Total pipeline",
@@ -226,9 +230,10 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                   ) : (
                     <div className="divide-y divide-white/5">
                       {dashboardData.recentActivity.map((item) => (
-                        <div
+                        <Link
                           key={item.id}
-                          className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between"
+                          href={`/leads/${item.lead_id}`}
+                          className="flex flex-col gap-3 px-5 py-4 transition-colors hover:bg-white/[0.02] sm:flex-row sm:items-center sm:justify-between"
                         >
                           <div className="min-w-0 flex-1">
                             <p className="text-sm font-medium text-white">
@@ -246,7 +251,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                           >
                             {item.status}
                           </span>
-                        </div>
+                        </Link>
                       ))}
                     </div>
                   )}

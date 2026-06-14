@@ -13,12 +13,16 @@ import {
   getFollowUpStatusColor,
   getFollowUpTypeLabel,
 } from "@/lib/follow-ups/display";
+import { filterFollowUpsForDrillDown } from "@/lib/follow-ups/drill-down-filters";
+import type { AnalyticsPeriodKey } from "@/lib/analytics/periods";
 import type { FollowUpBuckets, FollowUpWithLead } from "@/types/database";
 
 type FollowUpsListProps = {
   buckets: FollowUpBuckets;
   dbError?: string | null;
   initialGroup?: GroupFilter;
+  initialToday?: boolean;
+  initialPeriod?: AnalyticsPeriodKey;
 };
 
 type GroupFilter = "pending" | "sent" | "failed";
@@ -179,6 +183,8 @@ export function FollowUpsList({
   buckets,
   dbError,
   initialGroup = "pending",
+  initialToday = false,
+  initialPeriod,
 }: FollowUpsListProps) {
   const [group, setGroup] = useState<GroupFilter>(initialGroup);
   const [pendingId, setPendingId] = useState<string | null>(null);
@@ -196,8 +202,12 @@ export function FollowUpsList({
   );
 
   const items = useMemo(() => {
-    return buckets[group];
-  }, [buckets, group]);
+    const groupItems = buckets[group];
+    return filterFollowUpsForDrillDown(groupItems, {
+      today: initialToday,
+      period: initialPeriod,
+    });
+  }, [buckets, group, initialToday, initialPeriod]);
 
   function handleAction(
     followUpId: string,
