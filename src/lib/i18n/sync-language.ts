@@ -3,7 +3,12 @@ import {
   resolveConversationLanguageDebug,
   type LanguageResolutionReason,
 } from "@/lib/i18n/resolve-language";
-import { DEFAULT_LANGUAGE, normalizeLanguage, type SupportedLanguage } from "@/lib/i18n/types";
+import {
+  DEFAULT_LANGUAGE,
+  isSupportedLanguage,
+  normalizeLanguage,
+  type SupportedLanguage,
+} from "@/lib/i18n/types";
 import type { Conversation, Database, Lead } from "@/types/database";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -18,6 +23,16 @@ const PERSIST_REASONS = new Set<LanguageResolutionReason>([
   "strong_signals",
   "first_message_language",
 ]);
+
+function hasStoredPreferredLanguage(
+  preferredLanguage: string | null | undefined
+): boolean {
+  if (preferredLanguage == null || preferredLanguage.trim() === "") {
+    return false;
+  }
+
+  return isSupportedLanguage(preferredLanguage);
+}
 
 /** Language for this reply — latest inbound message first, stored preference if ambiguous. */
 export function resolveReplyLanguage(
@@ -54,12 +69,21 @@ export async function syncLeadPreferredLanguage(
     conversationHistory: history,
   });
   const language = debug.finalLanguage;
+  const hasStored = hasStoredPreferredLanguage(lead.preferred_language);
 
-  if (isStabilityPatchV1Enabled() && !PERSIST_REASONS.has(debug.reason)) {
+  if (
+    isStabilityPatchV1Enabled() &&
+    !PERSIST_REASONS.has(debug.reason) &&
+    hasStored
+  ) {
     return lead;
   }
 
-  if (language === normalizeLanguage(lead.preferred_language)) {
+  if (!isSupportedLanguage(language)) {
+    return lead;
+  }
+
+  if (hasStored && language === normalizeLanguage(lead.preferred_language)) {
     return lead;
   }
 
