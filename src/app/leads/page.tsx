@@ -4,7 +4,7 @@ import {
   LeadsList,
 } from "@/components/leads/leads-list";
 import { LeadsListSkeleton } from "@/components/leads/leads-list-skeleton";
-import { getLeads } from "@/lib/data/leads";
+import { getLeadsForInbox } from "@/lib/data/inbox";
 import { listWorkspaceMembers } from "@/lib/data/workspace-members";
 import type { LeadAssigneeFilter } from "@/lib/leads/assignment-filters";
 import { buildMemberLabelMap } from "@/lib/leads/member-display";
@@ -76,7 +76,7 @@ async function LeadsContent({
     try {
       const { workspaceId } = await resolveTenantScope(supabase, user.id);
       const [loadedLeads, members] = await Promise.all([
-        getLeads(supabase, workspaceId),
+        getLeadsForInbox(supabase, workspaceId, user.id),
         listWorkspaceMembers(supabase, workspaceId),
       ]);
       leads = loadedLeads;

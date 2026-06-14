@@ -20,10 +20,10 @@ export function isLeadInPipeline(
   return true;
 }
 
-export function filterLeadsByPipeline(
-  leads: Lead[],
+export function filterLeadsByPipeline<T extends Lead>(
+  leads: T[],
   pipeline: LeadPipelineFilter | undefined
-): Lead[] {
+): T[] {
   if (!pipeline) {
     return leads;
   }

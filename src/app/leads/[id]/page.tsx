@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { revalidatePath } from "next/cache";
 import { LeadDetailView } from "@/components/leads/lead-detail-view";
 import { getConversationsByLead } from "@/lib/data/conversations";
+import { markLeadConversationRead } from "@/lib/data/inbox";
 import { getLeadById } from "@/lib/data/leads";
 import { listWorkspaceMembers } from "@/lib/data/workspace-members";
 import {
@@ -61,6 +63,17 @@ export default async function LeadDetailPage({ params }: LeadPageProps) {
 
   if (!lead) {
     notFound();
+  }
+
+  try {
+    await markLeadConversationRead(supabase, workspaceId, id, user.id);
+    revalidatePath("/leads");
+  } catch (error) {
+    console.error("[LeadDetailPage] markLeadConversationRead failed", {
+      leadId: id,
+      userId: user.id,
+      error,
+    });
   }
 
   const memberLabels = Object.fromEntries(

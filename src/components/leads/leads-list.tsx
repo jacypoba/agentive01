@@ -3,25 +3,26 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { CreateTestLeadButton } from "@/components/dashboard/create-test-lead-button";
-import { LanguageBadge } from "@/components/leads/language-badge";
+import { LeadInboxCard } from "@/components/leads/lead-inbox-card";
 import {
   type LeadAssigneeFilter,
 } from "@/lib/leads/assignment-filters";
 import { type LeadPipelineFilter } from "@/lib/leads/pipeline-filters";
 import type { AnalyticsPeriodKey } from "@/lib/analytics/periods";
+import { sortLeadsForInbox } from "@/lib/data/inbox";
+import { leadMatchesInboxSearch } from "@/lib/leads/inbox-display";
 import {
   buildLeadsScopeBeforeStatusFilter,
   filterLeadsByStatusTab,
   resolveInitialStatusFilter,
 } from "@/lib/leads/leads-list-filters";
 import { getAssigneeLabel } from "@/lib/leads/member-display";
-import { formatLeadDate, getStatusBadgeColor } from "@/lib/leads/status";
-import type { Lead, LeadStatus } from "@/types/database";
+import type { LeadForInbox, LeadStatus } from "@/types/database";
 
 export type { LeadAssigneeFilter };
 
 type LeadsListProps = {
-  leads: Lead[];
+  leads: LeadForInbox[];
   dbError?: string | null;
   initialStatus?: LeadStatus;
   initialAssigneeFilter?: LeadAssigneeFilter;
@@ -65,7 +66,7 @@ function SearchIcon() {
 }
 
 function countByAssignee(
-  leads: Lead[],
+  leads: LeadForInbox[],
   assigneeFilter: LeadAssigneeFilter,
   currentUserId: string,
   pipeline?: LeadPipelineFilter,
@@ -116,41 +117,18 @@ export function LeadsList({
   const filteredLeads = useMemo(() => {
     let result = filterLeadsByStatusTab(scopedBeforeStatus, statusFilter);
 
-    const normalized = query.trim().toLowerCase();
-    if (!normalized) {
-      return result;
+    if (query.trim()) {
+      result = result.filter((lead) =>
+        leadMatchesInboxSearch(
+          lead,
+          getAssigneeLabel(lead.assigned_user_id, memberLabelMap),
+          query
+        )
+      );
     }
 
-    return result.filter((lead) => {
-      const assigneeLabel = getAssigneeLabel(
-        lead.assigned_user_id,
-        memberLabelMap
-      );
-
-      const haystack = [
-        lead.client_name,
-        lead.phone ?? "",
-        lead.interest ?? "",
-        lead.status,
-        assigneeLabel,
-        lead.budget ?? "",
-        lead.preferred_area ?? "",
-        lead.property_type ?? "",
-        lead.timeline ?? "",
-        lead.intent_status ?? "",
-        lead.visit_datetime_text ?? "",
-      ]
-        .join(" ")
-        .toLowerCase();
-
-      return haystack.includes(normalized);
-    });
-  }, [
-    scopedBeforeStatus,
-    query,
-    statusFilter,
-    memberLabelMap,
-  ]);
+    return sortLeadsForInbox(result);
+  }, [scopedBeforeStatus, query, statusFilter, memberLabelMap]);
 
   return (
     <div className="space-y-6">
@@ -163,7 +141,7 @@ export function LeadsList({
             type="search"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search by name, phone, assignee, status…"
+            placeholder="Search by name, message, phone, assignee…"
             className="w-full rounded-xl border border-white/10 bg-white/5 py-3 pl-11 pr-4 text-sm text-white placeholder:text-white/30 outline-none transition-colors focus:border-[#0066FF]/50 focus:ring-2 focus:ring-[#0066FF]/20"
           />
         </div>
@@ -288,76 +266,17 @@ export function LeadsList({
             Showing {filteredLeads.length} of {leads.length} lead
             {leads.length === 1 ? "" : "s"}
           </p>
-          <div className="overflow-hidden rounded-2xl border border-white/10 bg-white/[0.02]">
-            <div className="overflow-x-auto">
-              <table className="min-w-full text-left text-sm">
-                <thead>
-                  <tr className="border-b border-white/10 text-xs uppercase tracking-wider text-white/40">
-                    <th className="px-4 py-3 font-medium">Client</th>
-                    <th className="px-4 py-3 font-medium">Status</th>
-                    <th className="px-4 py-3 font-medium">Assigned to</th>
-                    <th className="hidden px-4 py-3 font-medium md:table-cell">
-                      Phone
-                    </th>
-                    <th className="px-4 py-3 font-medium">Created</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredLeads.map((lead) => (
-                    <tr
-                      key={lead.id}
-                      className="border-b border-white/5 transition-colors last:border-b-0 hover:bg-[#0066FF]/5"
-                    >
-                      <td className="px-4 py-3">
-                        <Link
-                          href={`/leads/${lead.id}`}
-                          className="block min-w-[10rem]"
-                        >
-                          <span className="font-medium text-white">
-                            {lead.client_name}
-                          </span>
-                          {lead.interest && (
-                            <span className="mt-0.5 block max-w-xs truncate text-xs text-white/45">
-                              {lead.interest}
-                            </span>
-                          )}
-                          <span className="mt-1 inline-flex md:hidden">
-                            <LanguageBadge language={lead.preferred_language} />
-                          </span>
-                        </Link>
-                      </td>
-                      <td className="px-4 py-3 align-top">
-                        <Link href={`/leads/${lead.id}`} className="inline-block">
-                          <span
-                            className={`rounded-full border px-2.5 py-1 text-[10px] font-semibold capitalize ${getStatusBadgeColor(lead.status)}`}
-                          >
-                            {lead.status}
-                          </span>
-                        </Link>
-                      </td>
-                      <td className="px-4 py-3 align-top text-white/70">
-                        <Link href={`/leads/${lead.id}`} className="block">
-                          {getAssigneeLabel(
-                            lead.assigned_user_id,
-                            memberLabelMap
-                          )}
-                        </Link>
-                      </td>
-                      <td className="hidden px-4 py-3 align-top text-white/60 md:table-cell">
-                        <Link href={`/leads/${lead.id}`} className="block">
-                          {lead.phone ?? "—"}
-                        </Link>
-                      </td>
-                      <td className="px-4 py-3 align-top text-white/50">
-                        <Link href={`/leads/${lead.id}`} className="block whitespace-nowrap">
-                          {formatLeadDate(lead.created_at)}
-                        </Link>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            {filteredLeads.map((lead) => (
+              <LeadInboxCard
+                key={lead.id}
+                lead={lead}
+                assigneeLabel={getAssigneeLabel(
+                  lead.assigned_user_id,
+                  memberLabelMap
+                )}
+              />
+            ))}
           </div>
         </>
       )}

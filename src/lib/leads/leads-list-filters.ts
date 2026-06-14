@@ -27,11 +27,11 @@ export function resolveInitialStatusFilter(
   return initialStatus ?? "all";
 }
 
-/** Leads visible in the table/chips before status tab and search filtering. */
-export function buildLeadsScopeBeforeStatusFilter(
-  leads: Lead[],
+/** Leads visible in the inbox before status tab and search filtering. */
+export function buildLeadsScopeBeforeStatusFilter<T extends Lead>(
+  leads: T[],
   input: LeadsListScopeInput
-): Lead[] {
+): T[] {
   let result = filterLeadsByAssignee(
     leads,
     input.assigneeFilter,
@@ -48,10 +48,10 @@ export function buildLeadsScopeBeforeStatusFilter(
   return result;
 }
 
-export function filterLeadsByStatusTab(
-  leads: Lead[],
+export function filterLeadsByStatusTab<T extends Lead>(
+  leads: T[],
   statusFilter: LeadStatus | "all"
-): Lead[] {
+): T[] {
   if (statusFilter === "all") {
     return leads;
   }

@@ -2,11 +2,11 @@ import type { Lead } from "@/types/database";
 
 export type LeadAssigneeFilter = "all" | "me" | "unassigned";
 
-export function filterLeadsByAssignee(
-  leads: Lead[],
+export function filterLeadsByAssignee<T extends Lead>(
+  leads: T[],
   assigneeFilter: LeadAssigneeFilter,
   currentUserId: string
-): Lead[] {
+): T[] {
   if (assigneeFilter === "me") {
     return leads.filter((lead) => lead.assigned_user_id === currentUserId);
   }
