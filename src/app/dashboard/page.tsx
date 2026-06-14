@@ -293,9 +293,9 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               <FollowUpsPanel buckets={dashboardData.followUpBuckets} />
             )}
 
-            {user && (
+            {user && activeWorkspaceId && (
               <WhatsAppLiveFeed
-                userId={user.id}
+                workspaceId={activeWorkspaceId}
                 initialActivity={dashboardData.recentActivity}
               />
             )}

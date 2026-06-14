@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { LanguageBadge } from "@/components/leads/language-badge";
 import { createClient } from "@/lib/supabase/client";
+import { belongsToWorkspace } from "@/lib/dashboard/whatsapp-live-feed-scope";
 import {
   formatRelativeTime,
   getActivityLabel,
@@ -12,7 +13,7 @@ import {
 import type { Conversation, Lead, RecentActivity } from "@/types/database";
 
 type WhatsAppLiveFeedProps = {
-  userId: string;
+  workspaceId: string;
   initialActivity: RecentActivity[];
 };
 
@@ -50,7 +51,7 @@ function toActivityFromLead(lead: Lead): RecentActivity {
 }
 
 export function WhatsAppLiveFeed({
-  userId,
+  workspaceId,
   initialActivity,
 }: WhatsAppLiveFeedProps) {
   const [activity, setActivity] = useState(initialActivity);
@@ -64,20 +65,29 @@ export function WhatsAppLiveFeed({
     const supabase = createClient();
 
     const channel = supabase
-      .channel(`whatsapp-live-${userId}`)
+      .channel(`whatsapp-live-${workspaceId}`)
       .on(
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "conversations" },
         async (payload) => {
           const conversation = payload.new as Conversation;
 
+          if (
+            conversation.workspace_id &&
+            !belongsToWorkspace(conversation, workspaceId)
+          ) {
+            return;
+          }
+
           const { data: lead } = await supabase
             .from("leads")
-            .select("id, client_name, interest, status, user_id, preferred_language")
+            .select(
+              "id, client_name, interest, status, workspace_id, preferred_language"
+            )
             .eq("id", conversation.lead_id)
             .maybeSingle();
 
-          if (!lead || lead.user_id !== userId) return;
+          if (!belongsToWorkspace(lead, workspaceId)) return;
 
           const item = toActivityFromConversation(conversation, lead);
           setActivity((prev) => {
@@ -99,7 +109,7 @@ export function WhatsAppLiveFeed({
         { event: "INSERT", schema: "public", table: "leads" },
         (payload) => {
           const lead = payload.new as Lead;
-          if (lead.user_id !== userId) return;
+          if (!belongsToWorkspace(lead, workspaceId)) return;
 
           const item = toActivityFromLead(lead);
           setActivity((prev) => {
@@ -118,7 +128,7 @@ export function WhatsAppLiveFeed({
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [userId]);
+  }, [workspaceId]);
 
   return (
     <section id="whatsapp" className="mt-12">
