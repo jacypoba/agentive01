@@ -87,7 +87,7 @@ export function WhatsAppLiveFeed({
             .eq("id", conversation.lead_id)
             .maybeSingle();
 
-          if (!belongsToWorkspace(lead, workspaceId)) return;
+          if (!lead || !belongsToWorkspace(lead, workspaceId)) return;
 
           const item = toActivityFromConversation(conversation, lead);
           setActivity((prev) => {
