@@ -12,6 +12,7 @@ import {
   parseDrillDownPeriodParam,
   parsePipelineFilterParam,
 } from "@/lib/analytics/drill-down-hrefs";
+import { buildLeadsListFilterKey } from "@/lib/leads/leads-list-filters";
 import type { LeadPipelineFilter } from "@/lib/leads/pipeline-filters";
 import type { AnalyticsPeriodKey } from "@/lib/analytics/periods";
 import { createClient } from "@/lib/supabase/server";
@@ -94,6 +95,12 @@ async function LeadsContent({
 
   return (
     <LeadsList
+      key={buildLeadsListFilterKey({
+        initialPipeline,
+        initialStatus,
+        initialPeriod,
+        initialAssigneeFilter,
+      })}
       leads={leads ?? []}
       dbError={dbError}
       initialStatus={initialStatus}

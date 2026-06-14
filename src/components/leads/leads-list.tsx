@@ -5,16 +5,15 @@ import Link from "next/link";
 import { CreateTestLeadButton } from "@/components/dashboard/create-test-lead-button";
 import { LanguageBadge } from "@/components/leads/language-badge";
 import {
-  countLeadsByAssignee,
-  filterLeadsByAssignee,
   type LeadAssigneeFilter,
 } from "@/lib/leads/assignment-filters";
-import {
-  filterLeadsByPipeline,
-  type LeadPipelineFilter,
-} from "@/lib/leads/pipeline-filters";
-import { isTimestampInAnalyticsPeriod } from "@/lib/analytics/period-filters";
+import { type LeadPipelineFilter } from "@/lib/leads/pipeline-filters";
 import type { AnalyticsPeriodKey } from "@/lib/analytics/periods";
+import {
+  buildLeadsScopeBeforeStatusFilter,
+  filterLeadsByStatusTab,
+  resolveInitialStatusFilter,
+} from "@/lib/leads/leads-list-filters";
 import { getAssigneeLabel } from "@/lib/leads/member-display";
 import { formatLeadDate, getStatusBadgeColor } from "@/lib/leads/status";
 import type { Lead, LeadStatus } from "@/types/database";
@@ -65,20 +64,19 @@ function SearchIcon() {
   );
 }
 
-function filterByAssignee(
-  leads: Lead[],
-  assigneeFilter: LeadAssigneeFilter,
-  currentUserId: string
-): Lead[] {
-  return filterLeadsByAssignee(leads, assigneeFilter, currentUserId);
-}
-
 function countByAssignee(
   leads: Lead[],
   assigneeFilter: LeadAssigneeFilter,
-  currentUserId: string
+  currentUserId: string,
+  pipeline?: LeadPipelineFilter,
+  period?: AnalyticsPeriodKey
 ): number {
-  return countLeadsByAssignee(leads, assigneeFilter, currentUserId);
+  return buildLeadsScopeBeforeStatusFilter(leads, {
+    assigneeFilter,
+    pipeline,
+    period,
+    currentUserId,
+  }).length;
 }
 
 export function LeadsList({
@@ -92,8 +90,8 @@ export function LeadsList({
   memberLabels,
 }: LeadsListProps) {
   const [query, setQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState<LeadStatus | "all">(
-    initialStatus ?? "all"
+  const [statusFilter, setStatusFilter] = useState<LeadStatus | "all">(() =>
+    resolveInitialStatusFilter(initialStatus, initialPipeline)
   );
   const [assigneeFilter, setAssigneeFilter] = useState<LeadAssigneeFilter>(
     initialAssigneeFilter
@@ -104,19 +102,19 @@ export function LeadsList({
     [memberLabels]
   );
 
+  const scopedBeforeStatus = useMemo(
+    () =>
+      buildLeadsScopeBeforeStatusFilter(leads, {
+        assigneeFilter,
+        pipeline: initialPipeline,
+        period: initialPeriod,
+        currentUserId,
+      }),
+    [leads, assigneeFilter, initialPipeline, initialPeriod, currentUserId]
+  );
+
   const filteredLeads = useMemo(() => {
-    let result = filterByAssignee(leads, assigneeFilter, currentUserId);
-    result = filterLeadsByPipeline(result, initialPipeline);
-
-    if (statusFilter !== "all") {
-      result = result.filter((lead) => lead.status === statusFilter);
-    }
-
-    if (initialPeriod) {
-      result = result.filter((lead) =>
-        isTimestampInAnalyticsPeriod(lead.created_at, initialPeriod)
-      );
-    }
+    let result = filterLeadsByStatusTab(scopedBeforeStatus, statusFilter);
 
     const normalized = query.trim().toLowerCase();
     if (!normalized) {
@@ -148,14 +146,10 @@ export function LeadsList({
       return haystack.includes(normalized);
     });
   }, [
-    leads,
+    scopedBeforeStatus,
     query,
     statusFilter,
-    assigneeFilter,
-    currentUserId,
     memberLabelMap,
-    initialPipeline,
-    initialPeriod,
   ]);
 
   return (
@@ -179,7 +173,13 @@ export function LeadsList({
       <div className="space-y-3">
         <div className="flex flex-wrap gap-2">
           {ASSIGNEE_FILTERS.map(({ value, label }) => {
-            const count = countByAssignee(leads, value, currentUserId);
+            const count = countByAssignee(
+              leads,
+              value,
+              currentUserId,
+              initialPipeline,
+              initialPeriod
+            );
             const isActive = assigneeFilter === value;
 
             return (
@@ -202,15 +202,11 @@ export function LeadsList({
 
         <div className="flex flex-wrap gap-2">
           {(["all", ...LEAD_STATUSES] as const).map((status) => {
-            const scopedLeads = filterByAssignee(
-              leads,
-              assigneeFilter,
-              currentUserId
-            );
             const count =
               status === "all"
-                ? scopedLeads.length
-                : scopedLeads.filter((lead) => lead.status === status).length;
+                ? scopedBeforeStatus.length
+                : scopedBeforeStatus.filter((lead) => lead.status === status)
+                    .length;
             const isActive = statusFilter === status;
 
             return (
