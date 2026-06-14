@@ -212,14 +212,6 @@ export async function isFollowUpsEnabledForWorkspace(
   return getPlanLimits(subscription!.plan_name).followUpsEnabled;
 }
 
-export {
-  assertPlanAccess,
-  assertWorkspaceSubscriptionActive,
-  getPlanLimits,
-  isSubscriptionBillingBlockError,
-  isSubscriptionUsable,
-  PlanAccessError,
-  WorkspaceSubscriptionInactiveError,
-};
+export { assertPlanAccess, getPlanLimits, isSubscriptionUsable, PlanAccessError };
 
 export type { PlanFeature, PlanName };
