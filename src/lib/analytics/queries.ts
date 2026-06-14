@@ -1,3 +1,7 @@
+import type {
+  FollowUpAssigneeAnalyticsRow,
+  VisitAssigneeAnalyticsRow,
+} from "@/lib/analytics/assignment-metrics";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { AnalyticsDateRange } from "@/lib/analytics/types";
 import type { Database } from "@/types/database";
@@ -33,6 +37,7 @@ export type LeadAnalyticsRow = {
   preferred_area: string | null;
   property_type: string | null;
   visit_requested: boolean;
+  assigned_user_id: string | null;
 };
 
 export type VisitAnalyticsRow = {
@@ -61,7 +66,7 @@ export async function fetchLeadAnalyticsRows(
     supabase
       .from("leads")
       .select(
-        "created_at, status, preferred_language, preferred_area, property_type, visit_requested"
+        "created_at, status, preferred_language, preferred_area, property_type, visit_requested, assigned_user_id"
       )
       .eq("workspace_id", workspaceId),
     range
@@ -81,7 +86,7 @@ export async function fetchAllLeadRowsForFunnel(
   const { data, error } = await supabase
     .from("leads")
     .select(
-      "created_at, status, preferred_language, preferred_area, property_type, visit_requested"
+      "created_at, status, preferred_language, preferred_area, property_type, visit_requested, assigned_user_id"
     )
     .eq("workspace_id", workspaceId);
 
@@ -233,4 +238,68 @@ export async function countInboundWhatsAppMessages(
   }
 
   return count ?? 0;
+}
+
+type VisitAssigneeJoinRow = {
+  created_at: string;
+  leads: { assigned_user_id: string | null };
+};
+
+type FollowUpAssigneeJoinRow = {
+  sent_at: string;
+  leads: { assigned_user_id: string | null };
+};
+
+/** Visit counts attributed via leads.assigned_user_id — never visit_requests.user_id. */
+export async function fetchVisitAssigneeAnalyticsRows(
+  supabase: Client,
+  workspaceId: string,
+  range: AnalyticsDateRange
+): Promise<VisitAssigneeAnalyticsRow[]> {
+  const { data, error } = await applyCreatedAtRange(
+    supabase
+      .from("visit_requests")
+      .select("created_at, leads!inner(assigned_user_id)")
+      .eq("workspace_id", workspaceId),
+    range
+  ).order("created_at", { ascending: true });
+
+  if (error) {
+    throw new Error(
+      `Failed to fetch visit assignee analytics: ${error.message}`
+    );
+  }
+
+  return ((data ?? []) as unknown as VisitAssigneeJoinRow[]).map((row) => ({
+    created_at: row.created_at,
+    assigned_user_id: row.leads.assigned_user_id,
+  }));
+}
+
+/** Sent follow-ups attributed via leads.assigned_user_id — never follow_ups.user_id. */
+export async function fetchSentFollowUpAssigneeAnalyticsRows(
+  supabase: Client,
+  workspaceId: string,
+  range: AnalyticsDateRange
+): Promise<FollowUpAssigneeAnalyticsRow[]> {
+  const { data, error } = await applySentAtRange(
+    supabase
+      .from("follow_ups")
+      .select("sent_at, leads!inner(assigned_user_id)")
+      .eq("workspace_id", workspaceId)
+      .eq("status", "sent")
+      .not("sent_at", "is", null),
+    range
+  ).order("sent_at", { ascending: true });
+
+  if (error) {
+    throw new Error(
+      `Failed to fetch follow-up assignee analytics: ${error.message}`
+    );
+  }
+
+  return ((data ?? []) as unknown as FollowUpAssigneeJoinRow[]).map((row) => ({
+    sent_at: row.sent_at,
+    assigned_user_id: row.leads.assigned_user_id,
+  }));
 }

@@ -1,5 +1,6 @@
 "use client";
 
+import { AgentPerformanceTable } from "@/components/analytics/agent-performance-table";
 import { AiInsightsPanel } from "@/components/analytics/ai-insights-panel";
 import { AnalyticsKpiGrid } from "@/components/analytics/analytics-kpi-grid";
 import { ConversionFunnelChart } from "@/components/analytics/charts/conversion-funnel-chart";
@@ -16,6 +17,11 @@ export function AnalyticsDashboard({ data }: AnalyticsDashboardProps) {
   return (
     <div className="space-y-6">
       <AnalyticsKpiGrid kpis={data.kpis} />
+
+      <AgentPerformanceTable
+        rows={data.agentPerformance}
+        periodLabel={data.range.label}
+      />
 
       <div className="grid gap-6 xl:grid-cols-3">
         <div className="xl:col-span-2">

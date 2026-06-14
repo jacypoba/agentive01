@@ -5,6 +5,7 @@ import {
   bucketRowsByDay,
   buildConversionFunnel,
 } from "@/lib/analytics/aggregate";
+import { aggregateAgentPerformance } from "@/lib/analytics/assignment-metrics";
 import { countQualifiedLeads } from "@/lib/analytics/qualification-metrics";
 import { buildAnalyticsDateRangeForPeriod } from "@/lib/analytics/date-ranges";
 import {
@@ -22,8 +23,12 @@ import {
   countSentFollowUpsInRange,
   fetchLeadAnalyticsRows,
   fetchPropertyAnalyticsRows,
+  fetchSentFollowUpAssigneeAnalyticsRows,
   fetchVisitAnalyticsRows,
+  fetchVisitAssigneeAnalyticsRows,
 } from "@/lib/analytics/queries";
+import { listWorkspaceMembers } from "@/lib/data/workspace-members";
+import { formatMemberDisplayName } from "@/lib/leads/member-display";
 import type { AnalyticsDashboardData, AnalyticsKpi } from "@/lib/analytics/types";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
@@ -116,6 +121,9 @@ export async function getAnalyticsDashboardData(
     totalPropertyRows,
     whatsappInbound,
     followUpsSent,
+    visitAssigneeRows,
+    followUpAssigneeRows,
+    members,
   ] = await Promise.all([
     fetchLeadAnalyticsRows(supabase, workspaceId, range),
     fetchVisitAnalyticsRows(supabase, workspaceId, range),
@@ -123,6 +131,9 @@ export async function getAnalyticsDashboardData(
     fetchPropertyAnalyticsRows(supabase, workspaceId),
     countInboundWhatsAppMessages(supabase, workspaceId, range),
     countSentFollowUpsInRange(supabase, workspaceId, range),
+    fetchVisitAssigneeAnalyticsRows(supabase, workspaceId, range),
+    fetchSentFollowUpAssigneeAnalyticsRows(supabase, workspaceId, range),
+    listWorkspaceMembers(supabase, workspaceId),
   ]);
 
   const qualifiedInRange = countQualifiedLeads(leadRows);
@@ -159,6 +170,20 @@ export async function getAnalyticsDashboardData(
     conversionRate,
   };
 
+  const agentPerformance = aggregateAgentPerformance({
+    members: members.map((member) => ({
+      userId: member.user_id,
+      label: formatMemberDisplayName(member),
+    })),
+    leadRows: leadRows.map((row) => ({
+      created_at: row.created_at,
+      status: row.status,
+      assigned_user_id: row.assigned_user_id,
+    })),
+    visitRows: visitAssigneeRows,
+    followUpRows: followUpAssigneeRows,
+  });
+
   const snapshot = {
     tenant: { userId, workspaceId },
     range,
@@ -181,6 +206,7 @@ export async function getAnalyticsDashboardData(
     topCities,
     insights: [],
     totals,
+    agentPerformance,
   };
 
   return {

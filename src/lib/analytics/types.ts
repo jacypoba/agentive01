@@ -1,4 +1,5 @@
 import type { AnalyticsPeriodKey } from "@/lib/analytics/periods";
+import type { AgentPerformanceRow } from "@/lib/analytics/assignment-metrics";
 
 /** Analytics domain types — scoped per tenant via userId (future Stripe org mapping). */
 
@@ -70,6 +71,7 @@ export type AnalyticsSnapshot = {
     properties: number;
     conversionRate: number;
   };
+  agentPerformance: AgentPerformanceRow[];
 };
 
 /** Placeholder for future Stripe revenue / subscription analytics. */
